@@ -9,6 +9,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
+#include <chrono>
+
+#include <omp.h>
 
 #include "fp16_80.h"
 #include "integer.h"
@@ -60,11 +63,12 @@ static void backward_out(Complex * const z, const size_t n, const size_t m_io, c
 	}
 }
 
-static void pass1(Complex * const z, const size_t n, const size_t m_io_2, const Complex * const w)
+static void pass1(const size_t thread_id, const size_t num_threads, Complex * const z, const size_t n, const size_t m_io_2, const Complex * const w)
 {
 	const size_t s_io_2 = (n / 2) / m_io_2;
 
-	for (size_t l = 0; l < s_io_2; ++l)	// parallel
+	const size_t l_min = thread_id * s_io_2 / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io_2 : (thread_id + 1) * s_io_2 / num_threads;
+	for (size_t l = l_min; l < l_max; ++l)
 	{
 		// forward_in
 		for (size_t m = m_io_2, s = 1; m >= 1; m /= 2, s *= 2)
@@ -105,27 +109,28 @@ static void pass1(Complex * const z, const size_t n, const size_t m_io_2, const 
 	}
 }
 
-static double pass2(Complex * const z, const size_t n, const size_t m_io, const Complex * const w, Complex * const f,
+static double pass2(const size_t thread_id, const size_t num_threads, Complex * const z, const size_t n, const size_t m_io, const Complex * const w, Complex * const f,
 					const bool dup, const double b, const double sb, const double isb, const double fsb)
 {
-	const size_t s_io = (n / 2) / m_io;
+	const size_t s_io = (n / 2) / m_io, m_io_8 = m_io / 2 / 4;
 	const double b_inv = 1.0 / b, sb_inv = 1.0 / sb, n_inv = 1.0 / n, g = dup ? 2 : 1;
 
 	double err = 0;
-	for (size_t lh = 0; lh < m_io / 2 / 4; ++lh)	// parallel
+
+	const size_t l_min = thread_id * m_io_8 / num_threads, l_max = (thread_id + 1 == num_threads) ? m_io_8 : (thread_id + 1) * m_io_8 / num_threads;
+	for (size_t lh = l_min; lh < l_max; ++lh)
 	{
 		// backward_out
-		for (size_t ll = 0; ll < 8; ++ll)
+		for (size_t m = m_io, s = s_io; m <= n / 2; m *= 2, s /= 2)
 		{
-			const size_t l = 8 * lh + ll;
-			for (size_t m = m_io, s = s_io; m <= n / 2; m *= 2, s /= 2)
+			for (size_t j = 0; j < s; ++j)
 			{
-				for (size_t j = 0; j < s; ++j)
+				const Complex r = std::conj(w[s + j]);
+				for (size_t i = 0; i < m; i += m_io)
 				{
-					const Complex r = std::conj(w[s + j]);
-					for (size_t i = 0; i < m; i += m_io)
+					for (size_t ll = 0; ll < 8; ++ll)
 					{
-						const size_t k = 2 * m * j + i + l;
+						const size_t k = 2 * m * j + i + 8 * lh + ll;
 						const Complex u = z[k], v = z[k + m];
 						z[k] = u + v; z[k + m] = (u - v) * r;
 					}
@@ -152,15 +157,18 @@ static double pass2(Complex * const z, const size_t n, const size_t m_io, const 
 			}
 		}
 	}
+
 	return err;
 }
 
-static void pass3(Complex * const z, const size_t n, const size_t m_io, const Complex * const w, Complex * const f,
+static void pass3(const size_t thread_id, const size_t num_threads, Complex * const z, const size_t n, const size_t m_io, const Complex * const w, Complex * const f,
 				  const double b, const double sb, const double isb, const double fsb)
 {
+	const size_t m_io_8 = m_io / 2 / 4;
 	const double b_inv = 1.0 / b, sb_inv = 1.0 / sb;
 
-	for (size_t lh = 0; lh < m_io / 2 / 4; ++lh)	// parallel
+	const size_t l_min = thread_id * m_io_8 / num_threads, l_max = (thread_id + 1 == num_threads) ? m_io_8 : (thread_id + 1) * m_io_8 / num_threads;
+	for (size_t lh = l_min; lh < l_max; ++lh)
 	{
 		// carry_in
 		for (size_t j = 0; j < (n / 2) / (m_io / 2); ++j)
@@ -182,57 +190,25 @@ static void pass3(Complex * const z, const size_t n, const size_t m_io, const Co
 				z[2 * k + 1] = irh;
 				if (ff == Complex(0, 0)) break;
 			}
-			if (ff != Complex(0, 0)) std::cout << "Error!" << std::endl;	// TODO
+			if (ff != Complex(0, 0)) { std::cout << "Error!" << std::endl; exit(0); }	// TODO
 		}
 
 		// forward_out
-		for (size_t ll = 0; ll < 8; ++ll)
+		for (size_t m = n / 2, s = 1; m >= m_io; m /= 2, s *= 2)
 		{
-			const size_t l = 8 * lh + ll;
-			for (size_t m = n / 2, s = 1; m >= m_io; m /= 2, s *= 2)
+			for (size_t j = 0; j < s; ++j)
 			{
-				for (size_t j = 0; j < s; ++j)
+				const Complex r = w[s + j];
+				for (size_t i = 0; i < m; i += m_io)
 				{
-					const Complex r = w[s + j];
-					for (size_t i = 0; i < m; i += m_io)
+					for (size_t ll = 0; ll < 8; ++ll)
 					{
-						const size_t k = 2 * m * j + i + l;
+						const size_t k = 2 * m * j + i + 8 * lh + ll;
 						const Complex u = z[k], v = z[k + m] * r;
 						z[k] = u + v; z[k + m] = u - v;
 					}
 				}
 			}
-		}
-	}
-}
-
-static void reducePos(Complex * const z, const size_t n, const size_t n_io, const uint32_t b, const double sb)
-{
-	const double n_io_inv = n_io / double(n);
-
-	int64_t f = 0;
-	for (size_t k = 0; k < 2 * n; k += 2)
-	{
-		const double o1 = (k < n) ? z[k].real() : z[k - n].imag();
-		const double o2 = (k < n) ? z[k + 1].real() : z[k + 1 - n].imag();
-		const double o = (o1 + sb * o2) * n_io_inv;
-		f += llrint(o);
-		int32_t r = f % b; if (r < 0) r += b;
-		f -= r; f /= b;
-		if (k < n) z[k].real(r); else z[k - n].imag(r);
-		if (k < n) z[k + 1].real(0); else z[k + 1 - n].imag(0);
-	}
-	while (f != 0)
-	{
-		f = -f;
-		for (size_t k = 0; k < 2 * n; k += 2)
-		{
-			const double o = (k < n) ? z[k].real() : z[k - n].imag();
-			f += llrint(o);
-			int32_t r = f % b; if (r < 0) r += b;
-			f -= r; f /= b;
-			if (k < n) z[k].real(r); else z[k - n].imag(r);
-			if (r == 0) break;
 		}
 	}
 }
@@ -255,6 +231,40 @@ private:
 		size_t r = 0;
 		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
 		return r;
+	}
+
+	void reducePos()
+	{
+		const size_t n = _n;
+		const uint32_t b = _b;
+		const double sb = _sb, n_io_inv = n_io / double(n);
+		Complex * const z = _z;
+
+		int64_t f = 0;
+		for (size_t k = 0; k < 2 * n; k += 2)
+		{
+			const double o1 = (k < n) ? z[k].real() : z[k - n].imag();
+			const double o2 = (k < n) ? z[k + 1].real() : z[k + 1 - n].imag();
+			const double o = (o1 + sb * o2) * n_io_inv;
+			f += llrint(o);
+			int32_t r = f % b; if (r < 0) r += b;
+			f -= r; f /= b;
+			if (k < n) z[k].real(r); else z[k - n].imag(r);
+			if (k < n) z[k + 1].real(0); else z[k + 1 - n].imag(0);
+		}
+		while (f != 0)
+		{
+			f = -f;
+			for (size_t k = 0; k < 2 * n; k += 2)
+			{
+				const double o = (k < n) ? z[k].real() : z[k - n].imag();
+				f += llrint(o);
+				int32_t r = f % b; if (r < 0) r += b;
+				f -= r; f /= b;
+				if (k < n) z[k].real(r); else z[k - n].imag(r);
+				if (r == 0) break;
+			}
+		}
 	}
 
 public:
@@ -288,20 +298,33 @@ public:
 	{
 		delete[] _w;
 		delete[] _z;
+		delete[] _f;
 	}
 
-	double squareDup(const bool dup)
+	double squareDup(const bool dup, const size_t num_threads)
 	{
-		pass1(_z, _n, n_io / 2, _w);
-		const double err = pass2(_z, _n, n_io, _w, _f, dup, double(_b), _sb, _isb, _fsb);
-		pass3(_z, _n, n_io, _w, _f, double(_b), _sb, _isb, _fsb);
+		double e[num_threads];
+
+#pragma omp parallel
+		{
+			const size_t thread_id = size_t(omp_get_thread_num());
+
+			pass1(thread_id, num_threads, _z, _n, n_io / 2, _w);
+#pragma omp barrier
+			e[thread_id] = pass2(thread_id, num_threads, _z, _n, n_io, _w, _f, dup, double(_b), _sb, _isb, _fsb);
+#pragma omp barrier
+			pass3(thread_id, num_threads, _z, _n, n_io, _w, _f, double(_b), _sb, _isb, _fsb);
+		}
+
+		double err = 0;
+		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
 		return err;
 	}
 
 	bool isPrime()
 	{
 		backward_out(_z, _n, n_io, _w);
-		reducePos(_z, _n, n_io, _b, _sb);
+		reducePos();
 
 		Complex * const z = _z;
 		bool isPrime = (z[0] == Complex(1, 0));
@@ -316,22 +339,38 @@ public:
 
 class genefer
 {
+private:
+
 public:
-	bool check(const uint32_t b, const size_t n, double & maxError)
+	void check(const uint32_t b, const size_t n)
 	{
 		transform t(n, b);
-
 		const integer exponent(b, n);
+
+		omp_set_num_threads(3);
+		size_t num_threads = 0;
+#pragma omp parallel 
+		{
+#pragma omp single
+			num_threads = size_t(omp_get_num_threads());
+		}
+		std::cout << num_threads << " thread(s)." << std::endl;
+
+		auto t0 = std::chrono::steady_clock::now();
 
 		double err = 0;
 		for (int i = int(exponent.bitSize()) - 1; i >= 0; --i)
 		{
-			const double e = t.squareDup(exponent.bit(i));
+			const double e = t.squareDup(exponent.bit(size_t(i)), num_threads);
 			err  = std::max(err, e);
 		}
 
-		maxError = err;
-		return t.isPrime();
+		const double time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+
+		const bool isPrime = t.isPrime();
+		std::cout << b << "^" << n << " + 1";
+		if (isPrime) std::cout << " is prime";
+		std::cout << ", err = " << err << ", " << time << " sec." << std::endl;
 	}
 };
 
@@ -340,15 +379,9 @@ int main(/*int argc, char * argv[]*/)
 	try
 	{
 		genefer g;
-		const size_t n = 256;
-		for (uint32_t b = 1000000862; b <= 1000000886; b += 2)
-		{
-			double maxError = 1;
-			const bool isPrime = g.check(b, n, maxError);
-			std::cout << b;
-			if (isPrime) std::cout << "*";
-			std::cout << ", " << maxError << std::endl;
-		}
+		g.check(399998298, 1024);
+		g.check(399998572, 2048);
+		g.check(399987078, 4096);
 	}
 	catch (const std::runtime_error & e)
 	{

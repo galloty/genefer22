@@ -41,6 +41,7 @@ public:
 	Complex operator-(const Complex & rhs) const { return Complex(re - rhs.re, im - rhs.im); }
 	Complex addi(const Complex & rhs) const { return Complex(re - rhs.im, im + rhs.re); }
 	Complex subi(const Complex & rhs) const { return Complex(re + rhs.im, im - rhs.re); }
+	Complex sub_i(const Complex & rhs) const { return Complex(rhs.im - im, re - rhs.re); }
 
 	Complex operator*(const Complex & rhs) const { return Complex(re * rhs.re - im * rhs.im, im * rhs.re + re * rhs.im); }
 	Complex operator*(const double & f) const { return Complex(re * f, im * f); }
@@ -92,13 +93,18 @@ private:
 	static const size_t l_shift = 4;
 	static const size_t n_io = 16 * 4;		// multiple of 4, n_io >= 2 * l_shift, n >= 16 * n_io, n >= num_threads * n_io
 
+	static constexpr double csqrt2_2 = 0.707106781186547524400844362104849039284835937688;
+	static constexpr Complex cs2pi_1_16 = Complex(0.92387953251128675612818318939678828682, 0.41421356237309504880168872420969807857);
+	static constexpr Complex cs2pi_1_32 = Complex(0.98078528040323044912618223613423903697, 0.19891236737965800691159762264467622860);
+	static constexpr Complex cs2pi_5_32 = Complex(0.55557023301960222474283081394853287438, 1.49660576266548901760113513494247691870);
+
 	const fp16_80 sqrt_b;
 
 	const uint32_t _b;
 	const size_t _num_threads;
 	const double _sb, _isb, _fsb;
 	Complex * const _z;
-	Complex * const _w123;
+	Complex * const _w122i;
 	Complex * const _ws;
 	Complex * const _f;
 
@@ -145,7 +151,8 @@ private:
 		}
 	}
 
-	static void forward4(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void forward4(const size_t m, Complex * const z, const size_t k, const Complex * const w)
 	{
 		for (size_t j = 0; j < m; j += step)
 		{
@@ -153,14 +160,31 @@ private:
 			{
 				Complex & z0 = z[index(k + 0 * m + j + i)]; Complex & z1 = z[index(k + 1 * m + j + i)];
 				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
-				const Complex u0 = z0, u2 = z2.mulW(w[0]), u1 = z1.mulW(w[1]), u3 = z3.mulW(w[2]);
-				const Complex v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+				const Complex u0 = z0, u2 = z2.mulW(w[0]), u1 = z1, u3 = z3.mulW(w[0]);
+				const Complex v0 = u0 + u2, v2 = u0 - u2, v1 = Complex(u1 + u3).mulW(w[1]), v3 = Complex(u1 - u3).mulW(w[1]);
 				z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
 			}
 		}
 	}
 
-	static void backward4(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void forward4i(const size_t m, Complex * const z, const size_t k, const Complex * const w)
+	{
+		for (size_t j = 0; j < m; j += step)
+		{
+			for (size_t i = 0; i < count; ++i)
+			{
+				Complex & z0 = z[index(k + 0 * m + j + i)]; Complex & z1 = z[index(k + 1 * m + j + i)];
+				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
+				const Complex u0 = z0, u2 = z2.mulW(w[0]), u1 = z1, u3 = z3.mulW(w[0]);
+				const Complex v0 = u0.addi(u2), v2 = u0.subi(u2), v1 = u1.addi(u3).mulW(w[2]), v3 = u1.subi(u3).mulW(w[2]);
+				z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
+			}
+		}
+	}
+
+	template <size_t step, size_t count>
+	static void backward4(const size_t m, Complex * const z, const size_t k, const Complex * const w)
 	{
 		for (size_t j = 0; j < m; j += step)
 		{
@@ -169,35 +193,47 @@ private:
 				Complex & z0 = z[index(k + 0 * m + j + i)]; Complex & z1 = z[index(k + 1 * m + j + i)];
 				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
 				const Complex v0 = z0, v1 = z1, v2 = z2, v3 = z3;
-				const Complex u0 = v0 + v1, u1 = v0 - v1, u2 = v2 + v3, u3 = v2 - v3;
-				z0 = u0 + u2; z2 = Complex(u0 - u2).mulWconj(w[0]); z1 = u1.subi(u3).mulWconj(w[1]); z3 = u1.addi(u3).mulWconj(w[2]);
+				const Complex u0 = v0 + v1, u1 = Complex(v0 - v1).mulWconj(w[1]), u2 = v2 + v3, u3 = Complex(v2 - v3).mulWconj(w[1]);
+				z0 = u0 + u2; z2 = Complex(u0 - u2).mulWconj(w[0]); z1 = u1.subi(u3); z3 = u1.addi(u3).mulWconj(w[0]);
 			}
 		}
 	}
 
-	static void forward4_0(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void backward4i(const size_t m, Complex * const z, const size_t k, const Complex * const w)
 	{
-		const double csqrt2_2 = w[3].real();
-		const Complex cs2pi_16 = w[4];
-
 		for (size_t j = 0; j < m; j += step)
 		{
 			for (size_t i = 0; i < count; ++i)
 			{
 				Complex & z0 = z[index(k + 0 * m + j + i)]; Complex & z1 = z[index(k + 1 * m + j + i)];
 				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
-				const Complex u0 = z0, u2 = z2.mul1i(), u1 = z1.mulW(cs2pi_16), u3 = z3.mulWconj(cs2pi_16);
+				const Complex v0 = z0, v1 = z1, v2 = z2, v3 = z3;
+				const Complex u0 = v0 + v1, u1 = Complex(v0 - v1).mulWconj(w[2]), u2 = v2 + v3, u3 = Complex(v2 - v3).mulWconj(w[2]);
+				z0 = u0 + u2; z2 = u2.sub_i(u0).mulWconj(w[0]); z1 = u1.subi(u3); z3 = u3.subi(u1).mulWconj(w[0]);
+			}
+		}
+	}
+
+	template <size_t step, size_t count>
+	static void forward4_0(const size_t m, Complex * const z, const size_t k)
+	{
+		for (size_t j = 0; j < m; j += step)
+		{
+			for (size_t i = 0; i < count; ++i)
+			{
+				Complex & z0 = z[index(k + 0 * m + j + i)]; Complex & z1 = z[index(k + 1 * m + j + i)];
+				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
+				const Complex u0 = z0, u2 = z2.mul1i(), u1 = z1.mulW(cs2pi_1_16), u3 = z3.mulWconj(cs2pi_1_16);
 				const Complex v0 = u0 + u2 * csqrt2_2, v2 = u0 - u2 * csqrt2_2, v1 = u1.addi(u3), v3 = u3.addi(u1);
 				z0 = v0 + v1; z1 = v0 - v1; z2 = v2 + v3; z3 = v2 - v3;
 			}
 		}
 	}
 
-	static void backward4_0(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void backward4_0(const size_t m, Complex * const z, const size_t k)
 	{
-		const double csqrt2_2 = w[3].real();
-		const Complex cs2pi_16 = w[4];
-
 		for (size_t j = 0; j < m; j += step)
 		{
 			for (size_t i = 0; i < count; ++i)
@@ -206,12 +242,13 @@ private:
 				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
 				const Complex v0 = z0, v1 = z1, v2 = z2, v3 = z3;
 				const Complex u0 = v0 + v1, u1 = v0 - v1, u2 = v2 + v3, u3 = v2 - v3;
-				z0 = u0 + u2; z2 = Complex(u0 - u2).mul1mi() * csqrt2_2; z1 = u1.subi(u3).mulWconj(cs2pi_16); z3 = u3.subi(u1).mulW(cs2pi_16);
+				z0 = u0 + u2; z2 = Complex(u0 - u2).mul1mi() * csqrt2_2; z1 = u1.subi(u3).mulWconj(cs2pi_1_16); z3 = u3.subi(u1).mulW(cs2pi_1_16);
 			}
 		}
 	}
 
-	static void forward8_0(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void forward8_0(const size_t m, Complex * const z, const size_t k)
 	{
 		for (size_t j = 0; j < m; j += step)
 		{
@@ -221,12 +258,11 @@ private:
 				Complex & z2 = z[index(k + 2 * m + j + i)]; Complex & z3 = z[index(k + 3 * m + j + i)];
 				Complex & z4 = z[index(k + 4 * m + j + i)]; Complex & z5 = z[index(k + 5 * m + j + i)];
 				Complex & z6 = z[index(k + 6 * m + j + i)]; Complex & z7 = z[index(k + 7 * m + j + i)];
-				const Complex u0 = z0, u4 = z4.mul1i(), u2 = z2.mulW(w[4]), u6 = z6.mul1i().mulW(w[4]);
-				const Complex u1 = z1, u5 = z5.mul1i(), u3 = z3.mulW(w[4]), u7 = z7.mul1i().mulW(w[4]);
-				const double csqrt2_2 = w[3].real();
+				const Complex u0 = z0, u4 = z4.mul1i(), u2 = z2.mulW(cs2pi_1_16), u6 = z6.mul1i().mulW(cs2pi_1_16);
+				const Complex u1 = z1, u5 = z5.mul1i(), u3 = z3.mulW(cs2pi_1_16), u7 = z7.mul1i().mulW(cs2pi_1_16);
 				const Complex v0 = u0 + u4 * csqrt2_2, v4 = u0 - u4 * csqrt2_2, v2 = u2 + u6 * csqrt2_2, v6 = u2 - u6 * csqrt2_2;
-				const Complex v1 = Complex(u1 + u5 * csqrt2_2).mulW(w[7]), v5 = Complex(u1 - u5 * csqrt2_2).mulW(w[10]);
-				const Complex v3 = Complex(u3 + u7 * csqrt2_2).mulW(w[7]), v7 = Complex(u3 - u7 * csqrt2_2).mulW(w[10]);
+				const Complex v1 = Complex(u1 + u5 * csqrt2_2).mulW(cs2pi_1_32), v5 = Complex(u1 - u5 * csqrt2_2).mulW(cs2pi_5_32);
+				const Complex v3 = Complex(u3 + u7 * csqrt2_2).mulW(cs2pi_1_32), v7 = Complex(u3 - u7 * csqrt2_2).mulW(cs2pi_5_32);
 				const Complex s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = v1 - v3;
 				const Complex s4 = v4.addi(v6), s6 = v4.subi(v6), s5 = v5.addi(v7), s7 = v5.subi(v7);
 				z0 = s0 + s1; z1 = s0 - s1; z2 = s2.addi(s3); z3 = s2.subi(s3);
@@ -235,7 +271,8 @@ private:
 		}
 	}
 
-	static void backward8_0(const size_t m, const size_t step, const size_t count, Complex * const z, const size_t k, const Complex * const w)
+	template <size_t step, size_t count>
+	static void backward8_0(const size_t m, Complex * const z, const size_t k)
 	{
 		for (size_t j = 0; j < m; j += step)
 		{
@@ -246,13 +283,12 @@ private:
 				Complex & z4 = z[index(k + 4 * m + j + i)]; Complex & z5 = z[index(k + 5 * m + j + i)];
 				Complex & z6 = z[index(k + 6 * m + j + i)]; Complex & z7 = z[index(k + 7 * m + j + i)];
 				const Complex s0 = z0, s1 = z1, s2 = z2, s3 = z3, s4 = z4, s5 = z5, s6 = z6, s7 = z7;
-				const Complex v0 = s0 + s1, v1 = Complex(s0 - s1).mulWconj(w[7]), v2 = s2 + s3, v3 = Complex(s2 - s3).mulWconj(w[7]);
-				const Complex v4 = s4 + s5, v5 = Complex(s4 - s5).mulWconj(w[10]), v6 = s6 + s7, v7 = Complex(s6 - s7).mulWconj(w[10]);
+				const Complex v0 = s0 + s1, v1 = Complex(s0 - s1).mulWconj(cs2pi_1_32), v2 = s2 + s3, v3 = Complex(s2 - s3).mulWconj(cs2pi_1_32);
+				const Complex v4 = s4 + s5, v5 = Complex(s4 - s5).mulWconj(cs2pi_5_32), v6 = s6 + s7, v7 = Complex(s6 - s7).mulWconj(cs2pi_5_32);
 				const Complex u0 = v0 + v2, u2 = v0 - v2, u4 = v4 + v6, u6 = v4 - v6;
 				const Complex u1 = v1.subi(v3), u3 = v1.addi(v3), u5 = v5.subi(v7), u7 = v5.addi(v7);
-				const double csqrt2_2 = w[3].real();
-				z0 = u0 + u4; z4 = Complex(u0 - u4).mul1mi() * csqrt2_2; z2 = u2.subi(u6).mulWconj(w[4]); z6 = u6.subi(u2).mulW(w[4]);
-				z1 = u1 + u5; z5 = Complex(u1 - u5).mul1mi() * csqrt2_2; z3 = u3.subi(u7).mulWconj(w[4]); z7 = u7.subi(u3).mulW(w[4]);
+				z0 = u0 + u4; z4 = Complex(u0 - u4).mul1mi() * csqrt2_2; z2 = u2.subi(u6).mulWconj(cs2pi_1_16); z6 = u6.subi(u2).mulW(cs2pi_1_16);
+				z1 = u1 + u5; z5 = Complex(u1 - u5).mul1mi() * csqrt2_2; z3 = u3.subi(u7).mulWconj(cs2pi_1_16); z7 = u7.subi(u3).mulW(cs2pi_1_16);
 			}
 		}
 	}
@@ -275,41 +311,47 @@ private:
 		z0 = s2.addi(s0); z2 = s0.addi(s2).mulWconj(w); z1 = s1.subi(s3); z3 = s3.subi(s1).mulWconj(w);
 	}
 
-	static void forward_out(Complex * const z, const size_t lh, const Complex * const w123)
+	static void forward_out(Complex * const z, const size_t lh, const Complex * const w122i)
 	{
-		size_t s = (N / 4) / n_io; for (; s >= 16; s /= 4);
+		size_t s = (N / 4) / n_io / 2; for (; s >= 4 * 2; s /= 4);
 
-		if (s == 8) forward8_0(N / 8, n_io, 2 * l_shift, z, 2 * l_shift * lh, w123);
-		else        forward4_0(N / 4, n_io, 2 * l_shift, z, 2 * l_shift * lh, w123);
+		if (s == 4) forward8_0<n_io, 2 * l_shift>(N / 8, z, 2 * l_shift * lh);
+		else        forward4_0<n_io, 2 * l_shift>(N / 4, z, 2 * l_shift * lh);
 
-		for (size_t m = (s == 8) ? N / 32 : N / 16; m >= n_io; m /= 4, s *= 4)
+		for (size_t m = (s == 4) ? N / 32 : N / 16; m >= n_io; m /= 4, s *= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				forward4(m, n_io, 2 * l_shift, z, 4 * m * j + 2 * l_shift * lh, &w123[3 * (s + j)]);
+				const size_t k = 2 * l_shift * lh + 8 * m * j;
+				const Complex * const w_j = &w122i[s + 3 * j];
+				forward4<n_io, 2 * l_shift>(m, z, k + 0 * 4 * m, w_j);
+				forward4i<n_io, 2 * l_shift>(m, z, k + 1 * 4 * m, w_j);
 			}
 		}
 	}
 
-	static void backward_out(Complex * const z, const size_t lh, const Complex * const w123)
+	static void backward_out(Complex * const z, const size_t lh, const Complex * const w122i)
 	{
-		size_t s = (N / 4) / n_io;
-		for (size_t m = n_io; s >= 4; m *= 4, s /= 4)
+		size_t s = (N / 4) / n_io / 2;
+		for (size_t m = n_io; s >= 2; m *= 4, s /= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				backward4(m, n_io, 2 * l_shift, z, 4 * m * j + 2 * l_shift * lh, &w123[3 * (s + j)]);
+				const size_t k = 2 * l_shift * lh + 8 * m * j;
+				const Complex * const w_j = &w122i[s + 3 * j];
+				backward4<n_io, 2 * l_shift>(m, z, k + 0 * 4 * m, w_j);
+				backward4i<n_io, 2 * l_shift>(m, z, k + 1 * 4 * m, w_j);
 			}
 		}
 
-		if (s == 2) backward8_0(N / 8, n_io, 2 * l_shift, z, 2 * l_shift * lh, w123);
-		else        backward4_0(N / 4, n_io, 2 * l_shift, z, 2 * l_shift * lh, w123);
+		if (s == 1) backward8_0<n_io, 2 * l_shift>(N / 8, z, 2 * l_shift * lh);
+		else        backward4_0<n_io, 2 * l_shift>(N / 4, z, 2 * l_shift * lh);
 	}
 
 	void pass1(const size_t thread_id)
 	{
 		Complex * const z = _z;
-		const Complex * const w123 = _w123;
+		const Complex * const w122i = _w122i;
 		const Complex * const ws = _ws;
 
 		const size_t num_threads = _num_threads, s_io = N / n_io;
@@ -317,30 +359,44 @@ private:
 		for (size_t l = l_min; l < l_max; ++l)
 		{
 			// forward_in
-			for (size_t m = n_io / 4, s = 1; m >= 4; m /= 4, s *= 4)
+			const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
+
+			if (l % 2 == 0) forward4<1, 1>(n_io / 4, z, n_io * l, w);
+			else            forward4i<1, 1>(n_io / 4, z, n_io * l, w);
+
+			for (size_t m = n_io / 16, s = 2; m >= 4; m /= 4, s *= 4)
 			{
 				for (size_t j = 0; j < s; ++j)
 				{
-					forward4(m, 1, 1, z, n_io * l + 4 * m * j, &w123[3 * ((s_io + l) * s + j)]);
+					const size_t k = n_io * l + 8 * m * j;
+					const Complex * const w_j = &w122i[(s_io + 3 * l) * s + 3 * j];
+					forward4<1, 1>(m, z, k + 0 * 4 * m, w_j);
+					forward4i<1, 1>(m, z, k + 1 * 4 * m, w_j);
 				}
 			}
 
 			// square
 			for (size_t j = 0; j < n_io / 8; ++j)
 			{
-				const Complex wsj = ws[l * n_io / 8 + j];
-				square4(z, n_io * l + 8 * j + 0, wsj);
-				square4i(z, n_io * l + 8 * j + 4, wsj);
+				const Complex ws_j = ws[l * n_io / 8 + j];
+				square4(z, n_io * l + 8 * j + 0, ws_j);
+				square4i(z, n_io * l + 8 * j + 4, ws_j);
 			}
 
 			// backward_in
-			for (size_t m = 4, s = n_io / 4 / m; m <= n_io / 4; m *= 4, s /= 4)
+			for (size_t m = 4, s = n_io / 4 / m / 2; m <= n_io / 16; m *= 4, s /= 4)
 			{
 				for (size_t j = 0; j < s; ++j)
 				{
-					backward4(m, 1, 1, z, n_io * l + 4 * m * j, &w123[3 * ((s_io + l) * s + j)]);
+					const size_t k = n_io * l + 8 * m * j;
+					const Complex * const w_j = &w122i[(s_io + 3 * l) * s + 3 * j];
+					backward4<1, 1>(m, z, k + 0 * 4 * m, w_j);
+					backward4i<1, 1>(m, z, k + 1 * 4 * m, w_j);
 				}
 			}
+
+			if (l % 2 == 0) backward4<1, 1>(n_io / 4, z, n_io * l, w);
+			else            backward4i<1, 1>(n_io / 4, z, n_io * l, w);
 		}
 	}
 
@@ -348,7 +404,7 @@ private:
 	{
 		const double b = double(_b);
 		Complex * const z = _z;
-		const Complex * const w123 = _w123;
+		const Complex * const w122i = _w122i;
 		Complex * const f = _f;
 		const double sb = _sb, isb = _isb, fsb = _fsb;
 
@@ -360,7 +416,7 @@ private:
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
 		for (size_t lh = l_min; lh < l_max; ++lh)
 		{
-			backward_out(z, lh, w123);
+			backward_out(z, lh, w122i);
 
 			// carry_out
 			for (size_t l = 0; l < l_shift; ++l)
@@ -390,7 +446,7 @@ private:
 	{
 		const double b = double(_b);
 		Complex * const z = _z;
-		const Complex * const w123 = _w123;
+		const Complex * const w122i = _w122i;
 		Complex * const f = _f;
 		const double sb = _sb, isb = _isb, fsb = _fsb;
 
@@ -424,41 +480,36 @@ private:
 				if (!f_j.isZero()) { std::cout << "Error!" << std::endl; exit(0); }	// TODO
 			}
 
-			forward_out(z, lh, w123);
+			forward_out(z, lh, w122i);
 		}
 	}
 
 public:
 	CZIT_CPU_vec_mt(const uint32_t b, const size_t num_threads) : sqrt_b(fp16_80::sqrt(b)), _b(b),
 		_num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()),
-		_z(new Complex[N]), _w123(new Complex[3 * N / 8]), _ws(new Complex[N / 8]), _f(new Complex[N / l_shift / 2])
+		_z(new Complex[N]), _w122i(new Complex[N / 8]), _ws(new Complex[N / 8]), _f(new Complex[N / l_shift / 2])
 	{
 		Complex * const z = _z;
 		z[0] = Complex(2, 0);
 		for (size_t k = 1; k < N; ++k) z[k] = Complex(0, 0);
 
-		Complex * const w123 = _w123;
-		for (size_t s = 1; s <= N / 16; s *= 2)
+		Complex * const w122i = _w122i;
+		for (size_t s = N / 16; s >= 4; s /= 4)
 		{
-			Complex * const w123_s = &w123[3 * s];
-			for (size_t j = 0; j < s; ++j)
+			Complex * const w_s = &w122i[2 * s / 4];
+			for (size_t j = 0; j < s / 2; ++j)
 			{
-				const size_t r = bitRev(j, 4 * s) + 1;
-				w123_s[3 * j + 0] = Complex::exp2iPi(r, 8 * s);
-				w123_s[3 * j + 1] = Complex::exp2iPi(r, 2 * 8 * s);
-				w123_s[3 * j + 2] = Complex::exp2iPi(3 * r, 2 * 8 * s);
-				// std::cout << s << ", " << j << ": ("
-				// 	<< w123_s[3 * j + 0].real() << ", " << w123_s[3 * j + 0].imag() * w123_s[3 * j + 0].real() << "), ("
-				// 	<< w123_s[3 * j + 1].real() << ", " << w123_s[3 * j + 1].imag() * w123_s[3 * j + 1].real() << "), ("
-				// 	<< w123_s[3 * j + 2].real() << ", " << w123_s[3 * j + 2].imag() * w123_s[3 * j + 2].real() << ")" << std::endl;
+				const size_t r = bitRev(j, 2 * s) + 1;
+				w_s[3 * j + 0] = Complex::exp2iPi(r, 8 * s);
+				w_s[3 * j + 1] = Complex::exp2iPi(r, 2 * 8 * s);
+				w_s[3 * j + 2] = Complex::exp2iPi(r + 2 * s, 2 * 8 * s);
 			}
 		}
 
 		Complex * const ws = _ws;
 		for (size_t j = 0; j < N / 8; ++j)
 		{
-			ws[j] = Complex::exp2iPi(bitRev(2 * j, 4 * (N / 4)) + 1, 8 * (N / 4));
-			// std::cout << j << ": (" << ws[j].real() << ", " << ws[j].imag() * ws[j].real() << ")" << std::endl;
+			ws[j] = Complex::exp2iPi(bitRev(j, 2 * (N / 4)) + 1, 8 * (N / 4));
 		}
 
 		Complex * const f = _f;
@@ -466,14 +517,14 @@ public:
 
 		for (size_t lh = 0; lh < n_io / l_shift / 2; ++lh)
 		{
-			forward_out(z, lh, w123);
+			forward_out(z, lh, w122i);
 		}
 	}
 
 	virtual ~CZIT_CPU_vec_mt()
 	{
 		delete[] _z;
-		delete[] _w123;
+		delete[] _w122i;
 		delete[] _ws;
 		delete[] _f;
 	}
@@ -501,10 +552,11 @@ public:
 	bool isPrime() override
 	{
 		Complex * const z = _z;
+		const Complex * const w122i = _w122i;
 
 		for (size_t lh = 0; lh < n_io / l_shift / 2; ++lh)
 		{
-			backward_out(z, lh, _w123);
+			backward_out(z, lh, w122i);
 		}
 
 		reducePos();

@@ -196,87 +196,85 @@ class Vradix4
 {
 private:
 	using Vc = Vcx<N>;
-	Vc z0, z1, z2, z3;
+	Vc z[4];
 
 public:
 	explicit Vradix4(const Complex * const mem, const size_t step)
 	{
-		z0 = Vc::read(&mem[0 * step]); z1 = Vc::read(&mem[1 * step]), z2 = Vc::read(&mem[2 * step]); z3 = Vc::read(&mem[3 * step]);
+		for (size_t i = 0; i < 4; ++i) z[i] = Vc::read(&mem[i * step]);
 	}
 
 	void store(Complex * const mem, const size_t step) const
 	{
-		z0.write(&mem[0 * step]); z1.write(&mem[1 * step]); z2.write(&mem[2 * step]); z3.write(&mem[3 * step]);
+		for (size_t i = 0; i < 4; ++i) z[i].write(&mem[i * step]);
 	}
 
 	explicit Vradix4(const Complex * const mem1, const Complex * const mem2, const size_t step)
 	{
-		z0 = Vc::read(&mem1[0 * step], &mem2[0 * step]); z1 = Vc::read(&mem1[1 * step], &mem2[1 * step]);
-		z2 = Vc::read(&mem1[2 * step], &mem2[2 * step]); z3 = Vc::read(&mem1[3 * step], &mem2[3 * step]);
+		for (size_t i = 0; i < 4; ++i) z[i] = Vc::read(&mem1[i * step], &mem2[i * step]);
 	}
 
 	void store(Complex * const mem1, Complex * const mem2, const size_t step) const
 	{
-		z0.write(&mem1[0 * step], &mem2[0 * step]); z1.write(&mem1[1 * step], &mem2[1 * step]);
-		z2.write(&mem1[2 * step], &mem2[2 * step]); z3.write(&mem1[3 * step], &mem2[3 * step]);
+		for (size_t i = 0; i < 4; ++i) z[i].write(&mem1[i * step], &mem2[i * step]);
 	}
 
 	void forward4e(const Vc & w0, const Vc & w1)
 	{
-		const Vc u0 = z0, u2 = z2.mulW(w0), u1 = z1, u3 = z3.mulW(w0);
+		const Vc u0 = z[0], u2 = z[2].mulW(w0), u1 = z[1], u3 = z[3].mulW(w0);
 		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = Vc(u1 + u3).mulW(w1), v3 = Vc(u1 - u3).mulW(w1);
-		z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
+		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2.addi(v3); z[3] = v2.subi(v3);
 	}
 
 	void forward4o(const Vc & w0, const Vc & w2)
 	{
-		const Vc u0 = z0, u2 = z2.mulW(w0), u1 = z1, u3 = z3.mulW(w0);
+		const Vc u0 = z[0], u2 = z[2].mulW(w0), u1 = z[1], u3 = z[3].mulW(w0);
 		const Vc v0 = u0.addi(u2), v2 = u0.subi(u2), v1 = u1.addi(u3).mulW(w2), v3 = u1.subi(u3).mulW(w2);
-		z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
+		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2.addi(v3); z[3] = v2.subi(v3);
 	}
 
 	void backward4e(const Vc & w0, const Vc & w1)
 	{
-		const Vc v0 = z0, v1 = z1, v2 = z2, v3 = z3;
+		const Vc v0 = z[0], v1 = z[1], v2 = z[2], v3 = z[3];
 		const Vc u0 = v0 + v1, u1 = Vc(v0 - v1).mulWconj(w1), u2 = v2 + v3, u3 = Vc(v2 - v3).mulWconj(w1);
-		z0 = u0 + u2; z2 = Vc(u0 - u2).mulWconj(w0); z1 = u1.subi(u3); z3 = u1.addi(u3).mulWconj(w0);
+		z[0] = u0 + u2; z[2] = Vc(u0 - u2).mulWconj(w0); z[1] = u1.subi(u3); z[3] = u1.addi(u3).mulWconj(w0);
 	}
 
 	void backward4o(const Vc & w0, const Vc & w2)
 	{
-		const Vc v0 = z0, v1 = z1, v2 = z2, v3 = z3;
+		const Vc v0 = z[0], v1 = z[1], v2 = z[2], v3 = z[3];
 		const Vc u0 = v0 + v1, u1 = Vc(v0 - v1).mulWconj(w2), u2 = v2 + v3, u3 = Vc(v2 - v3).mulWconj(w2);
-		z0 = u0 + u2; z2 = u2.sub_i(u0).mulWconj(w0); z1 = u1.subi(u3); z3 = u3.subi(u1).mulWconj(w0);
+		z[0] = u0 + u2; z[2] = u2.sub_i(u0).mulWconj(w0); z[1] = u1.subi(u3); z[3] = u3.subi(u1).mulWconj(w0);
 	}
 
 	void forward4_0(const Vc & w0)
 	{
-		const Vc u0 = z0, u2 = z2.mul1i(), u1 = z1.mulW(w0), u3 = z3.mulWconj(w0);
+		const Vc u0 = z[0], u2 = z[2].mul1i(), u1 = z[1].mulW(w0), u3 = z[3].mulWconj(w0);
 		const Vc v0 = u0 + u2 * csqrt2_2, v2 = u0 - u2 * csqrt2_2, v1 = u1.addi(u3), v3 = u3.addi(u1);
-		z0 = v0 + v1; z1 = v0 - v1; z2 = v2 + v3; z3 = v2 - v3;
+		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2 + v3; z[3] = v2 - v3;
 	}
 
 	void backward4_0(const Vc & w0)
 	{
-		const Vc v0 = z0, v1 = z1, v2 = z2, v3 = z3;
+		const Vc v0 = z[0], v1 = z[1], v2 = z[2], v3 = z[3];
 		const Vc u0 = v0 + v1, u1 = v0 - v1, u2 = v2 + v3, u3 = v2 - v3;
-		z0 = u0 + u2; z2 = Vc(u0 - u2).mul1mi() * csqrt2_2; z1 = u1.subi(u3).mulWconj(w0); z3 = u3.subi(u1).mulW(w0);
+		z[0] = u0 + u2; z[2] = Vc(u0 - u2).mul1mi() * csqrt2_2; z[1] = u1.subi(u3).mulWconj(w0); z[3] = u3.subi(u1).mulW(w0);
 	}
 
 	void square4e(const Vc & w)
 	{
-		const Vc u0 = z0, u2 = z2.mulW(w), u1 = z1, u3 = z3.mulW(w);
+		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
 		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
 		const Vc s0 = v0.sqr() + v1.sqr().mulW(w), s1 = (v0 + v0) * v1, s2 = v2.sqr() - v3.sqr().mulW(w), s3 = (v2 + v2) * v3;
-		z0 = s0 + s2; z2 = Vc(s0 - s2).mulWconj(w); z1 = s1 + s3; z3 = Vc(s1 - s3).mulWconj(w);
+		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
 	}
 
 	void square4o(const Vc & w)
 	{
-		const Vc u0 = z0, u2 = z2.mulW(w), u1 = z1, u3 = z3.mulW(w);
+		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
 		const Vc v0 = u0.addi(u2), v2 = u0.subi(u2), v1 = u1.addi(u3), v3 = u3.addi(u1);
 		const Vc s0 = v1.sqr().mulW(w).subi(v0.sqr()), s1 = (v0 + v0) * v1, s2 = v2.sqr().addi(v3.sqr().mulW(w)), s3 = (v2 + v2) * v3;
-		z0 = s2.addi(s0); z2 = s0.addi(s2).mulWconj(w); z1 = s1.subi(s3); z3 = s3.subi(s1).mulWconj(w);
+		z[0] = s2.addi(s0); z[2] = s0.addi(s2).mulWconj(w); z[1] = s1.subi(s3); z[3] = s3.subi(s1).mulWconj(w);
 	}
 };
 
@@ -285,47 +283,45 @@ class Vradix8
 {
 private:
 	using Vc = Vcx<N>;
-	Vc z0, z1, z2, z3, z4, z5, z6, z7;
+	Vc z[8];
 
 public:
-	explicit Vradix8(const Complex * const z, const size_t step)
+	explicit Vradix8(const Complex * const mem, const size_t step)
 	{
-		z0 = Vc::read(&z[0 * step]); z1 = Vc::read(&z[1 * step]); z2 = Vc::read(&z[2 * step]); z3 = Vc::read(&z[3 * step]);
-		z4 = Vc::read(&z[4 * step]); z5 = Vc::read(&z[5 * step]); z6 = Vc::read(&z[6 * step]); z7 = Vc::read(&z[7 * step]);
+		for (size_t i = 0; i < 8; ++i) z[i] = Vc::read(&mem[i * step]);
 	}
 
-	void store(Complex * const z, const size_t step) const
+	void store(Complex * const mem, const size_t step) const
 	{
-		z0.write(&z[0 * step]); z1.write(&z[1 * step]); z2.write(&z[2 * step]); z3.write(&z[3 * step]);
-		z4.write(&z[4 * step]); z5.write(&z[5 * step]); z6.write(&z[6 * step]); z7.write(&z[7 * step]);
+		for (size_t i = 0; i < 8; ++i) z[i].write(&mem[i * step]);
 	}
 
 	void forward8_0()
 	{
 		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
-		const Vc u0 = z0, u4 = z4.mul1i(), u2 = z2.mulW(w0), u6 = z6.mul1i().mulW(w0);
-		const Vc u1 = z1, u5 = z5.mul1i(), u3 = z3.mulW(w0), u7 = z7.mul1i().mulW(w0);
+		const Vc u0 = z[0], u4 = z[4].mul1i(), u2 = z[2].mulW(w0), u6 = z[6].mul1i().mulW(w0);
+		const Vc u1 = z[1], u5 = z[5].mul1i(), u3 = z[3].mulW(w0), u7 = z[7].mul1i().mulW(w0);
 		const Vc v0 = u0 + u4 * csqrt2_2, v4 = u0 - u4 * csqrt2_2, v2 = u2 + u6 * csqrt2_2, v6 = u2 - u6 * csqrt2_2;
 		const Vc w1 = Vc::broadcast(&cs2pi_1_32), w2 = Vc::broadcast(&cs2pi_5_32);;
 		const Vc v1 = Vc(u1 + u5 * csqrt2_2).mulW(w1), v5 = Vc(u1 - u5 * csqrt2_2).mulW(w2);
 		const Vc v3 = Vc(u3 + u7 * csqrt2_2).mulW(w1), v7 = Vc(u3 - u7 * csqrt2_2).mulW(w2);
 		const Vc s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = v1 - v3;
 		const Vc s4 = v4.addi(v6), s6 = v4.subi(v6), s5 = v5.addi(v7), s7 = v5.subi(v7);
-		z0 = s0 + s1; z1 = s0 - s1; z2 = s2.addi(s3); z3 = s2.subi(s3);
-		z4 = s4 + s5; z5 = s4 - s5; z6 = s6.addi(s7); z7 = s6.subi(s7);
+		z[0] = s0 + s1; z[1] = s0 - s1; z[2] = s2.addi(s3); z[3] = s2.subi(s3);
+		z[4] = s4 + s5; z[5] = s4 - s5; z[6] = s6.addi(s7); z[7] = s6.subi(s7);
 	}
 
 	void backward8_0()
 	{
-		const Vc s0 = z0, s1 = z1, s2 = z2, s3 = z3, s4 = z4, s5 = z5, s6 = z6, s7 = z7;
+		const Vc s0 = z[0], s1 = z[1], s2 = z[2], s3 = z[3], s4 = z[4], s5 = z[5], s6 = z[6], s7 = z[7];
 		const Vc w1 = Vc::broadcast(&cs2pi_1_32), w2 = Vc::broadcast(&cs2pi_5_32);;
 		const Vc v0 = s0 + s1, v1 = Vc(s0 - s1).mulWconj(w1), v2 = s2 + s3, v3 = Vc(s2 - s3).mulWconj(w1);
 		const Vc v4 = s4 + s5, v5 = Vc(s4 - s5).mulWconj(w2), v6 = s6 + s7, v7 = Vc(s6 - s7).mulWconj(w2);
 		const Vc u0 = v0 + v2, u2 = v0 - v2, u4 = v4 + v6, u6 = v4 - v6;
 		const Vc u1 = v1.subi(v3), u3 = v1.addi(v3), u5 = v5.subi(v7), u7 = v5.addi(v7);
 		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
-		z0 = u0 + u4; z4 = Vc(u0 - u4).mul1mi() * csqrt2_2; z2 = u2.subi(u6).mulWconj(w0); z6 = u6.subi(u2).mulW(w0);
-		z1 = u1 + u5; z5 = Vc(u1 - u5).mul1mi() * csqrt2_2; z3 = u3.subi(u7).mulWconj(w0); z7 = u7.subi(u3).mulW(w0);
+		z[0] = u0 + u4; z[4] = Vc(u0 - u4).mul1mi() * csqrt2_2; z[2] = u2.subi(u6).mulWconj(w0); z[6] = u6.subi(u2).mulW(w0);
+		z[1] = u1 + u5; z[5] = Vc(u1 - u5).mul1mi() * csqrt2_2; z[3] = u3.subi(u7).mulWconj(w0); z[7] = u7.subi(u3).mulW(w0);
 	}
 };
 
@@ -342,6 +338,8 @@ class CZIT_CPU_vec_mt : public ComplexITransform
 private:
 	static const size_t l_shift = 4;		// l_shift >= VSIZE / 2
 	static const size_t n_io = 16 * 4;		// power of 4, n_io >= 64, n_io >= 2 * l_shift, n >= 16 * n_io, n >= num_threads * n_io
+	static const size_t n_io_s = n_io / l_shift / 2;
+	static const size_t n_io_inv = N / n_io / VSIZE;
 
 	using Vc = Vcx<VSIZE>;
 	using Vr4 = Vradix4<VSIZE>;
@@ -370,7 +368,7 @@ private:
 	void reducePos()
 	{
 		const uint32_t b = _b;
-		const double sb = _sb, n_io_inv = double(n_io) / N;
+		const double sb = _sb, n_io_N = double(n_io) / N;
 		Complex * const z = _z;
 
 		int64_t f = 0;
@@ -378,7 +376,7 @@ private:
 		{
 			const double o1 = (k < N) ? z[index(k + 0)].real : z[index(k + 0 - N)].imag;
 			const double o2 = (k < N) ? z[index(k + 1)].real : z[index(k + 1 - N)].imag;
-			const double o = (o1 + sb * o2) * n_io_inv;
+			const double o = (o1 + sb * o2) * n_io_N;
 			f += llrint(o);
 			int32_t r = f % b; if (r < 0) r += b;
 			f -= r; f /= b;
@@ -400,15 +398,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void forward4e(const size_t m, Complex * const z, const size_t k, const Vc & w0, const Vc & w1)
+	template <size_t stepi, size_t count>
+	static void forward4e(const size_t mi, Complex * const z, const Vc & w0, const Vc & w1)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += (step == 1) ? VSIZE : step)
+		for (size_t j = 0; j < mi; j += (stepi == 1) ? VSIZE : stepi)
 		{
 			for (size_t i = 0; i < count; i += (count != 1) ? VSIZE : 1)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.forward4e(w0, w1);
 				vr.store(zi, mi);
@@ -416,15 +413,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void forward4o(const size_t m, Complex * const z, const size_t k, const Vc & w0, const Vc & w2)
+	template <size_t stepi, size_t count>
+	static void forward4o(const size_t mi, Complex * const z, const Vc & w0, const Vc & w2)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += (step == 1) ? VSIZE : step)
+		for (size_t j = 0; j < mi; j += (stepi == 1) ? VSIZE : stepi)
 		{
 			for (size_t i = 0; i < count; i += (count != 1) ? VSIZE : 1)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.forward4o(w0, w2);
 				vr.store(zi, mi);
@@ -432,15 +428,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void backward4e(const size_t m, Complex * const z, const size_t k, const Vc & w0, const Vc & w1)
+	template <size_t stepi, size_t count>
+	static void backward4e(const size_t mi, Complex * const z, const Vc & w0, const Vc & w1)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += (step == 1) ? VSIZE : step)
+		for (size_t j = 0; j < mi; j += (stepi == 1) ? VSIZE : stepi)
 		{
 			for (size_t i = 0; i < count; i += (count != 1) ? VSIZE : 1)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.backward4e(w0, w1);
 				vr.store(zi, mi);
@@ -448,15 +443,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void backward4o(const size_t m, Complex * const z, const size_t k, const Vc & w0, const Vc & w2)
+	template <size_t stepi, size_t count>
+	static void backward4o(const size_t mi, Complex * const z, const Vc & w0, const Vc & w2)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += (step == 1) ? VSIZE : step)
+		for (size_t j = 0; j < mi; j += (stepi == 1) ? VSIZE : stepi)
 		{
 			for (size_t i = 0; i < count; i += (count != 1) ? VSIZE : 1)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.backward4o(w0, w2);
 				vr.store(zi, mi);
@@ -464,48 +458,43 @@ private:
 		}
 	}
 
-	static void forward4e_4(Complex * const z, const size_t k, const Vc & w0, const Vc & w1)
+	static void forward4e_4(Complex * const z, const Vc & w0, const Vc & w1)
 	{
-		Complex * const zk = &z[index(k)];
-		Vr4 vr(zk, &zk[32], 4);
+		Vr4 vr(z, &z[32], 4);
 		vr.forward4e(w0, w1);
-		vr.store(zk, &zk[32], 4);
+		vr.store(z, &z[32], 4);
 	}
 
-	static void forward4o_4(Complex * const z, const size_t k, const Vc & w0, const Vc & w2)
+	static void forward4o_4(Complex * const z, const Vc & w0, const Vc & w2)
 	{
-		Complex * const zk = &z[index(k)];
-		Vr4 vr(zk, &zk[32], 4);
+		Vr4 vr(z, &z[32], 4);
 		vr.forward4o(w0, w2);
-		vr.store(zk, &zk[32], 4);
+		vr.store(z, &z[32], 4);
 	}
 
-	static void backward4e_4(Complex * const z, const size_t k, const Vc & w0, const Vc & w1)
+	static void backward4e_4(Complex * const z, const Vc & w0, const Vc & w1)
 	{
-		Complex * const zk = &z[index(k)];
-		Vr4 vr(zk, &zk[32], 4);
+		Vr4 vr(z, &z[32], 4);
 		vr.backward4e(w0, w1);
-		vr.store(zk, &zk[32], 4);
+		vr.store(z, &z[32], 4);
 	}
 
-	static void backward4o_4(Complex * const z, const size_t k, const Vc & w0, const Vc & w2)
+	static void backward4o_4(Complex * const z, const Vc & w0, const Vc & w2)
 	{
-		Complex * const zk = &z[index(k)];
-		Vr4 vr(zk, &zk[32], 4);
+		Vr4 vr(z, &z[32], 4);
 		vr.backward4o(w0, w2);
-		vr.store(zk, &zk[32], 4);
+		vr.store(z, &z[32], 4);
 	}
 
-	template <size_t step, size_t count>
-	static void forward4_0(const size_t m, Complex * const z, const size_t k)
+	template <size_t stepi, size_t count>
+	static void forward4_0(const size_t mi, Complex * const z)
 	{
-		const size_t mi = index(m);
 		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
-		for (size_t j = 0; j < m; j += step)
+		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; i += VSIZE)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.forward4_0(w0);
 				vr.store(zi, mi);
@@ -513,16 +502,15 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void backward4_0(const size_t m, Complex * const z, const size_t k)
+	template <size_t stepi, size_t count>
+	static void backward4_0(const size_t mi, Complex * const z)
 	{
-		const size_t mi = index(m);
 		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
-		for (size_t j = 0; j < m; j += step)
+		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; i += VSIZE)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr4 vr(zi, mi);
 				vr.backward4_0(w0);
 				vr.store(zi, mi);
@@ -530,15 +518,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void forward8_0(const size_t m, Complex * const z, const size_t k)
+	template <size_t stepi, size_t count>
+	static void forward8_0(const size_t mi, Complex * const z)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += step)
+		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; i += VSIZE)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr8 vr(zi, mi);
 				vr.forward8_0();
 				vr.store(zi, mi);
@@ -546,15 +533,14 @@ private:
 		}
 	}
 
-	template <size_t step, size_t count>
-	static void backward8_0(const size_t m, Complex * const z, const size_t k)
+	template <size_t stepi, size_t count>
+	static void backward8_0(const size_t mi, Complex * const z)
 	{
-		const size_t mi = index(m);
-		for (size_t j = 0; j < m; j += step)
+		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; i += VSIZE)
 			{
-				Complex * const zi = &z[index(k + j + i)];
+				Complex * const zi = &z[j + i];
 				Vr8 vr(zi, mi);
 				vr.backward8_0();
 				vr.store(zi, mi);
@@ -580,19 +566,19 @@ private:
 	{
 		size_t s = (N / 4) / n_io / 2; for (; s >= 4 * 2; s /= 4);
 
-		if (s == 4) forward8_0<n_io, 2 * l_shift>(N / 8, z, 2 * l_shift * lh);
-		else        forward4_0<n_io, 2 * l_shift>(N / 4, z, 2 * l_shift * lh);
+		if (s == 4) forward8_0<index(n_io), 2 * l_shift>(index(N / 8), &z[2 * l_shift * lh]);
+		else        forward4_0<index(n_io), 2 * l_shift>(index(N / 4), &z[2 * l_shift * lh]);
 
-		for (size_t m = (s == 4) ? N / 32 : N / 16; m >= n_io; m /= 4, s *= 4)
+		for (size_t mi = index((s == 4) ? N / 32 : N / 16); mi >= index(n_io); mi /= 4, s *= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t k = 2 * l_shift * lh + 8 * m * j;
+				const size_t k = 2 * l_shift * lh + 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
 				const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
-				forward4e<n_io, 2 * l_shift>(m, z, k + 0 * 4 * m, w0, w1);
+				forward4e<index(n_io), 2 * l_shift>(mi, &z[k + 0 * 4 * mi], w0, w1);
 				const Vc w2 = Vc::broadcast(&w[2]);
-				forward4o<n_io, 2 * l_shift>(m, z, k + 1 * 4 * m, w0, w2);
+				forward4o<index(n_io), 2 * l_shift>(mi, &z[k + 1 * 4 * mi], w0, w2);
 			}
 		}
 	}
@@ -600,21 +586,21 @@ private:
 	static void backward_out(Complex * const z, const size_t lh, const Complex * const w122i)
 	{
 		size_t s = (N / 4) / n_io / 2;
-		for (size_t m = n_io; s >= 2; m *= 4, s /= 4)
+		for (size_t mi = index(n_io); s >= 2; mi *= 4, s /= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t k = 2 * l_shift * lh + 8 * m * j;
+				const size_t k = 2 * l_shift * lh + 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
 				const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
-				backward4e<n_io, 2 * l_shift>(m, z, k + 0 * 4 * m, w0, w1);
+				backward4e<index(n_io), 2 * l_shift>(mi, &z[k + 0 * 4 * mi], w0, w1);
 				const Vc w2 = Vc::broadcast(&w[2]);
-				backward4o<n_io, 2 * l_shift>(m, z, k + 1 * 4 * m, w0, w2);
+				backward4o<index(n_io), 2 * l_shift>(mi, &z[k + 1 * 4 * mi], w0, w2);
 			}
 		}
 
-		if (s == 1) backward8_0<n_io, 2 * l_shift>(N / 8, z, 2 * l_shift * lh);
-		else        backward4_0<n_io, 2 * l_shift>(N / 4, z, 2 * l_shift * lh);
+		if (s == 1) backward8_0<index(n_io), 2 * l_shift>(index(N / 8), &z[2 * l_shift * lh]);
+		else        backward4_0<index(n_io), 2 * l_shift>(index(N / 4), &z[2 * l_shift * lh]);
 	}
 
 	void pass1(const size_t thread_id)
@@ -627,22 +613,27 @@ private:
 		const size_t l_min = thread_id * s_io / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io : (thread_id + 1) * s_io / num_threads;
 		for (size_t l = l_min; l < l_max; ++l)
 		{
-			// forward_in
-			const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
+			Complex * const zl = &z[index(n_io * l)];
 
-			if (l % 2 == 0) { const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]); forward4e<1, 1>(n_io / 4, z, n_io * l, w0, w1); }
-			else            { const Vc w0 = Vc::broadcast(&w[0]), w2 = Vc::broadcast(&w[2]); forward4o<1, 1>(n_io / 4, z, n_io * l, w0, w2); }
+			// forward_in
+			{
+				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
+				const Vc w0 = Vc::broadcast(&w[0]);
+
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(&w[1]); forward4e<1, 1>(n_io / 4, zl, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(&w[2]); forward4o<1, 1>(n_io / 4, zl, w0, w2); }
+			}
 
 			for (size_t m = n_io / 16, s = 2; m >= ((VSIZE > 4) ? 16 : 4); m /= 4, s *= 4)
 			{
 				for (size_t j = 0; j < s; ++j)
 				{
-					const size_t k = n_io * l + 8 * m * j;
+					const size_t k = 8 * m * j;
 					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
 					const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
-					forward4e<1, 1>(m, z, k + 0 * 4 * m, w0, w1);
+					forward4e<1, 1>(m, &zl[k + 0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(&w[2]);
-					forward4o<1, 1>(m, z, k + 1 * 4 * m, w0, w2);
+					forward4o<1, 1>(m, &zl[k + 1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -650,19 +641,19 @@ private:
 			{
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					const size_t k = n_io * l + 32 * j;
+					const size_t k = 32 * j;
 					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
 					const Vc w0 = Vc::broadcast(&w[0], &w[3]), w1 = Vc::broadcast(&w[1], &w[4]);
-					forward4e_4(z, k + 0 * 16, w0, w1);
+					forward4e_4(&zl[k + 0 * 16], w0, w1);
 					const Vc w2 = Vc::broadcast(&w[2], &w[5]);
-					forward4o_4(z, k + 1 * 16, w0, w2);
+					forward4o_4(&zl[k + 1 * 16], w0, w2);
 				}
 			}
 
 			// square
 			for (size_t j = 0; j < n_io / 8; j += VSIZE)
 			{
-				const size_t k = n_io * l + 8 * j;
+				const size_t k = 8 * j;
 				const Vc ws0 = Vc::read(&ws[l * n_io / 8 + j]);
 
 				Complex ze[4 * VSIZE], zo[4 * VSIZE];
@@ -670,8 +661,8 @@ private:
 				{
 					for (size_t l = 0; l < 4; ++l)
 					{
-						ze[VSIZE * l + i] = z[index(k + 8 * i + l)];
-						zo[VSIZE * l + i] = z[index(k + 8 * i + l + 4)];
+						ze[VSIZE * l + i] = zl[k + 8 * i + l];
+						zo[VSIZE * l + i] = zl[k + 8 * i + l + 4];
 					}
 				}
 				square4e(ze, ws0);
@@ -680,8 +671,8 @@ private:
 				{
 					for (size_t l = 0; l < 4; ++l)
 					{
-						z[index(k + 8 * i + l)] = ze[VSIZE * l + i];
-						z[index(k + 8 * i + l + 4)] = zo[VSIZE * l + i];
+						zl[k + 8 * i + l] = ze[VSIZE * l + i];
+						zl[k + 8 * i + l + 4] = zo[VSIZE * l + i];
 					}
 				}
 			}
@@ -690,12 +681,12 @@ private:
 			{
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					const size_t k = n_io * l + 32 * j;
+					const size_t k = 32 * j;
 					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
 					const Vc w0 = Vc::broadcast(&w[0], &w[3]), w1 = Vc::broadcast(&w[1], &w[4]);
-					backward4e_4(z, k + 0 * 16, w0, w1);
+					backward4e_4(&zl[k + 0 * 16], w0, w1);
 					const Vc w2 = Vc::broadcast(&w[2], &w[5]);
-					backward4o_4(z, k + 1 * 16, w0, w2);
+					backward4o_4(&zl[k + 1 * 16], w0, w2);
 				}
 			}
 
@@ -704,17 +695,22 @@ private:
 			{
 				for (size_t j = 0; j < s; ++j)
 				{
-					const size_t k = n_io * l + 8 * m * j;
+					const size_t k = 8 * m * j;
 					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
 					const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
-					backward4e<1, 1>(m, z, k + 0 * 4 * m, w0, w1);
+					backward4e<1, 1>(m, &zl[k + 0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(&w[2]);
-					backward4o<1, 1>(m, z, k + 1 * 4 * m, w0, w2);
+					backward4o<1, 1>(m, &zl[k + 1 * 4 * m], w0, w2);
 				}
 			}
 
-			if (l % 2 == 0) { const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]); backward4e<1, 1>(n_io / 4, z, n_io * l, w0, w1); }
-			else            { const Vc w0 = Vc::broadcast(&w[0]), w2 = Vc::broadcast(&w[2]); backward4o<1, 1>(n_io / 4, z, n_io * l, w0, w2); }
+			{
+				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
+				const Vc w0 = Vc::broadcast(&w[0]);
+
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(&w[1]); backward4e<1, 1>(n_io / 4, zl, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(&w[2]); backward4o<1, 1>(n_io / 4, zl, w0, w2); }
+			}
 		}
 	}
 
@@ -730,29 +726,25 @@ private:
 
 		Vc err = Vc(0.0);
 
-		const size_t num_threads = _num_threads, n_io_s = n_io / l_shift / 2;
+		const size_t num_threads = _num_threads;
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
 		for (size_t lh = l_min; lh < l_max; ++lh)
 		{
 			backward_out(z, lh, w122i);
 
 			// carry_out
-			for (size_t j = 0; j < (N / 2) / (n_io / 2); j += VSIZE)
+			for (size_t j = 0; j < n_io_inv; ++j)
 			{
-				Complex _z0[l_shift][VSIZE], _z1[l_shift][VSIZE];	//, _k[VSIZE];
+				Complex _z0[l_shift][VSIZE], _z1[l_shift][VSIZE];
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const size_t k_f = n_io_s * (j + i) + lh;
-					// std::cout << l_shift * k_f << std::endl;
+					const size_t k = index(n_io) * (VSIZE * j + i) + 2 * l_shift * lh;
 					for (size_t l = 0; l < l_shift; ++l)
 					{
-						const size_t k = l_shift * k_f + l;
-						_z0[l][i] = z[index(2 * k + 0)]; _z1[l][i] = z[index(2 * k + 1)];
+						_z0[l][i] = z[k + 2 * l + 0]; _z1[l][i] = z[k + 2 * l + 1];
 					}
-					// _k[i] = f[k_f];
 				}
-				Vc f_k_f = Vc(0.0);	// Vc::read(_k);
-				// Vc f_k_f = f[n_io_s * j + lh];
+				Vc f_k_f = Vc(0.0);
 
 				for (size_t l = 0; l < l_shift; ++l)
 				{
@@ -771,22 +763,16 @@ private:
 					z0.write(_z0[l]); z1.write(_z1[l]);
 				}
 
-				// f[n_io_s * j + lh] = f_k_f;
-				f[lh * (N / 2) / (n_io / 2) / VSIZE + j / VSIZE]= f_k_f;
-				// std::cout << j / VSIZE << ", " << lh << std::endl;
-				// f_k_f.write(_k);
+				f[lh * n_io_inv + j] = f_k_f;
+
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const size_t k_f = n_io_s * (j + i) + lh;
+					const size_t k = index(n_io) * (VSIZE * j + i) + 2 * l_shift * lh;
 					for (size_t l = 0; l < l_shift; ++l)
 					{
-						const size_t k = l_shift * k_f + l;
-						z[index(2 * k + 0)] = _z0[l][i]; z[index(2 * k + 1)] = _z1[l][i];
+						z[k + 2 * l + 0] = _z0[l][i]; z[k + 2 * l + 1] = _z1[l][i];
 					}
-					// f[k_f] = _k[i];
-					// std::cout << k_f << ", ";
 				}
-				// std::cout << std::endl;
 			}
 		}
 
@@ -803,56 +789,36 @@ private:
 
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb;
 
-		const size_t num_threads = _num_threads, n_io_s = n_io / l_shift / 2;
+		const size_t num_threads = _num_threads;
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
 		for (size_t lh = l_min; lh < l_max; ++lh)
 		{
 			// carry_in
-			for (size_t j = 0; j < (N / 2) / (n_io / 2); j += VSIZE)
+			for (size_t j = 0; j < n_io_inv; ++j)
 			{
-				Complex _z0[l_shift][VSIZE], _z1[l_shift][VSIZE];	//, _k[VSIZE];
+				Complex _z0[l_shift][VSIZE], _z1[l_shift][VSIZE];
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const size_t k_f = n_io_s * (j + i) + lh;
+					const size_t k = index(n_io) * (VSIZE * j + i) + 2 * l_shift * lh;
 					for (size_t l = 0; l < l_shift; ++l)
 					{
-						const size_t k = l_shift * k_f + l;
-						_z0[l][i] = z[index(2 * k + 0)]; _z1[l][i] = z[index(2 * k + 1)];
+						_z0[l][i] = z[k + 2 * l + 0]; _z1[l][i] = z[k + 2 * l + 1];
 					}
-					// const size_t carry_i = (k_f == 0) ? N / l_shift / 2 - 1 : k_f - 1;
-					// Complex f_j = (k_f == 0) ? Complex(-f[carry_i].imag, f[carry_i].real) : f[carry_i];
-					// // f[carry_i] = Complex(0.0, 0.0);
-					// _k[i] = f_j;
-					// // std::cout << j / VSIZE << ", " << lh << ": " << k_f << "/" << carry_i << ", ";
 				}
-				// std::cout << std::endl;
-				// const size_t k_f = n_io_s * j + lh;
-				Vc f_j;
-				if (lh != 0)
-				{
-					// f_j = f[n_io_s * j + lh - 1];
-					f_j = f[(lh - 1) * (N / 2) / (n_io / 2) / VSIZE + j / VSIZE];
-				}
-				else
-				{
-					// const Vc f1 = f[n_io_s * j + n_io_s - 1];
-					const Vc f1 = f[(n_io_s - 1)  * (N / 2) / (n_io / 2) / VSIZE + j / VSIZE];
 
-					// const Vc f2 = (j == 0) ? f[n_io_s * ((N / 2) / (n_io / 2) - VSIZE) + n_io_s - 1] : f[n_io_s * (j - VSIZE) + n_io_s - 1];
-					const Vc f2 = (j == 0) ? f[(n_io_s - 1)  * (N / 2) / (n_io / 2) / VSIZE + ((N / 2) / (n_io / 2) / VSIZE - 1)] : f[(n_io_s - 1)  * (N / 2) / (n_io / 2) / VSIZE + j / VSIZE - 1];
-
-					f_j = f1.shift(f2, j == 0);
+				const size_t lh_prev = ((lh != 0) ? lh : n_io_s) - 1;
+				Vc f_j = f[lh_prev * n_io_inv + j];
+				if (lh == 0)
+				{
+					const size_t j_prev = ((j == 0) ? n_io_inv : j) - 1;
+					f_j = f_j.shift(f[(n_io_s - 1) * n_io_inv + j_prev], j == 0);
 				}
-				// const size_t carry_i = (k_f == 0) ? (n_io_s * ((N / 2) / (n_io / 2) - VSIZE) + n_io_s - 1) : k_f - 1;
-				// Vc f_j = (k_f == 0) ? f[carry_i].rotate() : f[carry_i];
-				// f[carry_i] = Vc(0.0);
-				// Vc f_j = Vc::read(_k);
 
 				for (size_t l = 0; l < l_shift - 1; ++l)
 				{
 					Vc z0 = Vc::read(_z0[l]), z1 = Vc::read(_z1[l]);
 
-					const Vc o = z0 + z1 * sb, oi = o.round();	// ?
+					const Vc o = z0 + z1 * sb, oi = o.round();
 					f_j += oi;
 					const Vc f_o = Vc(f_j * b_inv).round();
 					const Vc r = f_j - f_o * b;
@@ -880,11 +846,10 @@ private:
 
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const size_t k_f = n_io_s * (j + i) + lh;
+					const size_t k = index(n_io) * (VSIZE * j + i) + 2 * l_shift * lh;
 					for (size_t l = 0; l < l_shift; ++l)
 					{
-						const size_t k = l_shift * k_f + l;
-						z[index(2 * k + 0)] = _z0[l][i]; z[index(2 * k + 1)] = _z1[l][i];
+						z[k + 2 * l + 0] = _z0[l][i]; z[k + 2 * l + 1] = _z1[l][i];
 					}
 				}
 			}

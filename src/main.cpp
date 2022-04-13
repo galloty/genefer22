@@ -10,11 +10,102 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #include <omp.h>
 
 #include "fp16_80.h"
 #include "integer.h"
+
+class ComplexITransform
+{
+private:
+	const size_t _size;
+	const uint32_t _b;
+
+private:
+	void unbalance(int64_t * const zi) const
+	{
+		const size_t size = _size;
+		const int64_t base = int64_t(_b);
+
+		int64_t f = 0;
+		for (size_t i = 0; i != size; ++i)
+		{
+			f += zi[i];
+			int64_t r = f % base;
+			if (r < 0) r += base;
+			zi[i] = r;
+			f -= r;
+			f /= base;
+		}
+
+		while (f != 0)
+		{
+			f = -f;		// a[n] = -a[0]
+
+			for (size_t i = 0; i != size; ++i)
+			{
+				f += zi[i];
+				int64_t r = f % base;
+				if (r < 0) r += base;
+				zi[i] = r;
+				f -= r;
+				f /= base;
+				if (f == 0) break;
+			}
+
+			if (f == 1)
+			{
+				bool isMinusOne = true;
+				for (size_t i = 0; i != size; ++i)
+				{
+					if (zi[i] != 0)
+					{
+						isMinusOne = false;
+						break;
+					}
+				}
+				if (isMinusOne)
+				{
+					// -1 cannot be unbalanced
+					zi[0] = -1;
+					break;
+				}
+			}
+		}
+	}
+
+public:
+	virtual double squareDup(const bool dup) = 0;
+	virtual void getZi(int64_t * const zi) const = 0;
+
+public:
+	ComplexITransform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
+	virtual ~ComplexITransform() {}
+
+	bool isOne(uint64_t & residue) const
+	{
+		const size_t size = _size;
+
+		int64_t * const zi = new int64_t[size];
+		getZi(zi);
+
+		unbalance(zi);
+
+		bool isOne = (zi[0] == 1);
+		if (isOne) for (size_t k = 1; k < size; ++k) isOne &= (zi[k] == 0);
+
+		uint64_t res = 0;
+		for (size_t i = 8; i != 0; --i) res = (res << 8) | (unsigned char)zi[size - i];
+		residue = res;
+
+		delete[] zi;
+
+		return isOne;
+	}	
+};
 
 struct Complex
 {
@@ -55,8 +146,8 @@ public:
 		return vd;
 	}
 
-	const double & operator[](const size_t i) const { return r[i]; }
-	double & operator[](const size_t i) { return r[i]; }
+	double operator[](const size_t i) const { return r[i]; }
+	void set(const size_t i, const double f) { r[i] = f; }
 
 	bool isZero() const { bool zero = true; for (size_t i = 0; i < N; ++i) zero &= (r[i] == 0.0); return zero; }
 
@@ -73,7 +164,7 @@ public:
 	Vd operator*(const double & f) const { Vd vd = *this; vd *= f; return vd; }
 
 	Vd abs() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::fabs(r[i]); return vd; }
-	Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::rint(r[i]); return vd; }
+	Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::round(r[i]); return vd; }
 
 	Vd & max(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = std::max(r[i], rhs.r[i]); return *this; }
 
@@ -81,7 +172,7 @@ public:
 };
 
 template<size_t N>
-class __attribute__((aligned(2 * 8  * N))) Vcx
+class Vcx
 {
 private:
 	Vd<N> re, im;
@@ -104,7 +195,8 @@ public:
 		Vcx vcx;
 		for (size_t i = 0; i < N; ++i)
 		{
-			vcx.re[i] = mem[i].real; vcx.im[i] = mem[i].imag;
+			vcx.re.set(i, mem[i].real);
+			vcx.im.set(i, mem[i].imag);
 		}
 		return vcx;
 	}
@@ -118,11 +210,13 @@ public:
 		Vcx vcx;
 		for (size_t i = 0; i < N / 2; ++i)
 		{
-			vcx.re[i] = mem1[i].real; vcx.im[i] = mem1[i].imag;
+			vcx.re.set(i, mem1[i].real);
+			vcx.im.set(i, mem1[i].imag);
 		}
 		for (size_t i = 0; i < N / 2; ++i)
 		{
-			vcx.re[i + N / 2] = mem2[i].real; vcx.im[i + N / 2] = mem2[i].imag;
+			vcx.re.set(i + N / 2, mem2[i].real);
+			vcx.im.set(i + N / 2, mem2[i].imag);
 		}
 		return vcx;
 	}
@@ -131,6 +225,9 @@ public:
 		for (size_t i = 0; i < N / 2; ++i) mem1[i] = Complex(re[i], im[i]);
 		for (size_t i = 0; i < N / 2; ++i) mem2[i] = Complex(re[i + N / 2], im[i + N / 2]);
 	}
+
+	Complex operator[](const size_t i) const { return Complex(re[i], im[i]); }
+	void set(const size_t i, const Complex & z) { re.set(i, z.real); im.set(i, z.imag); }
 
 	bool isZero() const { return (re.isZero() & im.isZero()); }
 
@@ -163,26 +260,16 @@ public:
 
 	double max() const { return std::max(re.max(), im.max()); }
 
-	Vcx shift(const Vcx & rhs, const bool rotate) const
+	void shift(const Vcx & rhs, const bool rotate)
 	{
 		// f x^n = -f
-		Vcx vcx;
 		for (size_t i = N - 1; i > 0; --i)
 		{
-			vcx.re[i] = re[i - 1];
-			vcx.im[i] = im[i - 1];
+			re.set(i, re[i - 1]);
+			im.set(i, im[i - 1]);
 		}
-		if (rotate)
-		{
-			vcx.re[0] = -rhs.im[N - 1];
-			vcx.im[0] = rhs.re[N - 1];
-		}
-		else
-		{
-			vcx.re[0] = rhs.re[N - 1];
-			vcx.im[0] = rhs.im[N - 1];
-		}
-		return vcx;
+		re.set(0, rotate ? -rhs.im[N - 1] : rhs.re[N - 1]);
+		im.set(0, rotate ?  rhs.re[N - 1] : rhs.im[N - 1]);
 	}
 };
 
@@ -218,6 +305,17 @@ public:
 	{
 		for (size_t i = 0; i < 4; ++i) z[i].write(&mem1[i * step], &mem2[i * step]);
 	}
+
+	explicit Vradix4(const Vc * const mem, const size_t step)
+	{
+		for (size_t i = 0; i < 4; ++i) z[i] = mem[i * step];
+	}
+
+	void store(Vc * const mem, const size_t step) const
+	{
+		for (size_t i = 0; i < 4; ++i) mem[i * step] = z[i];
+	}
+
 
 	void forward4e(const Vc & w0, const Vc & w1)
 	{
@@ -325,13 +423,6 @@ public:
 	}
 };
 
-class ComplexITransform
-{
-public:
-	virtual bool isPrime() = 0;
-	virtual double squareDup(const bool dup, const size_t num_threads) = 0;
-};
-
 template<size_t N, size_t VSIZE>
 class CZIT_CPU_vec_mt : public ComplexITransform
 {
@@ -364,39 +455,6 @@ private:
 	}
 
 	static constexpr size_t index(const size_t k) { const size_t j = k / n_io, i = k % n_io; return j * (n_io + 4) + i; }
-
-	void reducePos()
-	{
-		const uint32_t b = _b;
-		const double sb = _sb, n_io_N = double(n_io) / N;
-		Complex * const z = _z;
-
-		int64_t f = 0;
-		for (size_t k = 0; k < 2 * N; k += 2)
-		{
-			const double o1 = (k < N) ? z[index(k + 0)].real : z[index(k + 0 - N)].imag;
-			const double o2 = (k < N) ? z[index(k + 1)].real : z[index(k + 1 - N)].imag;
-			const double o = (o1 + sb * o2) * n_io_N;
-			f += llrint(o);
-			int32_t r = f % b; if (r < 0) r += b;
-			f -= r; f /= b;
-			if (k < N) z[index(k + 0)] = Complex(double(r), z[index(k + 0)].imag); else z[index(k + 0 - N)] = Complex(z[index(k + 0 - N)].real, double(r));
-			if (k < N) z[index(k + 1)] = Complex(0.0, z[index(k + 1)].imag); else z[index(k + 1 - N)] = Complex(z[index(k + 1 - N)].real, 0.0);
-		}
-		while (f != 0)
-		{
-			f = -f;
-			for (size_t k = 0; k < 2 * N; k += 2)
-			{
-				const double o = (k < N) ? z[index(k)].real : z[index(k - N)].imag;
-				f += llrint(o);
-				int32_t r = f % b; if (r < 0) r += b;
-				f -= r; f /= b;
-				if (k < N) z[index(k)] = Complex(double(r), z[index(k)].imag); else z[index(k - N)] = Complex(z[index(k - N)].real, double(r));
-				if (r == 0) break;
-			}
-		}
-	}
 
 	template <size_t stepi, size_t count>
 	static void forward4e(const size_t mi, Complex * const z, const Vc & w0, const Vc & w1)
@@ -548,18 +606,18 @@ private:
 		}
 	}
 
-	static void square4e(Complex * const z, const Vc & w)
+	static void square4e(Vc * const z, const Vc & w)
 	{
-		Vr4 vr(z, VSIZE);
+		Vr4 vr(z, 1);
 		vr.square4e(w);
-		vr.store(z, VSIZE);
+		vr.store(z, 1);
 	}
 
-	static void square4o(Complex * const z, const Vc & w)
+	static void square4o(Vc * const z, const Vc & w)
 	{
-		Vr4 vr(z, VSIZE);
+		Vr4 vr(z, 1);
 		vr.square4o(w);
-		vr.store(z, VSIZE);
+		vr.store(z, 1);
 	}
 
 	static void forward_out(Complex * const z, const size_t lh, const Complex * const w122i)
@@ -656,25 +714,32 @@ private:
 				const size_t k = 8 * j;
 				const Vc ws0 = Vc::read(&ws[l * n_io / 8 + j]);
 
-				Complex ze[4 * VSIZE], zo[4 * VSIZE];
+				Vc z_i[8];
+				for (size_t i = 0; i < 8; ++i) z_i[i] = Vc::read(&zl[k + i * VSIZE]);
+
+				Vc zt[8];
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
 					for (size_t l = 0; l < 4; ++l)
 					{
-						ze[VSIZE * l + i] = zl[k + 8 * i + l];
-						zo[VSIZE * l + i] = zl[k + 8 * i + l + 4];
+						const size_t ind = 8 * i + l;
+						zt[l].set(i, z_i[ind / VSIZE][ind % VSIZE]);
+						zt[l + 4].set(i, z_i[(ind + 4) / VSIZE][(ind + 4) % VSIZE]);
 					}
 				}
-				square4e(ze, ws0);
-				square4o(zo, ws0);
+				square4e(zt, ws0);
+				square4o(&zt[4], ws0);
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
 					for (size_t l = 0; l < 4; ++l)
 					{
-						zl[k + 8 * i + l] = ze[VSIZE * l + i];
-						zl[k + 8 * i + l + 4] = zo[VSIZE * l + i];
+						const size_t ind = 8 * i + l;
+						z_i[ind / VSIZE].set(ind % VSIZE, zt[l][i]);
+						z_i[(ind + 4) / VSIZE].set((ind + 4) % VSIZE, zt[l + 4][i]);
 					}
 				}
+
+				for (size_t i = 0; i < 8; ++i) z_i[i].write(&zl[k + i * VSIZE]);
 			}
 
 			if (VSIZE > 4)
@@ -811,7 +876,7 @@ private:
 				if (lh == 0)
 				{
 					const size_t j_prev = ((j == 0) ? n_io_inv : j) - 1;
-					f_j = f_j.shift(f[(n_io_s - 1) * n_io_inv + j_prev], j == 0);
+					f_j.shift(f[(n_io_s - 1) * n_io_inv + j_prev], j == 0);
 				}
 
 				for (size_t l = 0; l < l_shift - 1; ++l)
@@ -859,9 +924,9 @@ private:
 	}
 
 public:
-	CZIT_CPU_vec_mt(const uint32_t b, const size_t num_threads) : sqrt_b(fp16_80::sqrt(b)), _b(b),
-		_num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()),
-		_w122i(new Complex[N / 8]), _ws(new Complex[N / 8]), _z(new Complex[(N / n_io) * (n_io + 4)]), _f(new Vc[N / l_shift / 2 / VSIZE])
+	CZIT_CPU_vec_mt(const uint32_t b, const size_t num_threads) : ComplexITransform(N, b),
+		sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()),
+		_w122i(new Complex[N / 8]), _ws(new Complex[N / 8]), _z(new Complex[index(N)]), _f(new Vc[N / l_shift / 2 / VSIZE])
 	{
 		Complex * const w122i = _w122i;
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -883,11 +948,8 @@ public:
 		}
 
 		Complex * const z = _z;
-		z[index(0)] = Complex(2.0, 0.0);
-		for (size_t k = 1; k < N; ++k) z[index(k)] = Complex(0.0, 0.0);
-
-		// Complex * const f = _f;
-		// for (size_t k = 0; k < N / l_shift / 2; ++k) f[k] = Complex(0.0, 0.0);
+		z[0] = Complex(2.0, 0.0);
+		for (size_t k = 1; k < index(N); ++k) z[k] = Complex(0.0, 0.0);
 
 		for (size_t lh = 0; lh < n_io / l_shift / 2; ++lh)
 		{
@@ -903,8 +965,10 @@ public:
 		delete[] _f;
 	}
 
-	double squareDup(const bool dup, const size_t num_threads) override
+	double squareDup(const bool dup) override
 	{
+		const size_t num_threads = _num_threads;
+
 		double e[num_threads];
 
 #pragma omp parallel
@@ -923,25 +987,30 @@ public:
 		return err;
 	}
 
-	bool isPrime() override
+	void getZi(int64_t * const zi) const override
 	{
-		Complex * const z = _z;
+		const Complex * const z = _z;
 		const Complex * const w122i = _w122i;
+
+		Complex * const z_copy = new Complex[index(N)];
+		for (size_t k = 0; k < index(N); ++k) z_copy[k] = z[k];
 
 		for (size_t lh = 0; lh < n_io / l_shift / 2; ++lh)
 		{
-			backward_out(z, lh, w122i);
+			backward_out(z_copy, lh, w122i);
 		}
 
-		reducePos();
+		const double sb = _sb, n_io_N = double(n_io) / N;
 
-		bool isPrime = ((z[index(0)].real == 1.0) & (z[index(0)].imag == 0.0));
-		if (isPrime)
+		for (size_t k = 0; k < N / 2; ++k)
 		{
-			for (size_t k = 1; k < N; ++k) isPrime &= ((z[index(k)].real == 0.0) & (z[index(k)].imag == 0.0));
+			const size_t ki = index(2 * k);
+			const Complex z1 = z_copy[ki], z2 = z_copy[ki + 1];
+			zi[k]         = std::llround((z1.real + sb * z2.real) * n_io_N);
+			zi[k + N / 2] = std::llround((z1.imag + sb * z2.imag) * n_io_N);
 		}
 
-		return isPrime;
+		delete[] z_copy;
 	}
 };
 
@@ -950,7 +1019,7 @@ class genefer
 private:
 
 public:
-	void check(const uint32_t b, const size_t n)
+	void check(const uint32_t b, const size_t n, const char * const exp_residue)
 	{
 		omp_set_num_threads(3);
 		size_t num_threads = 0;
@@ -975,16 +1044,20 @@ public:
 		double err = 0;
 		for (int i = int(exponent.bitSize()) - 1; i >= 0; --i)
 		{
-			const double e = t->squareDup(exponent.bit(size_t(i)), num_threads);
+			const double e = t->squareDup(exponent.bit(size_t(i)));
 			err  = std::max(err, e);
 		}
 
 		const double time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
-		const bool isPrime = t->isPrime();
+		uint64_t res;
+		const bool isPrp = t->isOne(res);
+		char residue[30];
+		sprintf(residue, "%016" PRIx64, res);
+
 		std::cout << b << "^" << n << " + 1";
-		if (isPrime) std::cout << " is prime";
-		std::cout << ", err = " << err << ", " << time << " sec." << std::endl;
+		if (isPrp) std::cout << " is prime";
+		std::cout << ", err = " << err << ", " << time << " sec, res = " << residue << " [" << exp_residue << "]." << std::endl;
 	}
 };
 
@@ -997,10 +1070,15 @@ int main(/*int argc, char * argv[]*/)
 	try
 	{
 		genefer g;
-		g.check(399998298, 1024);
-		g.check(399998572, 2048);
-		g.check(399987078, 4096);
-		g.check(399992284, 8192);
+		// g.check(399998298, 1024, "");
+		// g.check(399998572, 2048, "");
+		// g.check(399987078, 4096, "");
+		// g.check(399992284, 8192, "");
+
+		g.check(399998300, 1024, "5a82277cc9c6f782");
+		g.check(399998574, 2048, "1907ebae0c183e35");
+		g.check(399987080, 4096, "dced858499069664");
+		g.check(399992286, 8192, "3c918e0f87815627");
 	}
 	catch (const std::runtime_error & e)
 	{

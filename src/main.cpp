@@ -137,19 +137,19 @@ public:
 	Vd(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = rhs.r[i]; }
 	Vd & operator=(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = rhs.r[i]; return *this; }
 
-	static Vd broadcast(const double * const mem) { Vd vd; const double f = mem[0]; for (size_t i = 0; i < N; ++i) vd.r[i] = f; return vd; }
-	static Vd broadcast(const double * const mem_l, const double * const mem_h)
+	static Vd broadcast(const double & f) { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = f; return vd; }
+	static Vd broadcast(const double & f_l, const double & f_h)
 	{
 		Vd vd;
-		const double f_l = mem_l[0]; for (size_t i = 0; i < N / 2; ++i) vd.r[i + 0 * N / 2] = f_l;
-		const double f_h = mem_h[0]; for (size_t i = 0; i < N / 2; ++i) vd.r[i + 1 * N / 2] = f_h;
+		for (size_t i = 0; i < N / 2; ++i) vd.r[i + 0 * N / 2] = f_l;
+		for (size_t i = 0; i < N / 2; ++i) vd.r[i + 1 * N / 2] = f_h;
 		return vd;
 	}
 
 	void interleave(Vd & rhs) { for (size_t i = 0; i < N / 2; ++i) { std::swap(r[i + N / 2], rhs.r[i]); } }	// N = 8
 
 	double operator[](const size_t i) const { return r[i]; }
-	void set(const size_t i, const double f) { r[i] = f; }
+	void set(const size_t i, const double & f) { r[i] = f; }
 
 	bool isZero() const { bool zero = true; for (size_t i = 0; i < N; ++i) zero &= (r[i] == 0.0); return zero; }
 
@@ -184,6 +184,69 @@ public:
 	}
 };
 
+inline __m128d round_pd(const __m128d rhs)
+{
+#ifdef __SSE4
+	return _mm_round_pd(rhs, _MM_FROUND_TO_NEAREST_INT);
+#else
+	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
+	const __m128d ar = _mm_andnot_pd(signMask, rhs);
+	const __m128d ir = _mm_or_pd(_mm_sub_pd(_mm_add_pd(ar, C52), C52), _mm_and_pd(signMask, rhs));
+	const __m128d mr = _mm_cmpge_pd(ar, C52);
+	return _mm_or_pd(_mm_and_pd(mr, rhs), _mm_andnot_pd(mr, ir));
+#endif
+}
+
+template<>
+class Vd<2>
+{
+private:
+	__m128d r;
+
+private:
+	constexpr explicit Vd(const __m128d & _r) : r(_r) {}
+
+public:
+	explicit Vd() {}
+	explicit Vd(const double & f) : r(_mm_set_pd(0.0, f)) {}
+	Vd(const Vd & rhs) : r(rhs.r) {}
+	Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
+
+	static Vd broadcast(const double & f) { return Vd(_mm_set1_pd(f)); }
+	static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
+
+	void interleave(Vd &) {}	// unused
+
+	double operator[](const size_t i) const { return r[i]; }
+	void set(const size_t i, const double & f) { r[i] = f; }
+
+	bool isZero() const { return (_mm_movemask_pd(_mm_cmpneq_pd(r, _mm_setzero_pd())) == 0); }
+
+	Vd & operator+=(const Vd & rhs) { r += rhs.r; return *this; }
+	Vd & operator-=(const Vd & rhs) { r -= rhs.r; return *this; }
+	Vd & operator*=(const Vd & rhs) { r *= rhs.r; return *this; }
+
+	Vd operator+(const Vd & rhs) const { Vd vd = *this; vd += rhs; return vd; }
+	Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
+	Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
+
+	Vd abs() const { return Vd(_mm_andnot_pd(_mm_set1_pd(-0.0), r)); }
+	Vd round() const { return Vd(round_pd(r)); } 
+
+	Vd & max(const Vd & rhs) { r = _mm_max_pd(r, rhs.r); return *this; }
+
+	double max() const { return std::max(r[0], r[1]); }
+
+	void shift(const double f) { r = _mm_set_pd(r[0], f); }
+
+	static void transpose(Vd vd[2])
+	{
+		const __m128d r0 = _mm_shuffle_pd(vd[0].r, vd[1].r, 0);
+		const __m128d r1 = _mm_shuffle_pd(vd[0].r, vd[1].r, 3);
+		vd[0].r = r0; vd[1].r = r1;
+	}
+};
+
 template<>
 class Vd<4>
 {
@@ -199,13 +262,13 @@ public:
 	Vd(const Vd & rhs) : r(rhs.r) {}
 	Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	static Vd broadcast(const double * const mem) { return Vd(_mm256_broadcast_sd(mem)); }
-	static Vd broadcast(const double * const, const double * const) { return Vd(0.0); }	// unused
+	static Vd broadcast(const double & f) { return Vd(_mm256_set1_pd(f)); }
+	static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	void interleave(Vd &) {}	// unused
 
 	double operator[](const size_t i) const { return r[i]; }
-	void set(const size_t i, const double f) { r[i] = f; }
+	void set(const size_t i, const double & f) { r[i] = f; }
 
 	bool isZero() const { return (_mm256_movemask_pd(_mm256_cmp_pd(r, _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0); }
 
@@ -240,6 +303,66 @@ public:
 	}
 };
 
+template<>
+class Vd<8>
+{
+private:
+	__m512d r;
+
+private:
+	constexpr explicit Vd(const __m512d & _r) : r(_r) {}
+
+public:
+	explicit Vd() {}
+	explicit Vd(const double & f) : r(_mm512_set_pd(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f)) {}
+	Vd(const Vd & rhs) : r(rhs.r) {}
+	Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
+
+	static Vd broadcast(const double & f) { return Vd(_mm512_set1_pd(f)); }
+	static Vd broadcast(const double & f_l, const double & f_h)
+	{
+		Vd vd;
+		for (size_t i = 0; i < 4; ++i) vd.r[i + 0] = f_l;
+		for (size_t i = 0; i < 4; ++i) vd.r[i + 4] = f_h;
+		return vd;
+	}
+
+	void interleave(Vd & rhs) { for (size_t i = 0; i < 4; ++i) { std::swap(r[i + 4], rhs.r[i]); } }
+
+	double operator[](const size_t i) const { return r[i]; }
+	void set(const size_t i, const double & f) { r[i] = f; }
+
+	bool isZero() const { return (_mm512_cmp_pd_mask(r, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0); }
+
+	Vd & operator+=(const Vd & rhs) { r += rhs.r; return *this; }
+	Vd & operator-=(const Vd & rhs) { r -= rhs.r; return *this; }
+	Vd & operator*=(const Vd & rhs) { r *= rhs.r; return *this; }
+
+	Vd operator+(const Vd & rhs) const { Vd vd = *this; vd += rhs; return vd; }
+	Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
+	Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
+
+	Vd abs() const { return Vd(_mm512_abs_pd(r)); }
+	Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
+
+	Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
+
+	double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
+
+	void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
+
+	static void transpose(Vd vd[8])
+	{
+		for (size_t i = 0; i < 8; ++i)
+		{
+			for (size_t j = 0; j < i; ++j)
+			{
+				std::swap(vd[i].r[j], vd[j].r[i]);
+			}
+		}
+	}
+};
+
 template<size_t N>
 class Vcx
 {
@@ -253,10 +376,10 @@ public:
 	constexpr explicit Vcx(const Vd<N> & real, const Vd<N> & imag) : re(real), im(imag) {}
 	Vcx & operator=(const Vcx & rhs) { re = rhs.re; im = rhs.im; return *this; }
 
-	static Vcx broadcast(const Complex * const mem) { return Vcx(Vd<N>::broadcast(&mem->real), Vd<N>::broadcast(&mem->imag)); }
-	static Vcx broadcast(const Complex * const mem_l, const Complex * const mem_h)
+	static Vcx broadcast(const Complex & z) { return Vcx(Vd<N>::broadcast(z.real), Vd<N>::broadcast(z.imag)); }
+	static Vcx broadcast(const Complex & z_l, const Complex & z_h)
 	{
-		return Vcx(Vd<N>::broadcast(&mem_l->real, &mem_h->real), Vd<N>::broadcast(&mem_l->imag, &mem_h->imag));
+		return Vcx(Vd<N>::broadcast(z_l.real, z_h.real), Vd<N>::broadcast(z_l.imag, z_h.imag));
 	}
 
 	void interleave(Vcx & rhs) { re.interleave(rhs.re); im.interleave(rhs.im); }
@@ -277,7 +400,7 @@ public:
 	Vcx sub_i(const Vcx & rhs) const { return Vcx(rhs.im - im, re - rhs.re); }
 
 	Vcx operator*(const Vcx & rhs) const { return Vcx(re * rhs.re - im * rhs.im, im * rhs.re + re * rhs.im); }
-	Vcx operator*(const double & f) const { const Vd<N> vf = Vd<N>::broadcast(&f); return Vcx(re * vf, im * vf); }
+	Vcx operator*(const double & f) const { const Vd<N> vf = Vd<N>::broadcast(f); return Vcx(re * vf, im * vf); }
 	Vcx mul1i() const { return Vcx(re - im, im + re); }
 	Vcx mul1mi() const { return Vcx(re + im, im - re); }
 	// Vcx muli() const { return Vcx(-im, re); }
@@ -440,11 +563,11 @@ public:
 
 	void forward8_0()
 	{
-		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
+		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		const Vc u0 = z[0], u4 = z[4].mul1i(), u2 = z[2].mulW(w0), u6 = z[6].mul1i().mulW(w0);
 		const Vc u1 = z[1], u5 = z[5].mul1i(), u3 = z[3].mulW(w0), u7 = z[7].mul1i().mulW(w0);
 		const Vc v0 = u0 + u4 * csqrt2_2, v4 = u0 - u4 * csqrt2_2, v2 = u2 + u6 * csqrt2_2, v6 = u2 - u6 * csqrt2_2;
-		const Vc w1 = Vc::broadcast(&cs2pi_1_32), w2 = Vc::broadcast(&cs2pi_5_32);
+		const Vc w1 = Vc::broadcast(cs2pi_1_32), w2 = Vc::broadcast(cs2pi_5_32);
 		const Vc v1 = Vc(u1 + u5 * csqrt2_2).mulW(w1), v5 = Vc(u1 - u5 * csqrt2_2).mulW(w2);
 		const Vc v3 = Vc(u3 + u7 * csqrt2_2).mulW(w1), v7 = Vc(u3 - u7 * csqrt2_2).mulW(w2);
 		const Vc s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = v1 - v3;
@@ -456,12 +579,12 @@ public:
 	void backward8_0()
 	{
 		const Vc s0 = z[0], s1 = z[1], s2 = z[2], s3 = z[3], s4 = z[4], s5 = z[5], s6 = z[6], s7 = z[7];
-		const Vc w1 = Vc::broadcast(&cs2pi_1_32), w2 = Vc::broadcast(&cs2pi_5_32);
+		const Vc w1 = Vc::broadcast(cs2pi_1_32), w2 = Vc::broadcast(cs2pi_5_32);
 		const Vc v0 = s0 + s1, v1 = Vc(s0 - s1).mulWconj(w1), v2 = s2 + s3, v3 = Vc(s2 - s3).mulWconj(w1);
 		const Vc v4 = s4 + s5, v5 = Vc(s4 - s5).mulWconj(w2), v6 = s6 + s7, v7 = Vc(s6 - s7).mulWconj(w2);
 		const Vc u0 = v0 + v2, u2 = v0 - v2, u4 = v4 + v6, u6 = v4 - v6;
 		const Vc u1 = v1.subi(v3), u3 = v1.addi(v3), u5 = v5.subi(v7), u7 = v5.addi(v7);
-		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
+		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		z[0] = u0 + u4; z[4] = Vc(u0 - u4).mul1mi() * csqrt2_2; z[2] = u2.subi(u6).mulWconj(w0); z[6] = u6.subi(u2).mulW(w0);
 		z[1] = u1 + u5; z[5] = Vc(u1 - u5).mul1mi() * csqrt2_2; z[3] = u3.subi(u7).mulWconj(w0); z[7] = u7.subi(u3).mulW(w0);
 	}
@@ -666,7 +789,7 @@ private:
 	template <size_t stepi, size_t count>
 	static void forward4_0(const size_t mi, Vc * const z)
 	{
-		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
+		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; ++i)
@@ -682,7 +805,7 @@ private:
 	template <size_t stepi, size_t count>
 	static void backward4_0(const size_t mi, Vc * const z)
 	{
-		const Vc w0 = Vc::broadcast(&cs2pi_1_16);
+		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; ++i)
@@ -776,9 +899,9 @@ private:
 			{
 				const size_t k = count * lh + 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
-				const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
+				const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 				forward4e<stepi, count>(mi, &z[k + 0 * 4 * mi], w0, w1);
-				const Vc w2 = Vc::broadcast(&w[2]);
+				const Vc w2 = Vc::broadcast(w[2]);
 				forward4o<stepi, count>(mi, &z[k + 1 * 4 * mi], w0, w2);
 			}
 		}
@@ -795,9 +918,9 @@ private:
 			{
 				const size_t k = count * lh + 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
-				const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
+				const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 				backward4e<stepi, count>(mi, &z[k + 0 * 4 * mi], w0, w1);
-				const Vc w2 = Vc::broadcast(&w[2]);
+				const Vc w2 = Vc::broadcast(w[2]);
 				backward4o<stepi, count>(mi, &z[k + 1 * 4 * mi], w0, w2);
 			}
 		}
@@ -821,10 +944,10 @@ private:
 			// forward_in
 			{
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
-				const Vc w0 = Vc::broadcast(&w[0]);
+				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(&w[1]); forward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(&w[2]); forward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); forward4e(n_io / 4 / VSIZE, zl, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); forward4o(n_io / 4 / VSIZE, zl, w0, w2); }
 			}
 
 			for (size_t m = n_io / 16 / VSIZE, s = 2; m >= ((VSIZE == 8) ? 16 : 4) / VSIZE; m /= 4, s *= 4)
@@ -833,9 +956,9 @@ private:
 				{
 					Vc * const zj = &zl[8 * m * j];
 					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
-					const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
+					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 					forward4e(m, &zj[0 * 4 * m], w0, w1);
-					const Vc w2 = Vc::broadcast(&w[2]);
+					const Vc w2 = Vc::broadcast(w[2]);
 					forward4o(m, &zj[1 * 4 * m], w0, w2);
 				}
 			}
@@ -846,9 +969,9 @@ private:
 				{
 					Vc * const zj = &zl[32 / VSIZE * j];
 					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
-					const Vc w0 = Vc::broadcast(&w[0], &w[3]), w1 = Vc::broadcast(&w[1], &w[4]);
+					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
 					forward4e_4(&zj[0], w0, w1);
-					const Vc w2 = Vc::broadcast(&w[2], &w[5]);
+					const Vc w2 = Vc::broadcast(w[2], w[5]);
 					forward4o_4(&zj[2], w0, w2);
 				}
 			}
@@ -870,9 +993,9 @@ private:
 				{
 					Vc * const zj = &zl[32 / VSIZE * j];
 					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
-					const Vc w0 = Vc::broadcast(&w[0], &w[3]), w1 = Vc::broadcast(&w[1], &w[4]);
+					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
 					backward4e_4(&zj[0], w0, w1);
-					const Vc w2 = Vc::broadcast(&w[2], &w[5]);
+					const Vc w2 = Vc::broadcast(w[2], w[5]);
 					backward4o_4(&zj[2], w0, w2);
 				}
 			}
@@ -884,19 +1007,19 @@ private:
 				{
 					Vc * const zj = &zl[8 * m * j];
 					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
-					const Vc w0 = Vc::broadcast(&w[0]), w1 = Vc::broadcast(&w[1]);
+					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 					backward4e(m, &zj[0 * 4 * m], w0, w1);
-					const Vc w2 = Vc::broadcast(&w[2]);
+					const Vc w2 = Vc::broadcast(w[2]);
 					backward4o(m, &zj[1 * 4 * m], w0, w2);
 				}
 			}
 
 			{
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
-				const Vc w0 = Vc::broadcast(&w[0]);
+				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(&w[1]); backward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(&w[2]); backward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); backward4e(n_io / 4 / VSIZE, zl, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); backward4o(n_io / 4 / VSIZE, zl, w0, w2); }
 			}
 		}
 	}
@@ -1156,11 +1279,11 @@ public:
 		const integer exponent(b, n);
 
 		ComplexITransform * t = nullptr;;
-		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 4>(b, num_threads);
-		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 4>(b, num_threads);
-		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 4>(b, num_threads);
-		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 4>(b, num_threads);
-		else if (n == (1 << 14)) t = new CZIT_CPU_vec_mt<(1 << 14), 4>(b, num_threads);
+		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 2>(b, num_threads);
+		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 2>(b, num_threads);
+		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 2>(b, num_threads);
+		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 2>(b, num_threads);
+		else if (n == (1 << 14)) t = new CZIT_CPU_vec_mt<(1 << 14), 2>(b, num_threads);
 		if (t == nullptr) throw std::runtime_error("exponent is not supported");
 
 		auto t0 = std::chrono::steady_clock::now();

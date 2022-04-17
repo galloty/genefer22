@@ -188,7 +188,7 @@ inline __m128d round_pd(const __m128d rhs)
 {
 #ifdef __SSE4
 	return _mm_round_pd(rhs, _MM_FROUND_TO_NEAREST_INT);
-#else
+#else // SSE2
 	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
 	const __m128d ar = _mm_andnot_pd(signMask, rhs);
 	const __m128d ir = _mm_or_pd(_mm_sub_pd(_mm_add_pd(ar, C52), C52), _mm_and_pd(signMask, rhs));
@@ -241,9 +241,8 @@ public:
 
 	static void transpose(Vd vd[2])
 	{
-		const __m128d r0 = _mm_shuffle_pd(vd[0].r, vd[1].r, 0);
-		const __m128d r1 = _mm_shuffle_pd(vd[0].r, vd[1].r, 3);
-		vd[0].r = r0; vd[1].r = r1;
+		const __m128d t = _mm_unpackhi_pd(vd[0].r, vd[1].r);
+		vd[0].r = _mm_unpacklo_pd(vd[0].r, vd[1].r); vd[1].r = t;
 	}
 };
 
@@ -291,15 +290,12 @@ public:
 
 	static void transpose(Vd vd[4])
 	{
-		const __m256d r0 = _mm256_unpacklo_pd(vd[0].r, vd[1].r);	// u0[0] u1[0] u0[2] u1[2]
-		const __m256d r1 = _mm256_unpackhi_pd(vd[0].r, vd[1].r);	// u0[1] u1[1] u0[3] u1[3]
-		const __m256d r2 = _mm256_unpacklo_pd(vd[2].r, vd[3].r);	// u2[0] u3[0] u2[2] u3[2]
-		const __m256d r3 = _mm256_unpackhi_pd(vd[2].r, vd[3].r);	// u2[1] u3[1] u2[3] u3[3]
-
-		vd[0].r = _mm256_permute2f128_pd(r0, r2, 0x20);				// u0[0] u1[0] u2[0] u3[0]
-		vd[2].r = _mm256_permute2f128_pd(r0, r2, 0x31);				// u0[2] u1[2] u2[2] u3[2]
-		vd[1].r = _mm256_permute2f128_pd(r1, r3, 0x20);				// u0[1] u1[1] u2[1] u3[1]
-		vd[3].r = _mm256_permute2f128_pd(r1, r3, 0x31);				// u0[3] u1[3] u2[3] u3[3]
+		const __m256d r0 = _mm256_shuffle_pd(vd[0].r, vd[1].r, 0b0000), r1 = _mm256_shuffle_pd(vd[0].r, vd[1].r, 0b1111);
+		const __m256d r2 = _mm256_shuffle_pd(vd[2].r, vd[3].r, 0b0000), r3 = _mm256_shuffle_pd(vd[2].r, vd[3].r, 0b1111);
+		vd[0].r = _mm256_permute2f128_pd(r0, r2, _MM_SHUFFLE(0, 2, 0, 0));
+		vd[2].r = _mm256_permute2f128_pd(r0, r2, _MM_SHUFFLE(0, 3, 0, 1));
+		vd[1].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 2, 0, 0));
+		vd[3].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 3, 0, 1));
 	}
 };
 
@@ -319,15 +315,13 @@ public:
 	Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
 	static Vd broadcast(const double & f) { return Vd(_mm512_set1_pd(f)); }
-	static Vd broadcast(const double & f_l, const double & f_h)
-	{
-		Vd vd;
-		for (size_t i = 0; i < 4; ++i) vd.r[i + 0] = f_l;
-		for (size_t i = 0; i < 4; ++i) vd.r[i + 4] = f_h;
-		return vd;
-	}
+	static Vd broadcast(const double & f_l, const double & f_h) { return Vd(_mm512_set_pd(f_h, f_h, f_h, f_h, f_l, f_l, f_l, f_l)); }
 
-	void interleave(Vd & rhs) { for (size_t i = 0; i < 4; ++i) { std::swap(r[i + 4], rhs.r[i]); } }
+	void interleave(Vd & rhs)
+	{
+		const __m512d t = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(2, 3, 2, 3));
+		r = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(0, 1, 0, 1)); rhs.r = t;
+	}
 
 	double operator[](const size_t i) const { return r[i]; }
 	void set(const size_t i, const double & f) { r[i] = f; }
@@ -347,19 +341,24 @@ public:
 
 	Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
 
-	double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
+	double max() const { return _mm512_reduce_max_pd(r); }
 
 	void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
 
 	static void transpose(Vd vd[8])
 	{
-		for (size_t i = 0; i < 8; ++i)
-		{
-			for (size_t j = 0; j < i; ++j)
-			{
-				std::swap(vd[i].r[j], vd[j].r[i]);
-			}
-		}
+		const __m512d r0 = _mm512_unpacklo_pd(vd[0].r, vd[1].r), r1 = _mm512_unpackhi_pd(vd[0].r, vd[1].r);
+		const __m512d r2 = _mm512_unpacklo_pd(vd[2].r, vd[3].r), r3 = _mm512_unpackhi_pd(vd[2].r, vd[3].r);
+		const __m512d r4 = _mm512_unpacklo_pd(vd[4].r, vd[5].r), r5 = _mm512_unpackhi_pd(vd[4].r, vd[5].r);
+		const __m512d r6 = _mm512_unpacklo_pd(vd[6].r, vd[7].r), r7 = _mm512_unpackhi_pd(vd[6].r, vd[7].r);
+		const __m512d t0 = _mm512_shuffle_f64x2(r0, r2, _MM_SHUFFLE(2, 0, 2, 0)), t2 = _mm512_shuffle_f64x2(r0, r2, _MM_SHUFFLE(3, 1, 3, 1));
+		const __m512d t1 = _mm512_shuffle_f64x2(r1, r3, _MM_SHUFFLE(2, 0, 2, 0)), t3 = _mm512_shuffle_f64x2(r1, r3, _MM_SHUFFLE(3, 1, 3, 1));
+		const __m512d t4 = _mm512_shuffle_f64x2(r4, r6, _MM_SHUFFLE(2, 0, 2, 0)), t6 = _mm512_shuffle_f64x2(r4, r6, _MM_SHUFFLE(3, 1, 3, 1));
+		const __m512d t5 = _mm512_shuffle_f64x2(r5, r7, _MM_SHUFFLE(2, 0, 2, 0)), t7 = _mm512_shuffle_f64x2(r5, r7, _MM_SHUFFLE(3, 1, 3, 1));
+		vd[0].r = _mm512_shuffle_f64x2(t0, t4, _MM_SHUFFLE(2, 0, 2, 0)); vd[4].r = _mm512_shuffle_f64x2(t0, t4, _MM_SHUFFLE(3, 1, 3, 1));
+		vd[1].r = _mm512_shuffle_f64x2(t1, t5, _MM_SHUFFLE(2, 0, 2, 0)); vd[5].r = _mm512_shuffle_f64x2(t1, t5, _MM_SHUFFLE(3, 1, 3, 1));
+		vd[2].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(2, 0, 2, 0)); vd[6].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(3, 1, 3, 1));
+		vd[3].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(2, 0, 2, 0)); vd[7].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(3, 1, 3, 1));
 	}
 };
 
@@ -1280,10 +1279,10 @@ public:
 
 		ComplexITransform * t = nullptr;;
 		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 2>(b, num_threads);
-		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 2>(b, num_threads);
-		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 2>(b, num_threads);
-		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 2>(b, num_threads);
-		else if (n == (1 << 14)) t = new CZIT_CPU_vec_mt<(1 << 14), 2>(b, num_threads);
+		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 4>(b, num_threads);
+		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 8>(b, num_threads);
+		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 4>(b, num_threads);
+		else if (n == (1 << 14)) t = new CZIT_CPU_vec_mt<(1 << 14), 8>(b, num_threads);
 		if (t == nullptr) throw std::runtime_error("exponent is not supported");
 
 		auto t0 = std::chrono::steady_clock::now();

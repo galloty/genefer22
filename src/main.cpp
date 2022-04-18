@@ -478,12 +478,12 @@ private:
 public:
 	finline explicit Vradix4(const Vc * const mem, const size_t step)
 	{
-		for (size_t i = 0; i < 4; ++i) z[i] = mem[i * (step / N)];
+		for (size_t i = 0; i < 4; ++i) z[i] = mem[i * step];
 	}
 
 	finline void store(Vc * const mem, const size_t step) const
 	{
-		for (size_t i = 0; i < 4; ++i) mem[i * (step / N)] = z[i];
+		for (size_t i = 0; i < 4; ++i) mem[i * step] = z[i];
 	}
 
 	finline explicit Vradix4(const Vc * const mem)	// 4_4
@@ -554,12 +554,12 @@ private:
 public:
 	finline explicit Vradix8(const Vc * const mem, const size_t step)
 	{
-		for (size_t i = 0; i < 8; ++i) z[i] = mem[i * (step / N)];
+		for (size_t i = 0; i < 8; ++i) z[i] = mem[i * step];
 	}
 
 	finline void store(Vc * const mem, const size_t step) const
 	{
-		for (size_t i = 0; i < 8; ++i) mem[i * (step / N)] = z[i];
+		for (size_t i = 0; i < 8; ++i) mem[i * step] = z[i];
 	}
 
 	finline void forward8_0()
@@ -629,8 +629,6 @@ public:
 			mem[(step * i_h + i_l) / N] = z[i];
 		}
 	}
-
-	finline Vc * getZ() { return z; }
 
 	finline void transpose_in() { Vc::transpose_in(z); }
 	finline void transpose_out() { Vc::transpose_out(z); }
@@ -735,9 +733,9 @@ private:
 	{
 		for (size_t i = 0; i < m; ++i)
 		{
-			Vr4 vr(&z[i], m * VSIZE);
+			Vr4 vr(&z[i], m);
 			vr.forward4e(w0, w1);
-			vr.store(&z[i], m * VSIZE);
+			vr.store(&z[i], m);
 		}
 	}
 
@@ -745,9 +743,9 @@ private:
 	{
 		for (size_t i = 0; i < m; ++i)
 		{
-			Vr4 vr(&z[i], m * VSIZE);
+			Vr4 vr(&z[i], m);
 			vr.forward4o(w0, w2);
-			vr.store(&z[i], m * VSIZE);
+			vr.store(&z[i], m);
 		}
 	}
 
@@ -755,9 +753,9 @@ private:
 	{
 		for (size_t i = 0; i < m; ++i)
 		{
-			Vr4 vr(&z[i], m * VSIZE);
+			Vr4 vr(&z[i], m);
 			vr.backward4e(w0, w1);
-			vr.store(&z[i], m * VSIZE);
+			vr.store(&z[i], m);
 		}
 	}
 
@@ -765,9 +763,9 @@ private:
 	{
 		for (size_t i = 0; i < m; ++i)
 		{
-			Vr4 vr(&z[i], m * VSIZE);
+			Vr4 vr(&z[i], m);
 			vr.backward4o(w0, w2);
-			vr.store(&z[i], m * VSIZE);
+			vr.store(&z[i], m);
 		}
 	}
 
@@ -779,9 +777,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.forward4e(w0, w1);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -794,9 +792,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.forward4o(w0, w2);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -809,9 +807,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.backward4e(w0, w1);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -824,9 +822,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.backward4o(w0, w2);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -840,9 +838,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.forward4_0(w0);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -856,9 +854,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr4 vr(zi, mi * VSIZE);
+				Vr4 vr(zi, mi);
 				vr.backward4_0(w0);
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -871,9 +869,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr8 vr(zi, mi * VSIZE);
+				Vr8 vr(zi, mi);
 				vr.forward8_0();
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -886,9 +884,9 @@ private:
 			for (size_t i = 0; i < count; ++i)
 			{
 				Vc * const zi = &z[j + i];
-				Vr8 vr(zi, mi * VSIZE);
+				Vr8 vr(zi, mi);
 				vr.backward8_0();
-				vr.store(zi, mi * VSIZE);
+				vr.store(zi, mi);
 			}
 		}
 	}
@@ -985,6 +983,7 @@ private:
 		for (size_t l = l_min; l < l_max; ++l)
 		{
 			Vc * const zl = &z[index(n_io * l) / VSIZE];
+			const Vc * const wsl = &ws[l * n_io / 8 / VSIZE];
 
 			// forward_in
 			{
@@ -997,10 +996,12 @@ private:
 
 			for (size_t m = n_io / 16 / VSIZE, s = 2; m >= ((VSIZE == 8) ? 16 : 4) / VSIZE; m /= 4, s *= 4)
 			{
+				const Complex * const w_s = &w122i[(s_io + 3 * l) * s];
+
 				for (size_t j = 0; j < s; ++j)
 				{
 					Vc * const zj = &zl[8 * m * j];
-					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
+					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 					forward4e(m, &zj[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
@@ -1010,10 +1011,12 @@ private:
 
 			if (VSIZE == 8)
 			{
+				const Complex * const w_s = &w122i[(s_io + 3 * l) * (n_io / 32)];
+
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
 					Vc * const zj = &zl[32 / VSIZE * j];
-					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
+					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
 					forward4e_4(&zj[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
@@ -1027,17 +1030,19 @@ private:
 				Vc * const zj = &zl[8 * j];
 				Vc8 z8(zj);
 				z8.transpose_in();
-				z8.square4eo(ws[l * n_io / 8 / VSIZE + j]);
+				z8.square4eo(wsl[j]);
 				z8.transpose_out();
 				z8.store(zj);
 			}
 
 			if (VSIZE == 8)
 			{
+				const Complex * const w_s = &w122i[(s_io + 3 * l) * (n_io / 32)];
+
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
 					Vc * const zj = &zl[32 / VSIZE * j];
-					const Complex * const w = &w122i[(s_io + 3 * l) * (n_io / 32) + 3 * j];
+					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
 					backward4e_4(&zj[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
@@ -1048,10 +1053,12 @@ private:
 			// backward_in
 			for (size_t m = ((VSIZE == 8) ? 16 : 4) / VSIZE, s = 2 * n_io / 16 / VSIZE / m; m <= n_io / 16 / VSIZE; m *= 4, s /= 4)
 			{
+				const Complex * const w_s = &w122i[(s_io + 3 * l) * s];
+
 				for (size_t j = 0; j < s; ++j)
 				{
 					Vc * const zj = &zl[8 * m * j];
-					const Complex * const w = &w122i[(s_io + 3 * l) * s + 3 * j];
+					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
 					backward4e(m, &zj[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
@@ -1268,7 +1275,7 @@ public:
 		const integer exponent(b, n);
 
 		ComplexITransform * t = nullptr;;
-		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 8>(b, num_threads);
+		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 2>(b, num_threads);
 		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 4>(b, num_threads);
 		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 8>(b, num_threads);
 		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 4>(b, num_threads);

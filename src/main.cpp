@@ -125,6 +125,7 @@ struct Complex
 	}
 };
 
+// Is not used because of full template specialization
 template<size_t N>
 class Vd
 {
@@ -188,7 +189,7 @@ public:
 
 inline __m128d round_pd(const __m128d rhs)
 {
-#ifdef __SSE4
+#ifdef __SSE4_1__
 	return _mm_round_pd(rhs, _MM_FROUND_TO_NEAREST_INT);
 #else // SSE2
 	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
@@ -248,6 +249,7 @@ public:
 	}
 };
 
+#ifdef __AVX__
 template<>
 class Vd<4>
 {
@@ -300,7 +302,9 @@ public:
 		vd[3].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 3, 0, 1));
 	}
 };
+#endif
 
+#ifdef __AVX512F__
 template<>
 class Vd<8>
 {
@@ -363,6 +367,7 @@ public:
 		vd[3].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(2, 0, 2, 0)); vd[7].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(3, 1, 3, 1));
 	}
 };
+#endif
 
 template<size_t N>
 class Vcx
@@ -486,12 +491,12 @@ public:
 		for (size_t i = 0; i < 4; ++i) mem[i * step] = z[i];
 	}
 
-	finline explicit Vradix4(const Vc * const mem)	// 4_4
+	finline explicit Vradix4(const Vc * const mem)	// VSIZE = 8, 4_4
 	{
 		for (size_t i = 0; i < 4; ++i) z[i] = mem[(4 * i) / 8 + ((4 * i) % 8)];
 	}
 
-	finline void store(Vc * const mem) const	// 4_4
+	finline void store(Vc * const mem) const	// VSIZE = 8, 4_4
 	{
 		for (size_t i = 0; i < 4; ++i) mem[(4 * i) / 8 + ((4 * i) % 8)] = z[i];
 	}
@@ -633,24 +638,26 @@ public:
 	finline void transpose_in() { Vc::transpose_in(z); }
 	finline void transpose_out() { Vc::transpose_out(z); }
 
-	finline void square4eo(const Vc & w)
+	finline void square4e(const Vc & w)
 	{
-		// square4e
 		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
 		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
 		const Vc s0 = v0.sqr() + v1.sqr().mulW(w), s1 = (v0 + v0) * v1, s2 = v2.sqr() - v3.sqr().mulW(w), s3 = (v2 + v2) * v3;
 		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
+	}
 
-		// square4o
+	finline void square4o(const Vc & w)
+	{
 		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
 		const Vc v4 = u4.addi(u6), v6 = u4.subi(u6), v5 = u5.addi(u7), v7 = u7.addi(u5);
 		const Vc s4 = v5.sqr().mulW(w).subi(v4.sqr()), s5 = (v4 + v4) * v5, s6 = v6.sqr().addi(v7.sqr().mulW(w)), s7 = (v6 + v6) * v7;
 		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
 	}
 
-	finline Vc mul_carry(const double g, const double b, const double b_inv, const double t2_n, const double sb, const double sb_inv, const double isb, const double fsb, Vc & err)
+	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
+						 const double sb, const double sb_inv, const double isb, const double fsb, Vc & err)
 	{
-		Vc f = Vc(0.0);
+		Vc f = f_prev;
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
@@ -699,7 +706,7 @@ class CZIT_CPU_vec_mt : public ComplexITransform
 private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
 	// n_io must be a power of 4, n_io >= 64, n >= 16 * n_io, n >= num_threads * n_io.
-	static const size_t n_io = (N <= (1 << 11)) ? 64 : (N <= (1 << 13)) ? 256 : 1024;
+	static const size_t n_io = (N <= (1 << 11)) ? 64 : (N <= (1 << 13)) ? 256 : (N <= (1 << 17)) ? 1024 : 4096;
 	static const size_t n_io_s = n_io / 4 / 2;
 	static const size_t n_io_inv = N / n_io / VSIZE;
 	static const size_t n_gap = (VSIZE <= 4) ? 64 : 16 * VSIZE;	// Cache line size is 64 bytes. Alignment is needed if VSIZE > 4.
@@ -1030,7 +1037,14 @@ private:
 				Vc * const zj = &zl[8 * j];
 				Vc8 z8(zj);
 				z8.transpose_in();
-				z8.square4eo(wsl[j]);
+				z8.square4e(wsl[j]);
+				z8.store(zj);
+			}
+			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
+			{
+				Vc * const zj = &zl[8 * j];
+				Vc8 z8(zj);
+				z8.square4o(wsl[j]);
 				z8.transpose_out();
 				z8.store(zj);
 			}
@@ -1099,17 +1113,10 @@ private:
 				Vc * const zj = &zl[index(n_io) * j];
 				Vc8 z8(zj, index(n_io));
 				z8.transpose_in();
-				const Vc f_j = z8.mul_carry(g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
+				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
+				f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
 
-				if (lh != l_min)
-				{
-					const Vc f_prev = f[j];	// carry of lh - 1
-					f[j] = f_j;		// if lh = l_max - 1 then => pass3 else => lh + 1
-					z8.carry(f_prev, b, b_inv, sb, sb_inv, isb, fsb);
-					z8.transpose_out();
-				}
-				else f[j] = f_j;	// => lh + 1
-
+				if (lh != l_min) z8.transpose_out();
 				z8.store(zj, index(n_io));	// transposed if lh = l_min
 			}
 

@@ -17,8 +17,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <omp.h>
 
+#include <gmp.h>
+
 #include "fp16_80.h"
-#include "integer.h"
 
 class ComplexITransform
 {
@@ -711,6 +712,17 @@ private:
 	static const size_t n_io_inv = N / n_io / VSIZE;
 	static const size_t n_gap = (VSIZE <= 4) ? 64 : 16 * VSIZE;	// Cache line size is 64 bytes. Alignment is needed if VSIZE > 4.
 
+	finline static constexpr size_t index(const size_t k) { const size_t j = k / n_io, i = k % n_io; return j * (n_io + n_gap / sizeof(Complex)) + i; }
+
+	static const size_t wSize = N / 8 * sizeof(Complex);
+	static const size_t wsSize = N / 8 * sizeof(Complex);
+	static const size_t zSize = index(N) * sizeof(Complex);
+
+	static const size_t wOffset = 0;
+	static const size_t wsOffset = wOffset + wSize;
+	static const size_t zOffset = wsOffset + wsSize;
+	static const size_t fcOffset = zOffset + zSize;
+
 	using Vc = Vcx<VSIZE>;
 	using Vr4 = Vradix4<VSIZE>;
 	using Vr8 = Vradix8<VSIZE>;
@@ -721,10 +733,7 @@ private:
 	const uint32_t _b;
 	const size_t _num_threads;
 	const double _sb, _isb, _fsb;
-	Complex * const _w122i;
-	Vc * const _ws;
-	Vc * const _z;
-	Vc * const _fc;
+	char * const _mem;
 
 private:
 	finline static size_t bitRev(const size_t i, const size_t n)
@@ -733,8 +742,6 @@ private:
 		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
 		return r;
 	}
-
-	finline static constexpr size_t index(const size_t k) { const size_t j = k / n_io, i = k % n_io; return j * (n_io + n_gap / sizeof(Complex)) + i; }
 
 	finline static void forward4e(const size_t m, Vc * const z, const Vc & w0, const Vc & w1)
 	{
@@ -981,9 +988,9 @@ private:
 
 	void pass1(const size_t thread_id)
 	{
-		const Complex * const w122i = _w122i;
-		const Vc * const ws = _ws;
-		Vc * const z = _z;
+		const Complex * const w122i = (Complex *)&_mem[wOffset];
+		const Vc * const ws = (Vc *)&_mem[wsOffset];
+		Vc * const z = (Vc *)&_mem[zOffset];
 
 		const size_t num_threads = _num_threads, s_io = N / n_io;
 		const size_t l_min = thread_id * s_io / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io : (thread_id + 1) * s_io / num_threads;
@@ -1092,9 +1099,9 @@ private:
 
 	double pass2(const size_t thread_id, const bool dup)
 	{
-		const Complex * const w122i = _w122i;
-		Vc * const z = _z;
-		Vc * const f = &_fc[thread_id * n_io_inv];
+		const Complex * const w122i = (Complex *)&_mem[wOffset];
+		Vc * const z = (Vc *)&_mem[zOffset];
+		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
 		const double b = double(_b), sb = _sb, isb = _isb, fsb = _fsb;
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb, g = dup ? 2.0 : 1.0;
 
@@ -1113,6 +1120,7 @@ private:
 				Vc * const zj = &zl[index(n_io) * j];
 				Vc8 z8(zj, index(n_io));
 				z8.transpose_in();
+
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
 				f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
 
@@ -1132,8 +1140,8 @@ private:
 		const size_t thread_id_prev = ((thread_id != 0) ? thread_id : num_threads) - 1;
 		const size_t lh = thread_id * n_io_s / num_threads;	// l_min of pass2
 
-		Vc * const zl = &_z[2 * 4 / VSIZE * lh];
-		Vc * const f = &_fc[thread_id_prev * n_io_inv];
+		Vc * const z = (Vc *)&_mem[zOffset]; Vc * const zl = &z[2 * 4 / VSIZE * lh];
+		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
 
 		const double b = double(_b), sb = _sb, isb = _isb, fsb = _fsb;
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb;
@@ -1145,24 +1153,25 @@ private:
 
 			Vc f_prev = f[j];
 			if (thread_id == 0) f_prev.shift(f[((j == 0) ? n_io_inv : j) - 1], j == 0);
-
 			z8.carry(f_prev, b, b_inv, sb, sb_inv, isb, fsb);
+
 			z8.transpose_out();
 			z8.store(zj, index(n_io));
 		}
 
-		forward_out(zl, _w122i);
+		const Complex * const w122i = (Complex *)&_mem[wOffset];
+		forward_out(zl, w122i);
 	}
 
 public:
 	CZIT_CPU_vec_mt(const uint32_t b, const size_t num_threads) : ComplexITransform(N, b),
 		sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()),
-		_w122i(new Complex[N / 8]), _ws(new Vc[N / 8 / VSIZE]), _z(new Vc[index(N) / VSIZE]), _fc(new Vc[num_threads * n_io_inv])
+		_mem((char *)_mm_malloc(wSize + wsSize + zSize + num_threads * n_io_inv * sizeof(Vc) + 1024 * 1024, 2 * 1024 * 1024))
 	{
-		// std::cout << "w: " << N / 8 * sizeof(Complex) << ", _ws: " << N / 8 * sizeof(Complex)
-		// 		  << ", z: " << index(N) * sizeof(Complex) << ", fc: " << num_threads * n_io_inv * sizeof(Vc) << std::endl;
+		// std::cout << "w: " << wSize << ", ws: " << wsSize
+		// 		  << ", z: " << zSize << ", fc: " << num_threads * n_io_inv * sizeof(Vc) << std::endl;
 
-		Complex * const w122i = _w122i;
+		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
 		{
 			Complex * const w_s = &w122i[2 * s / 4];
@@ -1175,7 +1184,7 @@ public:
 			}
 		}
 
-		Vc * const ws = _ws;
+		Vc * const ws = (Vc *)&_mem[wsOffset];
 		for (size_t j = 0; j < N / 8 / VSIZE; ++j)
 		{
 			for (size_t i = 0; i < VSIZE; ++i)
@@ -1184,8 +1193,8 @@ public:
 			}
 		}
 
-		Vc * const z = _z;
-		z[0] = Vc(2.0);
+		Vc * const z = (Vc *)&_mem[zOffset];
+		z[0] = Vc(1.0);
 		for (size_t k = 1; k < index(N) / VSIZE; ++k) z[k] = Vc(0.0);
 
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
@@ -1196,10 +1205,7 @@ public:
 
 	virtual ~CZIT_CPU_vec_mt()
 	{
-		delete[] _w122i;
-		delete[] _ws;
-		delete[] _z;
-		delete[] _fc;
+		_mm_free((void *)_mem);
 	}
 
 	double squareDup(const bool dup) override
@@ -1235,12 +1241,12 @@ public:
 
 	void getZi(int64_t * const zi) const override
 	{
-		const Vc * const z = _z;
-		const Complex * const w122i = _w122i;
+		const Vc * const z = (Vc *)&_mem[zOffset];
 
-		Vc * const z_copy = new Vc[index(N) / VSIZE];
+		Vc * const z_copy = (Vc *)_mm_malloc(zSize, 1024);
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_copy[k] = z[k];
 
+		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
 		{
 			backward_out(&z_copy[2 * 4 / VSIZE * lh], w122i);
@@ -1259,7 +1265,7 @@ public:
 			}
 		}
 
-		delete[] z_copy;
+		_mm_free((void *)z_copy);
 	}
 };
 
@@ -1268,7 +1274,7 @@ class genefer
 private:
 
 public:
-	void check(const uint32_t b, const size_t n, const std::string & exp_residue)
+	void check(const uint32_t b, const uint32_t n, const std::string & exp_residue)
 	{
 		omp_set_num_threads(3);
 		size_t num_threads = 0;
@@ -1279,7 +1285,7 @@ public:
 		}
 		std::cout << num_threads << " thread(s)." << std::endl;
 
-		const integer exponent(b, n);
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
 
 		ComplexITransform * t = nullptr;;
 		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 2>(b, num_threads);
@@ -1292,11 +1298,13 @@ public:
 		auto t0 = std::chrono::steady_clock::now();
 
 		double err = 0;
-		for (int i = int(exponent.bitSize()) - 1; i >= 0; --i)
+		for (int i = int(mpz_sizeinbase(exponent, 2)) - 1; i >= 0; --i)
 		{
-			const double e = t->squareDup(exponent.bit(size_t(i)));
+			const double e = t->squareDup(mpz_tstbit(exponent, i) != 0);
 			err  = std::max(err, e);
 		}
+
+		mpz_clear(exponent);
 
 		const double time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 

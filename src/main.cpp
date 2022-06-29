@@ -109,8 +109,10 @@ private:
 	{
 		std::ostringstream ss;
 		ss << "Usage: genefer22 [options]  options may be specified in any order" << std::endl;
-		ss << "  -q \"b^{2^n}+1\"          test quick expression (Fermat probable prime)" << std::endl;
-		ss << "  -v or -V                print the startup banner and immediately exit" << std::endl;
+		ss << "  -q \"b^{2^n}+1\"                test a generalized Fermat number" << std::endl;
+		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread per logical core)" << std::endl;
+		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
+		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
 #ifdef BOINC
 		ss << "  -boinc                  operate as a BOINC client app" << std::endl;
 #endif
@@ -125,6 +127,20 @@ public:
 		for (int i = 1; i < argc; ++i) args.push_back(argv[i]);
 
 		bool bBoinc = false;
+#ifdef BOINC
+		for (const std::string & arg : args) if (arg == "-boinc") bBoinc = true;
+#endif
+		pio::getInstance().setBoinc(bBoinc);
+
+		if (bBoinc)
+		{
+			const int retval = boinc_init();
+			if (retval != 0)
+			{
+				std::ostringstream ss; ss << "boinc_init returned " << retval;
+				throw std::runtime_error(ss.str());
+			}
+		}
 
 		// if -v or -V then print header to stderr and exit
 		for (const std::string & arg : args)
@@ -139,13 +155,15 @@ public:
 
 		pio::print(header(args, true));
 
-		// if (args.empty())
-		// {
-		// 	pio::print(usage());
-		// 	return;
-		// }
+		if (args.empty())
+		{
+			pio::print(usage());
+			// return;
+		}
 
 		uint32_t b = 0, n = 0;
+		size_t nthreads = 0;
+		std::string impl;
 		bool qTest = false;
 		// parse args
 		for (size_t i = 0, size = args.size(); i < size; ++i)
@@ -165,6 +183,21 @@ public:
 				if (n > (1 << 22)) throw std::runtime_error("n > 22 is not supported");
 				qTest = true;
 			}
+			if (arg.substr(0, 2) == "-t")
+			{
+				const std::string nt = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				nthreads = std::min(std::atoi(nt.c_str()), 64);
+			}
+			if (arg.substr(0, 10) == "--nthreads")
+			{
+				const std::string nt = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
+				nthreads =  std::min(std::atoi(nt.c_str()), 64);
+			}
+			if (arg.substr(0, 2) == "-x")
+			{
+				impl = ((arg == "-x") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				if ((impl != "sse2") && (impl != "sse4") && (impl != "avx") && (impl != "fma") && (impl != "512")) throw std::runtime_error("implementation is not valid");
+			}
 		}
 
 		genefer & g = genefer::getInstance();
@@ -172,30 +205,20 @@ public:
 
 		if (qTest)
 		{
-			g.check(b, n);
+			g.check(b, n, nthreads, impl);
 		}
 		else
 		{
 			static const size_t count = 5;
-			// static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 300084246 };
+			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 300084246 };
 			static constexpr uint32_t bc[count] = { 399998300, 399998574, 399987080, 399992286, 300000000 };
 			static const char * const res[count] = { "5a82277cc9c6f782", "1907ebae0c183e35", "dced858499069664", "3c918e0f87815627", "978bc600c793bae1" };
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bc[i], 1 << (10 + i), res[i])) break;
+				if (!g.check(bp[i], 1 << (10 + i), nthreads, impl)) break;
+				if (!g.check(bc[i], 1 << (10 + i), nthreads, impl, res[i])) break;
 			}
-			// // g.check(399998298, 1 << 10, "");
-			// g.check(399998300, 1 << 10, "5a82277cc9c6f782");
-			// // g.check(399998572, 1 << 11, "");
-			// g.check(399998574, 1 << 11, "1907ebae0c183e35");
-			// // g.check(399987078, 1 << 12, "");
-			// g.check(399987080, 1 << 12, "dced858499069664");
-			// // g.check(399992284, 1 << 13, "");
-			// g.check(399992286, 1 << 13, "3c918e0f87815627");
-			// // g.check(300084246, 1 << 14, "");
-			// g.check(300000000, 1 << 14, "978bc600c793bae1");
-
 		}
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);
@@ -217,31 +240,4 @@ int main(int argc, char * argv[])
 	}
 
 	return EXIT_SUCCESS;
-
-	// std::cerr << "genefer22: search for Generalized Fermat primes" << std::endl;
-	// std::cerr << " Copyright (c) 2022, Yves Gallot" << std::endl;
-	// std::cerr << " genefer22 is free source code, under the MIT license." << std::endl << std::endl;
-
-	// try
-	// {
-	// 	genefer g;
-	// 	// g.check(399998298, 1 << 10, "");
-	// 	g.check(399998300, 1 << 10, "5a82277cc9c6f782");
-	// 	// g.check(399998572, 1 << 11, "");
-	// 	g.check(399998574, 1 << 11, "1907ebae0c183e35");
-	// 	// g.check(399987078, 1 << 12, "");
-	// 	g.check(399987080, 1 << 12, "dced858499069664");
-	// 	// g.check(399992284, 1 << 13, "");
-	// 	g.check(399992286, 1 << 13, "3c918e0f87815627");
-	// 	// g.check(300084246, 1 << 14, "");
-	// 	g.check(300000000, 1 << 14, "978bc600c793bae1");
-	// }
-	// catch (const std::runtime_error & e)
-	// {
-	// 	std::ostringstream ss; ss << std::endl << "error: " << e.what() << ".";
-	// 	std::cerr << ss.str() << std::endl;
-	// 	return EXIT_FAILURE;
-	// }
-
-	// return EXIT_SUCCESS;
 }

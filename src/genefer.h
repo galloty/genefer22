@@ -17,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <thread>
 
 #include <gmp.h>
+#include <omp.h>
 
 #include "transform.h"
 
@@ -44,36 +45,63 @@ protected:
 private:
 	int _n = 0;
 	bool _isBoinc = false;
-	// transform * _transform = nullptr;
 
 public:
-	bool check(const uint32_t b, const uint32_t n, const std::string & exp_residue = "")
+	bool check(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const std::string & exp_residue = "")
 	{
-		omp_set_num_threads(2);
+		if (nthreads != 0) omp_set_num_threads(int(nthreads));
 		size_t num_threads = 0;
 #pragma omp parallel
 		{
 #pragma omp single
 			num_threads = size_t(omp_get_num_threads());
 		}
-		std::cout << num_threads << " thread(s)." << std::endl;
 
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
 
-		ComplexITransform * t = nullptr;
-		if (n == (1 << 10))      t = new CZIT_CPU_vec_mt<(1 << 10), 4>(b, num_threads);
-		else if (n == (1 << 11)) t = new CZIT_CPU_vec_mt<(1 << 11), 4>(b, num_threads);
-		else if (n == (1 << 12)) t = new CZIT_CPU_vec_mt<(1 << 12), 4>(b, num_threads);
-		else if (n == (1 << 13)) t = new CZIT_CPU_vec_mt<(1 << 13), 4>(b, num_threads);
-		else if (n == (1 << 14)) t = new CZIT_CPU_vec_mt<(1 << 14), 4>(b, num_threads);
-		if (t == nullptr) throw std::runtime_error("exponent is not supported");
+		Transform * transform = nullptr;
+		std::string ttype;
+
+		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
+		{
+			transform = Transform::create_512(b, n, num_threads);
+			ttype = "512";
+		}
+		else if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
+		{
+			transform = Transform::create_fma(b, n, num_threads);
+			ttype = "fma";
+		}
+		else if (__builtin_cpu_supports("avx") && (impl.empty() || (impl == "avx")))
+		{
+			transform = Transform::create_avx(b, n, num_threads);
+			ttype = "avx";
+		}
+		else if (__builtin_cpu_supports("sse4.1") && (impl.empty() || (impl == "sse4")))
+		{
+			transform = Transform::create_sse4(b, n, num_threads);
+			ttype = "sse4";
+		}
+		else if (__builtin_cpu_supports("sse2") && (impl.empty() || (impl == "sse2")))
+		{
+			transform = Transform::create_sse2(b, n, num_threads);
+			ttype = "sse2";
+		}
+		else
+		{
+			if (impl.empty()) throw std::runtime_error("processor must support sse2");
+			std::ostringstream ss; ss << impl << " is not supported";
+			throw std::runtime_error(ss.str());
+		}
+
+		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
 
 		auto t0 = std::chrono::steady_clock::now();
 
 		double err = 0;
 		for (int i = int(mpz_sizeinbase(exponent, 2)) - 1; i >= 0; --i)
 		{
-			const double e = t->squareDup(mpz_tstbit(exponent, i) != 0);
+			const double e = transform->squareDup(mpz_tstbit(exponent, i) != 0);
 			err  = std::max(err, e);
 			if (_quit) break;
 		}
@@ -85,7 +113,7 @@ public:
 		const double time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
 		uint64_t res;
-		const bool isPrp = t->isOne(res);
+		const bool isPrp = transform->isOne(res);
 		char residue[30];
 		sprintf(residue, "%016" PRIx64, res);
 

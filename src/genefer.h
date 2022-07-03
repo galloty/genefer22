@@ -57,8 +57,6 @@ public:
 			num_threads = size_t(omp_get_num_threads());
 		}
 
-		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
-
 		Transform * transform = nullptr;
 		std::string ttype;
 
@@ -96,13 +94,32 @@ public:
 
 		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
 
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
+
 		auto t0 = std::chrono::steady_clock::now();
 
-		double err = 0;
-		for (int i = int(mpz_sizeinbase(exponent, 2)) - 1; i >= 0; --i)
+		// LTR
+		// transform->set(1);
+		// for (int i = int(mpz_sizeinbase(exponent, 2)) - 1; i >= 0; --i)
+		// {
+		// 	transform->squareDup(mpz_tstbit(exponent, i) != 0);
+		// 	if (_quit) break;
+		// }
+
+		// RTL
+		transform->set(2);
+		for (size_t i = 0; i < n; ++i)
 		{
-			const double e = transform->squareDup(mpz_tstbit(exponent, i) != 0);
-			err  = std::max(err, e);
+			//transform->pow(b);
+			transform->initMultiplicand();
+			for (int j = 31 - __builtin_clz(b) - 1; j >= 0; --j)
+			{
+				transform->squareDup(false);
+				if ((b & (uint32_t(1) << j)) != 0)
+				{
+					transform->mul();
+				}
+			}
 			if (_quit) break;
 		}
 
@@ -112,6 +129,7 @@ public:
 
 		const double time = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
+		const double err = transform->getError();
 		uint64_t res;
 		const bool isPrp = transform->isOne(res);
 		char residue[30];

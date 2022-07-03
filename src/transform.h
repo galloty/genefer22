@@ -16,16 +16,16 @@ private:
 	const uint32_t _b;
 
 private:
-	void unbalance(int64_t * const zi) const
+	void unbalance(int32_t * const zi) const
 	{
 		const size_t size = _size;
-		const int64_t base = int64_t(_b);
+		const int32_t base = int32_t(_b);
 
 		int64_t f = 0;
 		for (size_t i = 0; i != size; ++i)
 		{
 			f += zi[i];
-			int64_t r = f % base;
+			int32_t r = int32_t(f % base);
 			if (r < 0) r += base;
 			zi[i] = r;
 			f -= r;
@@ -39,7 +39,7 @@ private:
 			for (size_t i = 0; i != size; ++i)
 			{
 				f += zi[i];
-				int64_t r = f % base;
+				int32_t r = int32_t(f % base);
 				if (r < 0) r += base;
 				zi[i] = r;
 				f -= r;
@@ -69,8 +69,16 @@ private:
 	}
 
 public:
-	virtual double squareDup(const bool dup) = 0;
-	virtual void getZi(int64_t * const zi) const = 0;
+	virtual void set(const int32_t a) = 0;
+	virtual void getZi(int32_t * const zi) const = 0;
+	virtual void setZi(int32_t * const zi) = 0;
+
+	virtual void setError(const double error) = 0;
+	virtual double getError() const = 0;
+
+	virtual void squareDup(const bool dup) = 0;
+	virtual void initMultiplicand() = 0;
+	virtual void mul() = 0;
 
 public:
 	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads);
@@ -87,7 +95,7 @@ public:
 	{
 		const size_t size = _size;
 
-		int64_t * const zi = new int64_t[size];
+		int32_t * const zi = new int32_t[size];
 		getZi(zi);
 
 		unbalance(zi);

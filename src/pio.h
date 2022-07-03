@@ -60,7 +60,7 @@ private:
 	}
 
 private:
-	// result: normal: 'presults.txt' file, boinc: 'out' file
+	// result: normal: 'results.txt' file, boinc: 'out' file
 	bool _result(const std::string & str) const
 	{
 		if (_isBoinc)
@@ -71,7 +71,7 @@ private:
 			std::fclose(out_file);
 			return true;
 		}
-		std::ofstream resFile("gresults.txt", std::ios::app);
+		std::ofstream resFile("results.txt", std::ios::app);
 		if (!resFile.is_open()) return false;
 		resFile << str;
 		resFile.close();

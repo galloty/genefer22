@@ -15,7 +15,7 @@ private:
 	const size_t _size;
 	const uint32_t _b;
 
-private:
+public:
 	void unbalance(int32_t * const zi) const
 	{
 		const size_t size = _size;
@@ -76,9 +76,11 @@ public:
 	virtual void setError(const double error) = 0;
 	virtual double getError() const = 0;
 
-	virtual void squareDup(const bool dup) = 0;
-	virtual void initMultiplicand() = 0;
-	virtual void mul() = 0;
+	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
+
+	virtual void squareDup(const bool dup) = 0;		// r0 => r0^2 or 2*r0^2
+	virtual void initMultiplicand() = 0;			// r1 => transform(r1)
+	virtual void mul() = 0;							// r0 *= r1
 
 public:
 	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads);

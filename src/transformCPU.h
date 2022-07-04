@@ -653,7 +653,6 @@ private:
 	static const size_t wsSize = N / 8 * sizeof(Complex);
 	static const size_t zSize = index(N) * sizeof(Complex);
 	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);	// num_threads <= 64
-	static const size_t zpSize = index(N) * sizeof(Complex);
 
 	static const size_t wOffset = 0;
 	static const size_t wsOffset = wOffset + wSize;
@@ -1269,7 +1268,7 @@ private:
 public:
 	TransformCPU(const uint32_t b, const size_t num_threads) : Transform(N, b),
 		sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()), _error(0),
-		_mem((char *)_mm_malloc(wSize + wsSize + zSize + fcSize + zpSize, 2 * 1024 * 1024))
+		_mem((char *)_mm_malloc(wSize + wsSize + zSize + fcSize + 15 * zSize, 2 * 1024 * 1024))		// r0 + r1...r15
 	{
 		// std::cout << "w: " << wSize << ", ws: " << wsSize
 		// 		  << ", z: " << zSize << ", fc: " << fcSize << std::endl;
@@ -1381,6 +1380,13 @@ public:
 	void setError(const double error) override { _error = error; }
 	double getError() const override { return _error; }
 
+	void copy(const size_t dst, const size_t src) const override
+	{
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
+		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + (dst - 1) * zSize];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
+	}
+
 	void squareDup(const bool dup) override
 	{
 		const size_t num_threads = _num_threads;
@@ -1414,11 +1420,6 @@ public:
 
 	void initMultiplicand() override
 	{
-		const Vc * const z = (Vc *)&_mem[zOffset];
-		Vc * const zp = (Vc *)&_mem[zpOffset];
-
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z[k];
-
 		if (_num_threads > 1)
 		{
 #pragma omp parallel

@@ -9,108 +9,61 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
+#include "gint.h"
+
 class Transform
 {
 private:
 	const size_t _size;
 	const uint32_t _b;
 
-public:
-	void unbalance(int32_t * const zi) const
-	{
-		const size_t size = _size;
-		const int32_t base = int32_t(_b);
-
-		int64_t f = 0;
-		for (size_t i = 0; i != size; ++i)
-		{
-			f += zi[i];
-			int32_t r = int32_t(f % base);
-			if (r < 0) r += base;
-			zi[i] = r;
-			f -= r;
-			f /= base;
-		}
-
-		while (f != 0)
-		{
-			f = -f;		// a[n] = -a[0]
-
-			for (size_t i = 0; i != size; ++i)
-			{
-				f += zi[i];
-				int32_t r = int32_t(f % base);
-				if (r < 0) r += base;
-				zi[i] = r;
-				f -= r;
-				f /= base;
-				if (f == 0) break;
-			}
-
-			if (f == 1)
-			{
-				bool isMinusOne = true;
-				for (size_t i = 0; i != size; ++i)
-				{
-					if (zi[i] != 0)
-					{
-						isMinusOne = false;
-						break;
-					}
-				}
-				if (isMinusOne)
-				{
-					// -1 cannot be unbalanced
-					zi[0] = -1;
-					break;
-				}
-			}
-		}
-	}
-
-public:
-	virtual void set(const int32_t a) = 0;
+protected:
 	virtual void getZi(int32_t * const zi) const = 0;
 	virtual void setZi(int32_t * const zi) = 0;
 
-	virtual void setError(const double error) = 0;
-	virtual double getError() const = 0;
-
-	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
-
+public:
+	virtual void set(const int32_t a) = 0;			// r0 = a
 	virtual void squareDup(const bool dup) = 0;		// r0 => r0^2 or 2*r0^2
 	virtual void initMultiplicand() = 0;			// r1 => transform(r1)
 	virtual void mul() = 0;							// r0 *= r1
 
+	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
+
+	virtual void setError(const double error) = 0;
+	virtual double getError() const = 0;
+
 public:
-	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads);
-	static Transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads);
-	static Transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads);
-	static Transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_threads);
-	static Transform * create_512(const uint32_t b, const uint32_t n, const size_t num_threads);
+	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static Transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static Transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static Transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static Transform * create_512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
 
 public:
 	Transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
 	virtual ~Transform() {}
 
+	gint * getInt() const
+	{
+		gint * const gptr = new gint(_size, _b);
+		getZi(gptr->d());
+		gptr->unbalance();
+		return gptr;
+	}
+
+	void setInt(const gint * const gptr)
+	{
+		gptr->balance();
+		setZi(gptr->d());
+	}
+
 	bool isOne(uint64_t & residue) const
 	{
-		const size_t size = _size;
-
-		int32_t * const zi = new int32_t[size];
-		getZi(zi);
-
-		unbalance(zi);
-
-		bool isOne = (zi[0] == 1);
-		if (isOne) for (size_t k = 1; k < size; ++k) isOne &= (zi[k] == 0);
-
-		uint64_t res = 0;
-		for (size_t i = 8; i != 0; --i) res = (res << 8) | (unsigned char)zi[size - i];
-		residue = res;
-
-		delete[] zi;
-
-		return isOne;
-	}	
+		gint zi(_size, _b);
+		getZi(zi.d());
+		zi.unbalance();
+		bool bOne = zi.isOne();
+		residue = zi.getResidue();
+		return bOne;
+	}
 };

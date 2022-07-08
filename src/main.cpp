@@ -162,7 +162,7 @@ public:
 		}
 
 		uint32_t b = 0, n = 0;
-		size_t nthreads = 0;
+		size_t nthreads = 1;	// 0;
 		std::string impl;
 		bool qTest = false;
 		// parse args
@@ -210,7 +210,7 @@ public:
 		else
 		{
 			static const size_t count = 5;
-			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 300084246 };
+			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 299940492 };
 			static constexpr uint32_t bc[count] = { 399998300, 399998574, 399987080, 399992286, 300000000 };
 			static const char * const res[count] = { "5a82277cc9c6f782", "1907ebae0c183e35", "dced858499069664", "3c918e0f87815627", "978bc600c793bae1" };
 

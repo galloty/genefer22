@@ -1266,9 +1266,9 @@ private:
 	}
 
 public:
-	TransformCPU(const uint32_t b, const size_t num_threads) : Transform(N, b),
+	TransformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs) : Transform(N, b),
 		sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()), _error(0),
-		_mem((char *)_mm_malloc(wSize + wsSize + zSize + fcSize + 15 * zSize, 2 * 1024 * 1024))		// r0 + r1...r15
+		_mem((char *)_mm_malloc(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize, 2 * 1024 * 1024))
 	{
 		// std::cout << "w: " << wSize << ", ws: " << wsSize
 		// 		  << ", z: " << zSize << ", fc: " << fcSize << std::endl;
@@ -1301,19 +1301,7 @@ public:
 		_mm_free((void *)_mem);
 	}
 
-	virtual void set(const int32_t a) override
-	{
-		Vc * const z = (Vc *)&_mem[zOffset];
-		z[0] = Vc(a);
-		for (size_t k = 1; k < index(N) / VSIZE; ++k) z[k] = Vc(0.0);
-
-		const Complex * const w122i = (Complex *)&_mem[wOffset];
-		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
-		{
-			forward_out(&z[2 * 4 / VSIZE * lh], w122i);
-		}
-	}
-
+protected:
 	void getZi(int32_t * const zi) const override
 	{
 		const Vc * const z = (Vc *)&_mem[zOffset];
@@ -1377,14 +1365,18 @@ public:
 		}
 	}
 
-	void setError(const double error) override { _error = error; }
-	double getError() const override { return _error; }
-
-	void copy(const size_t dst, const size_t src) const override
+public:
+	virtual void set(const int32_t a) override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
-		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + (dst - 1) * zSize];
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
+		Vc * const z = (Vc *)&_mem[zOffset];
+		z[0] = Vc(a);
+		for (size_t k = 1; k < index(N) / VSIZE; ++k) z[k] = Vc(0.0);
+
+		const Complex * const w122i = (Complex *)&_mem[wOffset];
+		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
+		{
+			forward_out(&z[2 * 4 / VSIZE * lh], w122i);
+		}
 	}
 
 	void squareDup(const bool dup) override
@@ -1464,4 +1456,14 @@ public:
 		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
 		_error = std::max(_error, err);
 	}
+
+	void copy(const size_t dst, const size_t src) const override
+	{
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
+		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + (dst - 1) * zSize];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
+	}
+
+	void setError(const double error) override { _error = error; }
+	double getError() const override { return _error; }
 };

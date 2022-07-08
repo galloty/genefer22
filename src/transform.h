@@ -22,10 +22,10 @@ protected:
 	virtual void setZi(int32_t * const zi) = 0;
 
 public:
-	virtual void set(const int32_t a) = 0;			// r0 = a
-	virtual void squareDup(const bool dup) = 0;		// r0 => r0^2 or 2*r0^2
-	virtual void initMultiplicand() = 0;			// r1 => transform(r1)
-	virtual void mul() = 0;							// r0 *= r1
+	virtual void set(const int32_t a) = 0;					// r0 = a
+	virtual void squareDup(const bool dup) = 0;				// r0 = r0^2 or 2*r0^2
+	virtual void initMultiplicand(const size_t src) = 0;	// r1 = transform(r_src)
+	virtual void mul() = 0;									// r0 *= r1
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 
@@ -43,6 +43,12 @@ public:
 	Transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
 	virtual ~Transform() {}
 
+	void mul(const size_t src)
+	{
+		initMultiplicand(src);
+		mul();
+	}
+
 	gint * getInt() const
 	{
 		gint * const gptr = new gint(_size, _b);
@@ -55,15 +61,5 @@ public:
 	{
 		gptr->balance();
 		setZi(gptr->d());
-	}
-
-	bool isOne(uint64_t & residue) const
-	{
-		gint zi(_size, _b);
-		getZi(zi.d());
-		zi.unbalance();
-		bool bOne = zi.isOne();
-		residue = zi.getResidue();
-		return bOne;
 	}
 };

@@ -11,10 +11,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include <chrono>
 #include <thread>
+#include <cmath>
 
 #include <gmp.h>
 #include <omp.h>
@@ -47,10 +46,21 @@ private:
 	bool _isBoinc = false;
 
 private:
+	static void power(Transform * const transform, const size_t reg, const uint32_t e)
+	{
+		transform->initMultiplicand(reg);
+		transform->set(1);
+		for (size_t j = 0, esize = 32 - __builtin_clzl(e); j < esize; ++j)
+		{
+			const size_t i = esize - 1 - j;
+			transform->squareDup(false);
+			if ((e & (uint32_t(1) << i)) != 0) transform->mul();
+		}
+	}
+
 	static void power(Transform * const transform, const size_t reg, const mpz_t & e)
 	{
-		transform->copy(1, reg);
-		transform->initMultiplicand();
+		transform->initMultiplicand(reg);
 		transform->set(1);
 		for (size_t j = 0, esize = mpz_sizeinbase(e, 2); j < esize; ++j)
 		{
@@ -61,7 +71,7 @@ private:
 	}
 
 public:
-	bool check(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const std::string & exp_residue = "")
+	bool check(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl)
 	{
 		const int depth = 5;
 		const size_t L = size_t(1) << depth;
@@ -120,7 +130,7 @@ public:
 
 		gint * cert_ptr[depth + 1];
 
-		double time = 0;
+		double time = 0, testtime = 0;
 {
 		const auto t0 = std::chrono::steady_clock::now();
 
@@ -131,14 +141,15 @@ public:
 			transform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (j == 0) x.add(1);	// error
 			// if (i == 0) x.add(1);	// error
-			if (i % B == 0) transform->copy(2 + i / B, 0);
+			if (i % B == 0) transform->copy(2 + i / B, 0);	// ckpt[i] => reg 2 + i
 			if (_quit) return false;
 		}
 
 		const auto t1 = std::chrono::steady_clock::now();
-		std::cout << "test: " << std::chrono::duration<double>(t1 - t0).count() << ", ";
+		testtime = std::chrono::duration<double>(t1 - t0).count();
+		std::cout << "test: " << testtime << ", ";
 
-		// cert[0] = ckpt[0];
+		// cert[0] = ckpt[0]
 		transform->copy(0, 2);
 		cert_ptr[0] = transform->getInt();
 
@@ -149,20 +160,18 @@ public:
 		{
 			const size_t i = size_t(1) << (depth - k);
 
-			// ckpt[i] = ckpt[i].pow(w[0]);
+			// ckpt[i] = ckpt[i]^w[0]
 			power(transform, 2 + i, w[0]);
 			transform->copy(2 + i, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
 			{
-				// ckpt[i].mul(ckpt[i + 2 * j].pow(w[j]));
+				// ckpt[i] *= ckpt[i + 2 * j]^w[j]
 				power(transform, 2 + i + 2 * j, w[j]);
-				transform->copy(1, 2 + i);
-				transform->initMultiplicand();
-				transform->mul();
+				transform->mul(2 + i);
 				transform->copy(2 + i, 0);
 			}
-			// cert[k] = ckpt[size_t(1) << (depth - k)];
+			// cert[k] = ckpt[i]
 			transform->copy(0, 2 + i);
 			cert_ptr[k] = transform->getInt();
 
@@ -189,52 +198,44 @@ public:
 		const auto t0 = std::chrono::steady_clock::now();
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
-		mpz_set_ui(w[0], cert_ptr[0]->gethash32());
 
-		// Mod v1 = Mod(cert[0]).pow(w[0]);
+		// v1 = cert[0]^w[0], v1: reg = 2
+		const uint32_t q = cert_ptr[0]->gethash32();
+		mpz_set_ui(w[0], q);
 		transform->setInt(cert_ptr[0]);
-		power(transform, 0, w[0]);
-		transform->copy(2, 0);	// v1: reg = 2
+		power(transform, 0, q);
+		transform->copy(2, 0);
 
-		// v2 = Mod(1);
+		// v2 = 1, v2: reg = 3
 		transform->set(1);
-		transform->copy(3, 0);	// v2: reg = 3
+		transform->copy(3, 0);
 
 		for (int k = 1; k <= depth; ++k)
 		{
-			// const Mod & mu = cert[k];
-			// const uint32_t q = mu.gethash32();
+			// mu = cert[k], mu: reg = 4
 			const uint32_t q = cert_ptr[k]->gethash32();
 			transform->setInt(cert_ptr[k]);
-			transform->copy(4, 0);	// mu: reg = 4
+			transform->copy(4, 0);
 
-			mpz_t mq; mpz_init_set_ui(mq, q);
-
-			// v1.mul(mu.pow(mq));
-			power(transform, 4, mq);
-			transform->copy(1, 2);
-			transform->initMultiplicand();
-			transform->mul();
+			// v1 = v1 * mu^q
+			power(transform, 4, q);
+			transform->mul(2);
 			transform->copy(2, 0);
 
-			// v2 = v2.pow(mq); v2.mul(mu);
-			power(transform, 3, mq);
-			transform->copy(1, 4);
-			transform->initMultiplicand();
-			transform->mul();
+			// v2 = v2^q * mu
+			power(transform, 3, q);
+			transform->mul(4);
 			transform->copy(3, 0);
-
-			mpz_clear(mq);
 
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
 
 			if (_quit) return false;
 		}
-		// hv1 = v1.gethash64();
+		// hv1 = hash64(v1);
 		transform->copy(0, 2);
 		gint * v1 = transform->getInt();
-		hv1srv = v1->getResidue();
+		hv1srv = v1->gethash64();
 		delete v1;
 
 		mpz_set_ui(p2, 0);
@@ -251,7 +252,7 @@ public:
 		delete[] w;
 
 		const auto t1 = std::chrono::steady_clock::now();
-		std::cout << "srv: " << std::chrono::duration<double>(t1 - t0).count() << ", ";	// << (cert[0].isone() ? "prime" : "composite") << ", ";
+		std::cout << "srv: " << std::chrono::duration<double>(t1 - t0).count() << ", ";
 		time += std::chrono::duration<double>(t1 - t0).count();
 }
 		// v2: reg = 3
@@ -259,7 +260,7 @@ public:
 {
 		const auto t0 = std::chrono::steady_clock::now();
 
-		// Mod t = v2; for (size_t i = 0; i < B; ++i) t.square_dup(false);
+		// v2 = v2^{2^B}
 		transform->copy(0, 3);
 		for (size_t i = 0; i < B; ++i)
 		{
@@ -268,40 +269,41 @@ public:
 		}
 		transform->copy(3, 0);
 
-		// t.mul(Mod(2).pow(p2));
-		transform->set(2);
-		power(transform, 0, p2);
-		transform->copy(1, 3);
-		transform->initMultiplicand();
-		transform->mul();
+		// z = v2 * 2^p2
+		transform->set(1);
+		for (size_t j = 0, p2size = mpz_sizeinbase(p2, 2); j < p2size; ++j)
+		{
+			const size_t i = p2size - 1 - j;
+			transform->squareDup(mpz_tstbit(p2, i) != 0);
+		}
+		transform->mul(3);
 
-		// hv1v = t.gethash64();
+		// hv1v = hash64(z)
 		gint * v1 = transform->getInt();
-		hv1val = v1->getResidue();
+		hv1val = v1->gethash64();
 		delete v1;
 
-		const auto t1 = std::chrono::steady_clock::now();;
+		const auto t1 = std::chrono::steady_clock::now();
 		std::cout << "valid: " << std::chrono::duration<double>(t1 - t0).count() << ", ";
 		time += std::chrono::duration<double>(t1 - t0).count();
+		std::cout << "+" << std::rint((time - testtime) * 1000 / time) / 10 << "%, ";
 }
 
 		mpz_clear(p2);
 
 		std::cout << "proof " << ((hv1srv == hv1val) ? "ok" : "failed") << ": " << std::hex << hv1srv << std::dec << std::endl;
 
-		transform->setInt(cert_ptr[0]);
+		const bool isPrp = cert_ptr[0]->isOne();
 
 		for (size_t i = 0; i <= depth; ++i) delete cert_ptr[i];
 
 		mpz_clear(exponent);
 
 		const double err = transform->getError();
-		uint64_t res64; const bool isPrp = transform->isOne(res64);
-		char residue[30]; sprintf(residue, "%016" PRIx64, res64);
 
-		std::cout << b << "^" << n << " + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec";
-		if (!isPrp & (std::string(residue) != exp_residue)) std::cout << ", res = " << residue << " [" << exp_residue << "]";
-		std::cout << "." << std::endl;
+		std::cout << b << "^" << n << " + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec." << std::endl;
+
+		delete transform;
 
 		return true;
 	}

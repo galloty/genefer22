@@ -212,12 +212,11 @@ public:
 			static const size_t count = 5;
 			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 299940492 };
 			static constexpr uint32_t bc[count] = { 399998300, 399998574, 399987080, 399992286, 300000000 };
-			static const char * const res[count] = { "5a82277cc9c6f782", "1907ebae0c183e35", "dced858499069664", "3c918e0f87815627", "978bc600c793bae1" };
 
 			for (size_t i = 0; i < count; ++i)
 			{
 				if (!g.check(bp[i], 1 << (10 + i), nthreads, impl)) break;
-				if (!g.check(bc[i], 1 << (10 + i), nthreads, impl, res[i])) break;
+				if (!g.check(bc[i], 1 << (10 + i), nthreads, impl)) break;
 			}
 		}
 

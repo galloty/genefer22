@@ -1410,8 +1410,12 @@ public:
 		_error = std::max(_error, err);
 	}
 
-	void initMultiplicand() override
+	void initMultiplicand(const size_t src) override
 	{
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
+		Vc * const zp = (Vc *)&_mem[zpOffset];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
+
 		if (_num_threads > 1)
 		{
 #pragma omp parallel

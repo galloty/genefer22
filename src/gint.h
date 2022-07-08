@@ -18,14 +18,20 @@ private:
 	const int32_t _base;
 	int32_t * const _d;
 
+	enum class EState { Unknown, Balanced, Unbalanced };
+	mutable EState _state;
+
 public:
-	gint(const size_t size, const int32_t base) : _size(size), _base(base), _d(new int32_t[size]) {}
+	gint(const size_t size, const int32_t base) : _size(size), _base(base), _d(new int32_t[size]), _state(EState::Unknown) {}
 	virtual ~gint() { delete[] _d; }
 
 	int32_t * d() const { return _d; }
 
 	void unbalance() const
 	{
+		if (_state == EState::Unbalanced) return;
+		_state = EState::Unbalanced;
+
 		const size_t size = _size;
 		const int32_t base = _base;
 		int32_t * const d = _d;
@@ -79,6 +85,9 @@ public:
 
 	void balance() const
 	{
+		if (_state == EState::Balanced) return;
+		_state = EState::Balanced;
+
 		const size_t size = _size;
 		const int32_t base = _base;
 		int32_t * const d = _d;
@@ -113,31 +122,34 @@ public:
 		}
 	}
 
-	bool isOne() const	// must be unbalanced
+	bool isOne() const
 	{
 		const size_t size = _size;
 		int32_t * const d = _d;
 
+		unbalance();
 		bool bOne = (d[0] == 1);
 		if (bOne) for (size_t k = 1; k < size; ++k) bOne &= (d[k] == 0);
 		return bOne;
 	}
 
-	uint64_t getResidue() const	// must be unbalanced
+	uint64_t getResidue() const
 	{
 		const size_t size = _size;
 		int32_t * const d = _d;
 
+		unbalance();
 		uint64_t res = 0;
 		for (size_t i = 8; i != 0; --i) res = (res << 8) | (unsigned char)d[size - i];
 		return res;
 	}
 
-	uint32_t gethash32() const	// must be unbalanced
+	uint64_t gethash64() const
 	{
 		const size_t size = _size;
 		int32_t * const d = _d;
 
+		unbalance();
 		uint64_t hash = 0;
 		for (size_t i = 0; i < size; ++i)
 		{
@@ -145,6 +157,12 @@ public:
 			hash += a_i;
 			hash ^= _rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * a_i + 5) % 64);
 		}
+		return hash;
+	}
+
+	uint32_t gethash32() const	// must be unbalanced
+	{
+		const uint64_t hash = gethash64();
 		return std::max(uint32_t(2), uint32_t(hash) ^ uint32_t(hash >> 32));
 	}
 };

@@ -7,7 +7,7 @@ BIN_DIR = bin
 SRC_DIR = src
 
 OBJS = main.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
-DEPSM = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h
+DEPSM = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h
 DEPST = $(SRC_DIR)/transform.h $(SRC_DIR)/transformCPU.h $(SRC_DIR)/fp16_80.h
 
 EXEC = $(BIN_DIR)/genefer22.exe

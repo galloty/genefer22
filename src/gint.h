@@ -14,16 +14,28 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class gint
 {
 private:
-	const size_t _size;
-	const int32_t _base;
-	int32_t * const _d;
+	size_t _size;
+	int32_t _base;
+	int32_t * _d;
 
 	enum class EState { Unknown, Balanced, Unbalanced };
 	mutable EState _state;
 
 public:
-	gint(const size_t size, const int32_t base) : _size(size), _base(base), _d(new int32_t[size]), _state(EState::Unknown) {}
-	virtual ~gint() { delete[] _d; }
+	gint() : _size(0), _base(0), _d(nullptr), _state(EState::Unknown) {}
+	virtual ~gint() { clear(); }
+
+	void init(const size_t size, const int32_t base)
+	{
+		_size = size;
+		_base = base;
+		_d = new int32_t[size];
+	}
+
+	void clear()
+	{
+		if (_d != nullptr) { delete[] _d; _d = nullptr; }
+	}
 
 	int32_t * d() const { return _d; }
 
@@ -133,17 +145,6 @@ public:
 		return bOne;
 	}
 
-	uint64_t getResidue() const
-	{
-		const size_t size = _size;
-		int32_t * const d = _d;
-
-		unbalance();
-		uint64_t res = 0;
-		for (size_t i = 8; i != 0; --i) res = (res << 8) | (unsigned char)d[size - i];
-		return res;
-	}
-
 	uint64_t gethash64() const
 	{
 		const size_t size = _size;
@@ -160,7 +161,7 @@ public:
 		return hash;
 	}
 
-	uint32_t gethash32() const	// must be unbalanced
+	uint32_t gethash32() const
 	{
 		const uint64_t hash = gethash64();
 		return std::max(uint32_t(2), uint32_t(hash) ^ uint32_t(hash >> 32));

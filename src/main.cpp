@@ -205,19 +205,24 @@ public:
 
 		if (qTest)
 		{
-			g.check(b, n, nthreads, impl);
+			g.check(b, n, nthreads, impl, 5);
 		}
 		else
 		{
-			static const size_t count = 5;
-			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 299940492 };
-			static constexpr uint32_t bc[count] = { 399998300, 399998574, 399987080, 399992286, 300000000 };
+			static const size_t count = 20 - 10 + 1;
+			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 250063168,
+													200295018, 167811262, 112719374, 15417192, 4896418, 1059094 };
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i], 1 << (10 + i), nthreads, impl)) break;
-				if (!g.check(bc[i], 1 << (10 + i), nthreads, impl)) break;
+				if (!g.check(bp[i], 1 << (10 + i), nthreads, impl, 5)) break;
 			}
+
+			// size_t i = 1;
+			// for (int d = 3; d <= 8; ++d)
+			// {
+			// 	if (!g.check(bp[i], 1 << (10 + i), nthreads, impl, d)) break;
+			// }
 		}
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);
@@ -240,3 +245,4 @@ int main(int argc, char * argv[])
 
 	return EXIT_SUCCESS;
 }
+

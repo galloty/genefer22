@@ -49,17 +49,15 @@ public:
 		mul();
 	}
 
-	gint * getInt() const
+	void getInt(gint & g) const
 	{
-		gint * const gptr = new gint(_size, _b);
-		getZi(gptr->d());
-		gptr->unbalance();
-		return gptr;
+		g.init(_size, _b);
+		getZi(g.d());
 	}
 
-	void setInt(const gint * const gptr)
+	void setInt(const gint & g)
 	{
-		gptr->balance();
-		setZi(gptr->d());
+		g.balance();
+		setZi(g.d());
 	}
 };

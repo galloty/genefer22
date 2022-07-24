@@ -660,11 +660,12 @@ private:
 	static const size_t fcOffset = zOffset + zSize;
 	static const size_t zpOffset = fcOffset + fcSize;
 
-	const fp16_80 sqrt_b;
+	const fp16_80 _sqrt_b;
 
 	const uint32_t _b;
 	const size_t _num_threads;
 	const double _sb, _isb, _fsb;
+	const double _mem_size;
 	double _error;
 	char * const _mem;
 
@@ -1267,12 +1268,9 @@ private:
 
 public:
 	TransformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs) : Transform(N, b),
-		sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(sqrt_b.hi()), _fsb(sqrt_b.lo()), _error(0),
-		_mem((char *)_mm_malloc(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize, 2 * 1024 * 1024))
+		_sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
+		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize), _error(0), _mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
 	{
-		// std::cout << "w: " << wSize << ", ws: " << wsSize
-		// 		  << ", z: " << zSize << ", fc: " << fcSize << std::endl;
-
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
 		{
@@ -1300,6 +1298,8 @@ public:
 	{
 		_mm_free((void *)_mem);
 	}
+
+	size_t getMemSize() const override { return _mem_size; }
 
 protected:
 	void getZi(int32_t * const zi) const override

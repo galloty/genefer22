@@ -11,8 +11,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
-#include <chrono>
-#include <thread>
 #include <cmath>
 
 #include <gmp.h>
@@ -20,6 +18,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transform.h"
 #include "timer.h"
+
+inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clzl(n); }
+inline int ilog2_64(const uint64_t n) { return 63 - __builtin_clzll(n); }
 
 class genefer
 {
@@ -59,44 +60,13 @@ private:
 		return num_threads;
 	}
 
-	void createTransform(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs)
+	Transform * createTransform(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs)
 	{
-		if (_transform != nullptr) delete _transform;
+		deleteTransform();
 		std::string ttype;
-
-		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
-		{
-			_transform = Transform::create_512(b, n, num_threads, num_regs);
-			ttype = "512";
-		}
-		else if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
-		{
-			_transform = Transform::create_fma(b, n, num_threads, num_regs);
-			ttype = "fma";
-		}
-		else if (__builtin_cpu_supports("avx") && (impl.empty() || (impl == "avx")))
-		{
-			_transform = Transform::create_avx(b, n, num_threads, num_regs);
-			ttype = "avx";
-		}
-		else if (__builtin_cpu_supports("sse4.1") && (impl.empty() || (impl == "sse4")))
-		{
-			_transform = Transform::create_sse4(b, n, num_threads, num_regs);
-			ttype = "sse4";
-		}
-		else if (__builtin_cpu_supports("sse2") && (impl.empty() || (impl == "sse2")))
-		{
-			_transform = Transform::create_sse2(b, n, num_threads, num_regs);
-			ttype = "sse2";
-		}
-		else
-		{
-			if (impl.empty()) throw std::runtime_error("processor must support sse2");
-			std::ostringstream ss; ss << impl << " is not supported";
-			throw std::runtime_error(ss.str());
-		}
-
-		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
+		_transform = Transform::create(b, n, num_threads, impl, num_regs, ttype);
+		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		return _transform;
 	}
 
 	void deleteTransform()
@@ -113,7 +83,7 @@ private:
 		Transform * const transform = _transform;
 		transform->initMultiplicand(reg);
 		transform->set(1);
-		for (size_t j = 0, esize = 32 - __builtin_clzl(e); j < esize; ++j)
+		for (size_t j = 0, esize = ilog2_32(e) + 1; j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
 			transform->squareDup(false);
@@ -140,27 +110,33 @@ private:
 
 		const auto t0 = timer::currentTime();
 
-		const size_t L = size_t(1) << depth;
-		const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
+		const size_t esize = mpz_sizeinbase(exponent, 2), L_GL = (2 << (ilog2_64(esize) / 2)), B_GL = ((esize - 1) / L_GL) + 1;
+		std::cout << "L_GL = " << L_GL << ", B_GL = " << B_GL << ", ";
+
+		const size_t L = size_t(1) << depth, B_PL = ((esize - 1) >> depth) + 1;
 
 		transform->set(1);
-		transform->copy(L + 2, 0);	// prod1
+		transform->copy(2, 0);	// prod1
 		for (size_t j = 0; j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
 			transform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (j == 0) x.add(1);	// error
 			// if (i == 0) x.add(1);	// error
-			if (i % B == 0)
+			if (i % B_GL == 0)
 			{
-				const size_t reg = 2 + i / B;	// ckpt[i]
- 				transform->copy(reg, 0);
-				if (reg != 0)
+				if (i / B_GL != 0)
 				{
-					transform->mul(L + 2);	// prod1
-					transform->copy(L + 2, 0);
-					transform->copy(0, reg);
+	 				transform->copy(3, 0);
+					transform->mul(2);	// prod1
+					transform->copy(2, 0);
+					transform->copy(0, 3);
 				}
+			}
+			if (i % B_PL == 0)
+			{
+				const size_t reg = 4 + i / B_PL;	// ckpt[i]
+ 				transform->copy(reg, 0);
 			}
 			if (_quit) return false;
 		}
@@ -170,24 +146,23 @@ private:
 
 		// Gerbicz-Li error checking
 
-		transform->copy(0, L + 2);
 		transform->mul(2);
-		transform->copy(L + 3, 0);	// prod2
+		transform->copy(3, 0);	// prod2 = prod1 * result
 
-		transform->copy(0, L + 2);
-		for (size_t i = 0; i < B; ++i)
+		transform->copy(0, 2);
+		for (size_t i = 0; i < B_GL; ++i)
 		{
 			transform->squareDup(false);
 		}
-		transform->copy(L + 2, 0);	// prod1^{2^B}
+		transform->copy(2, 0);	// prod1^{2^B}
 
 		mpz_t res; mpz_init_set_ui(res, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
-		for (size_t i = 0; i < L; i++)
+		while (mpz_sgn(e) != 0)
 		{
-			mpz_mod_2exp(t, e, B);
+			mpz_mod_2exp(t, e, B_GL);
 			mpz_add(res, res, t);
-			mpz_div_2exp(e, e, B);
+			mpz_div_2exp(e, e, B_GL);
 		}
 		mpz_clear(e); mpz_clear(t);
 
@@ -202,16 +177,18 @@ private:
 		mpz_clear(res);
 
 		// prod1^{2^B} * 2^res
-		transform->mul(L + 2);
+		transform->mul(2);
 
 		// prod1^{2^B} * 2^res ?= prod2
 		gint v1; transform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
-		transform->copy(0, L + 3);
+		transform->copy(0, 3);
 		gint v2; transform->getInt(v2);
 		const uint64_t h2 = v2.gethash64();
 		v2.clear();
+
+		const bool success = (h1 == h2);
 
 		const auto t2 = timer::currentTime();
 		checkTime = timer::diffTime(t2, t1);
@@ -219,7 +196,7 @@ private:
 		// generate certificates
 
 		// cert[0] = ckpt[0]
-		transform->copy(0, 2);
+		transform->copy(0, 4);
 		transform->getInt(cert[0]);
 
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
@@ -229,19 +206,17 @@ private:
 		{
 			const size_t i = size_t(1) << (depth - k);
 
-			// ckpt[i] = ckpt[i]^w[0]
-			power(2 + i, w[0]);
-			transform->copy(2 + i, 0);
+			// cert[k] = ckpt[i]^w[0]
+			power(4 + i, w[0]);
+			transform->copy(2, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
 			{
-				// ckpt[i] *= ckpt[i + 2 * j]^w[j]
-				power(2 + i + 2 * j, w[j]);
-				transform->mul(2 + i);
-				transform->copy(2 + i, 0);
+				// cert[k] *= ckpt[i + 2 * j]^w[j]
+				power(4 + i + 2 * j, w[j]);
+				transform->mul(2);
+				transform->copy(2, 0);
 			}
-			// cert[k] = ckpt[i]
-			transform->copy(0, 2 + i);
 			transform->getInt(cert[k]);
 
 			if (i > 1)
@@ -256,10 +231,9 @@ private:
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		const auto t3 = timer::currentTime();
-		certTime = timer::diffTime(t3, t2);
+		certTime = timer::diffTime(timer::currentTime(), t2);
 
-		return h1 == h2;
+		return success;
 	}
 
 	uint64_t server(const int depth, const mpz_t & exponent, const gint cert[], gint & v2, mpz_t & p2, double & dt)
@@ -367,32 +341,32 @@ private:
 		return h1;
 	}
 
+private:
+	static double percent(const double num, const double den) { return std::rint(num * 1000 / den) / 10; }
+
 public:
 	bool check(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const int depth)
 	{
 		// const int depth = 5;
 		const size_t L = size_t(1) << depth;
 
-		const size_t num_threads = set_num_threads(nthreads);
-		createTransform(b, n, num_threads, impl, 2 + L + 2);
-		Transform * const transform = _transform;
+		const size_t num_threads = set_num_threads(nthreads), num_regs = 4 + L;
+		Transform * const transform = createTransform(b, n, num_threads, impl, num_regs);
 
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
 
 		const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
 
-		std::cout << "depth = " << depth << ", L = " << L << ", B = " << B << ", ";
+		std::cout << "depth = " << depth << ", L_PL = " << L << ", B_PL = " << B << ", ";
 
 		gint cert[depth + 1];
 
 		double testTime = 0, checkTime = 0, certTime = 0; const bool success = test(depth, exponent, cert, testTime, checkTime, certTime);
 		if (!success) return false;
-		std::cout << "test: " << testTime << ", check: " << (success ? "ok" : "FAILED") << " " << checkTime << ", cert: " << certTime << ", ";
 
 		gint v2; mpz_t p2; mpz_init(p2);
 		double serverTime = 0; const uint64_t hv1srv = server(depth, exponent, cert, v2, p2, serverTime);
 		if (hv1srv == 0) return false;
-		std::cout << "srv: " << serverTime << ", ";
 
 		const bool isPrp = cert[0].isOne();
 
@@ -401,14 +375,15 @@ public:
 
 		double validTime = 0; const uint64_t hv1val = valid(B, v2, p2, validTime);
 		if (hv1val == 0) return false;
-		std::cout << "valid: " << validTime << ", ";
 
 		v2.clear();
 		mpz_clear(p2);
 
 		const double time = testTime + checkTime + certTime + serverTime + validTime;
-		std::cout << "+" << std::rint((time - testTime) * 1000 / time) / 10 << "%, ";
-		std::cout << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
+
+		std::cout << "test: " << percent(testTime, time) << "%, check: " << (success ? "ok" : "FAILED") << " " << percent(checkTime, time)
+				  << "%, cert: " << percent(certTime, time) << "%, srv: " << percent(serverTime, time) << "%, valid: " << percent(validTime, time) << "%, "
+				  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
 
 		const double err = transform->getError();
 

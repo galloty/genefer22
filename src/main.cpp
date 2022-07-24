@@ -109,7 +109,12 @@ private:
 	{
 		std::ostringstream ss;
 		ss << "Usage: genefer22 [options]  options may be specified in any order" << std::endl;
-		ss << "  -q \"b^{2^n}+1\"                test a generalized Fermat number" << std::endl;
+		ss << "  -n <n>                        the exponent of the GFN (14 <= n <= 22)" << std::endl;
+		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
+		ss << "  -q                            quick test (default)" << std::endl;
+		ss << "  -p                            full test: a proof is generated" << std::endl;
+		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
+		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
 		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread per logical core)" << std::endl;
 		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
@@ -213,13 +218,15 @@ public:
 			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 250063168,
 													200295018, 167811262, 112719374, 15417192, 4896418, 1059094 };
 
+			// 10: 5, 11: 5, 12: 5, 13: 6, 14: 6
+
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i], 1 << (10 + i), nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 2, 1 << (10 + i), nthreads, impl, 5)) break;
 			}
 
-			// size_t i = 1;
-			// for (int d = 3; d <= 8; ++d)
+			// size_t i = 4;
+			// for (int d = 5; d <= 8; ++d)
 			// {
 			// 	if (!g.check(bp[i], 1 << (10 + i), nthreads, impl, d)) break;
 			// }

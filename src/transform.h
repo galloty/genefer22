@@ -8,6 +8,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <sstream>
 
 #include "gint.h"
 
@@ -32,7 +34,9 @@ public:
 	virtual void setError(const double error) = 0;
 	virtual double getError() const = 0;
 
-public:
+	virtual size_t getMemSize() const = 0;
+
+private:
 	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
 	static Transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
 	static Transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
@@ -42,6 +46,45 @@ public:
 public:
 	Transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
 	virtual ~Transform() {}
+
+	static Transform * create(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs, std::string & ttype)
+	{
+		Transform * transform = nullptr;
+
+		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
+		{
+			transform = Transform::create_512(b, n, num_threads, num_regs);
+			ttype = "512";
+		}
+		else if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
+		{
+			transform = Transform::create_fma(b, n, num_threads, num_regs);
+			ttype = "fma";
+		}
+		else if (__builtin_cpu_supports("avx") && (impl.empty() || (impl == "avx")))
+		{
+			transform = Transform::create_avx(b, n, num_threads, num_regs);
+			ttype = "avx";
+		}
+		else if (__builtin_cpu_supports("sse4.1") && (impl.empty() || (impl == "sse4")))
+		{
+			transform = Transform::create_sse4(b, n, num_threads, num_regs);
+			ttype = "sse4";
+		}
+		else if (__builtin_cpu_supports("sse2") && (impl.empty() || (impl == "sse2")))
+		{
+			transform = Transform::create_sse2(b, n, num_threads, num_regs);
+			ttype = "sse2";
+		}
+		else
+		{
+			if (impl.empty()) throw std::runtime_error("processor must support sse2");
+			std::ostringstream ss; ss << impl << " is not supported";
+			throw std::runtime_error(ss.str());
+		}
+
+		return transform;
+	}
 
 	void mul(const size_t src)
 	{

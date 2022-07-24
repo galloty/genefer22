@@ -136,23 +136,19 @@ public:
 
 	bool isOne() const
 	{
-		const size_t size = _size;
-		int32_t * const d = _d;
-
 		unbalance();
+		int32_t * const d = _d;
 		bool bOne = (d[0] == 1);
-		if (bOne) for (size_t k = 1; k < size; ++k) bOne &= (d[k] == 0);
+		if (bOne) for (size_t k = 1, size = _size; k < size; ++k) bOne &= (d[k] == 0);
 		return bOne;
 	}
 
 	uint64_t gethash64() const
 	{
-		const size_t size = _size;
-		int32_t * const d = _d;
-
 		unbalance();
+		int32_t * const d = _d;
 		uint64_t hash = 0;
-		for (size_t i = 0; i < size; ++i)
+		for (size_t i = 0, size = _size; i < size; ++i)
 		{
 			const uint64_t a_i = d[i];
 			hash += a_i;

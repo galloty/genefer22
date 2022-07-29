@@ -632,7 +632,7 @@ public:
 };
 
 template<size_t N, size_t VSIZE>
-class TransformCPU : public Transform
+class transformCPU : public transform
 {
 private:
 	using Vc = Vcx<VSIZE>;
@@ -662,9 +662,8 @@ private:
 
 	const fp16_80 _sqrt_b;
 
-	const uint32_t _b;
 	const size_t _num_threads;
-	const double _sb, _isb, _fsb;
+	const double _b, _sb, _isb, _fsb;
 	const double _mem_size;
 	double _error;
 	char * const _mem;
@@ -1205,7 +1204,7 @@ private:
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
-		const double b = double(_b), sb = _sb, isb = _isb, fsb = _fsb;
+		const double b = _b, sb = _sb, isb = _isb, fsb = _fsb;
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb, g = dup ? 2.0 : 1.0;
 
 		Vc err = Vc(0.0);
@@ -1246,7 +1245,7 @@ private:
 		Vc * const z = (Vc *)&_mem[zOffset]; Vc * const zl = &z[2 * 4 / VSIZE * lh];
 		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
 
-		const double b = double(_b), sb = _sb, isb = _isb, fsb = _fsb;
+		const double b = _b, sb = _sb, isb = _isb, fsb = _fsb;
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb;
 
 		for (size_t j = 0; j < n_io_inv; ++j)
@@ -1267,8 +1266,8 @@ private:
 	}
 
 public:
-	TransformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs) : Transform(N, b),
-		_sqrt_b(fp16_80::sqrt(b)), _b(b), _num_threads(num_threads), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
+	transformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs) : transform(N, b),
+		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize), _error(0), _mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -1294,7 +1293,7 @@ public:
 		}
 	}
 
-	virtual ~TransformCPU()
+	virtual ~transformCPU()
 	{
 		_mm_free((void *)_mem);
 	}
@@ -1366,7 +1365,7 @@ protected:
 	}
 
 public:
-	virtual void set(const int32_t a) override
+	void set(const int32_t a) override
 	{
 		Vc * const z = (Vc *)&_mem[zOffset];
 		z[0] = Vc(a);
@@ -1471,3 +1470,25 @@ public:
 	void setError(const double error) override { _error = error; }
 	double getError() const override { return _error; }
 };
+
+template<size_t VSIZE>
+inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
+{
+	transform * pTransform = nullptr;
+	if (n == (1 << 10))      pTransform = new transformCPU<(1 << 10), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 11)) pTransform = new transformCPU<(1 << 11), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 12)) pTransform = new transformCPU<(1 << 12), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 13)) pTransform = new transformCPU<(1 << 13), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 14)) pTransform = new transformCPU<(1 << 14), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 15)) pTransform = new transformCPU<(1 << 15), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 16)) pTransform = new transformCPU<(1 << 16), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 17)) pTransform = new transformCPU<(1 << 17), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 18)) pTransform = new transformCPU<(1 << 18), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 19)) pTransform = new transformCPU<(1 << 19), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 20)) pTransform = new transformCPU<(1 << 20), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 21)) pTransform = new transformCPU<(1 << 21), VSIZE>(b, num_threads, num_regs);
+	else if (n == (1 << 22)) pTransform = new transformCPU<(1 << 22), VSIZE>(b, num_threads, num_regs);
+	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
+
+	return pTransform;
+}

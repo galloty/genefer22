@@ -13,7 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "gint.h"
 
-class Transform
+class transform
 {
 private:
 	const size_t _size;
@@ -37,43 +37,55 @@ public:
 	virtual size_t getMemSize() const = 0;
 
 private:
-	static Transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
-	static Transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
-	static Transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
-	static Transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
-	static Transform * create_512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+#ifdef GPU
+	static transform * create_ocl(const uint32_t b, const uint32_t n, const size_t device);
+#else
+	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static transform * create_512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+#endif
 
 public:
-	Transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
-	virtual ~Transform() {}
+	transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
+	virtual ~transform() {}
 
-	static Transform * create(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs, std::string & ttype)
+#ifdef GPU
+	static transform * create_gpu(const uint32_t b, const uint32_t n, const size_t device)
 	{
-		Transform * transform = nullptr;
+		transform * const pTransform = transform::create_ocl(b, n, device);
+		if (pTransform == nullptr) throw std::runtime_error("OpenCL device not found");
+		return pTransform;
+	}
+#else
+	static transform * create_cpu(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs, std::string & ttype)
+	{
+		transform * pTransform = nullptr;
 
 		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
 		{
-			transform = Transform::create_512(b, n, num_threads, num_regs);
+			pTransform = transform::create_512(b, n, num_threads, num_regs);
 			ttype = "512";
 		}
 		else if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
 		{
-			transform = Transform::create_fma(b, n, num_threads, num_regs);
+			pTransform = transform::create_fma(b, n, num_threads, num_regs);
 			ttype = "fma";
 		}
 		else if (__builtin_cpu_supports("avx") && (impl.empty() || (impl == "avx")))
 		{
-			transform = Transform::create_avx(b, n, num_threads, num_regs);
+			pTransform = transform::create_avx(b, n, num_threads, num_regs);
 			ttype = "avx";
 		}
 		else if (__builtin_cpu_supports("sse4.1") && (impl.empty() || (impl == "sse4")))
 		{
-			transform = Transform::create_sse4(b, n, num_threads, num_regs);
+			pTransform = transform::create_sse4(b, n, num_threads, num_regs);
 			ttype = "sse4";
 		}
 		else if (__builtin_cpu_supports("sse2") && (impl.empty() || (impl == "sse2")))
 		{
-			transform = Transform::create_sse2(b, n, num_threads, num_regs);
+			pTransform = transform::create_sse2(b, n, num_threads, num_regs);
 			ttype = "sse2";
 		}
 		else
@@ -83,8 +95,9 @@ public:
 			throw std::runtime_error(ss.str());
 		}
 
-		return transform;
+		return pTransform;
 	}
+#endif
 
 	void mul(const size_t src)
 	{

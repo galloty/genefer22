@@ -45,11 +45,22 @@ protected:
 	volatile bool _quit = false;
 private:
 	bool _isBoinc = false;
-	Transform * _transform = nullptr;
+	transform * _transform = nullptr;
 
 private:
-	static size_t set_num_threads(const size_t nthreads)
+#ifdef GPU
+	transform * createTransformGPU(const uint32_t b, const uint32_t n, const size_t device)
 	{
+		deleteTransform();
+		_transform = transform::create_gpu(b, n, device);
+		std::cout << "Using device " << device << "." << std::endl;
+		return _transform;
+	}
+#else
+	transform * createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
+	{
+		deleteTransform();
+
 		if (nthreads != 0) omp_set_num_threads(int(nthreads));
 		size_t num_threads = 0;
 #pragma omp parallel
@@ -57,17 +68,13 @@ private:
 #pragma omp single
 			num_threads = size_t(omp_get_num_threads());
 		}
-		return num_threads;
-	}
 
-	Transform * createTransform(const uint32_t b, const uint32_t n, const size_t num_threads, const std::string & impl, const size_t num_regs)
-	{
-		deleteTransform();
 		std::string ttype;
-		_transform = Transform::create(b, n, num_threads, impl, num_regs, ttype);
+		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
 		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
 		return _transform;
 	}
+#endif
 
 	void deleteTransform()
 	{
@@ -80,33 +87,33 @@ private:
 
 	void power(const size_t reg, const uint32_t e) const
 	{
-		Transform * const transform = _transform;
-		transform->initMultiplicand(reg);
-		transform->set(1);
+		transform * const pTransform = _transform;
+		pTransform->initMultiplicand(reg);
+		pTransform->set(1);
 		for (size_t j = 0, esize = ilog2_32(e) + 1; j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
-			transform->squareDup(false);
-			if ((e & (uint32_t(1) << i)) != 0) transform->mul();
+			pTransform->squareDup(false);
+			if ((e & (uint32_t(1) << i)) != 0) pTransform->mul();
 		}
 	}
 
 	void power(const size_t reg, const mpz_t & e) const
 	{
-		Transform * const transform = _transform;
-		transform->initMultiplicand(reg);
-		transform->set(1);
+		transform * const pTransform = _transform;
+		pTransform->initMultiplicand(reg);
+		pTransform->set(1);
 		for (size_t j = 0, esize = mpz_sizeinbase(e, 2); j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
-			transform->squareDup(false);
-			if (mpz_tstbit(e, i) != 0) transform->mul();
+			pTransform->squareDup(false);
+			if (mpz_tstbit(e, i) != 0) pTransform->mul();
 		}
 	}
 
 	bool test(const int depth, const mpz_t & exponent, gint cert[], double & testTime, double & checkTime, double & certTime)
 	{
-		Transform * const transform = _transform;
+		transform * const pTransform = _transform;
 
 		const auto t0 = timer::currentTime();
 
@@ -115,28 +122,28 @@ private:
 
 		const size_t L = size_t(1) << depth, B_PL = ((esize - 1) >> depth) + 1;
 
-		transform->set(1);
-		transform->copy(2, 0);	// prod1
+		pTransform->set(1);
+		pTransform->copy(2, 0);	// prod1
 		for (size_t j = 0; j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
-			transform->squareDup(mpz_tstbit(exponent, i) != 0);
+			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (j == 0) x.add(1);	// error
 			// if (i == 0) x.add(1);	// error
 			if (i % B_GL == 0)
 			{
 				if (i / B_GL != 0)
 				{
-	 				transform->copy(3, 0);
-					transform->mul(2);	// prod1
-					transform->copy(2, 0);
-					transform->copy(0, 3);
+	 				pTransform->copy(3, 0);
+					pTransform->mul(2);	// prod1
+					pTransform->copy(2, 0);
+					pTransform->copy(0, 3);
 				}
 			}
 			if (i % B_PL == 0)
 			{
 				const size_t reg = 4 + i / B_PL;	// ckpt[i]
- 				transform->copy(reg, 0);
+ 				pTransform->copy(reg, 0);
 			}
 			if (_quit) return false;
 		}
@@ -146,15 +153,15 @@ private:
 
 		// Gerbicz-Li error checking
 
-		transform->mul(2);
-		transform->copy(3, 0);	// prod2 = prod1 * result
+		pTransform->mul(2);
+		pTransform->copy(3, 0);	// prod2 = prod1 * result
 
-		transform->copy(0, 2);
+		pTransform->copy(0, 2);
 		for (size_t i = 0; i < B_GL; ++i)
 		{
-			transform->squareDup(false);
+			pTransform->squareDup(false);
 		}
-		transform->copy(2, 0);	// prod1^{2^B}
+		pTransform->copy(2, 0);	// prod1^{2^B}
 
 		mpz_t res; mpz_init_set_ui(res, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
@@ -167,24 +174,24 @@ private:
 		mpz_clear(e); mpz_clear(t);
 
 		// 2^res
-		transform->set(1);
+		pTransform->set(1);
 		for (size_t j = 0, ressize = mpz_sizeinbase(res, 2); j < ressize; ++j)
 		{
 			const size_t i = ressize - 1 - j;
-			transform->squareDup(mpz_tstbit(res, i) != 0);
+			pTransform->squareDup(mpz_tstbit(res, i) != 0);
 			if (_quit) return false;
 		}
 		mpz_clear(res);
 
 		// prod1^{2^B} * 2^res
-		transform->mul(2);
+		pTransform->mul(2);
 
 		// prod1^{2^B} * 2^res ?= prod2
-		gint v1; transform->getInt(v1);
+		gint v1; pTransform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
-		transform->copy(0, 3);
-		gint v2; transform->getInt(v2);
+		pTransform->copy(0, 3);
+		gint v2; pTransform->getInt(v2);
 		const uint64_t h2 = v2.gethash64();
 		v2.clear();
 
@@ -196,8 +203,8 @@ private:
 		// generate certificates
 
 		// cert[0] = ckpt[0]
-		transform->copy(0, 4);
-		transform->getInt(cert[0]);
+		pTransform->copy(0, 4);
+		pTransform->getInt(cert[0]);
 
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
 		mpz_set_ui(w[0], cert[0].gethash32());
@@ -208,16 +215,16 @@ private:
 
 			// cert[k] = ckpt[i]^w[0]
 			power(4 + i, w[0]);
-			transform->copy(2, 0);
+			pTransform->copy(2, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
 			{
 				// cert[k] *= ckpt[i + 2 * j]^w[j]
 				power(4 + i + 2 * j, w[j]);
-				transform->mul(2);
-				transform->copy(2, 0);
+				pTransform->mul(2);
+				pTransform->copy(2, 0);
 			}
-			transform->getInt(cert[k]);
+			pTransform->getInt(cert[k]);
 
 			if (i > 1)
 			{
@@ -238,7 +245,7 @@ private:
 
 	uint64_t server(const int depth, const mpz_t & exponent, const gint cert[], gint & v2, mpz_t & p2, double & dt)
 	{
-		Transform * const transform = _transform;
+		transform * const pTransform = _transform;
 
 		const auto t0 = timer::currentTime();
 
@@ -250,30 +257,30 @@ private:
 		// v1 = cert[0]^w[0], v1: reg = 2
 		const uint32_t q = cert[0].gethash32();
 		mpz_set_ui(w[0], q);
-		transform->setInt(cert[0]);
+		pTransform->setInt(cert[0]);
 		power(0, q);
-		transform->copy(2, 0);
+		pTransform->copy(2, 0);
 
 		// v2 = 1, v2: reg = 3
-		transform->set(1);
-		transform->copy(3, 0);
+		pTransform->set(1);
+		pTransform->copy(3, 0);
 
 		for (int k = 1; k <= depth; ++k)
 		{
 			// mu = cert[k], mu: reg = 4
 			const uint32_t q = cert[k].gethash32();
-			transform->setInt(cert[k]);
-			transform->copy(4, 0);
+			pTransform->setInt(cert[k]);
+			pTransform->copy(4, 0);
 
 			// v1 = v1 * mu^q
 			power(4, q);
-			transform->mul(2);
-			transform->copy(2, 0);
+			pTransform->mul(2);
+			pTransform->copy(2, 0);
 
 			// v2 = v2^q * mu
 			power(3, q);
-			transform->mul(4);
-			transform->copy(3, 0);
+			pTransform->mul(4);
+			pTransform->copy(3, 0);
 
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
@@ -281,12 +288,12 @@ private:
 			if (_quit) return 0;
 		}
 
-		transform->copy(0, 3);
-		transform->getInt(v2);
+		pTransform->copy(0, 3);
+		pTransform->getInt(v2);
 
 		// h1 = hash64(v1);
-		transform->copy(0, 2);
-		gint v1; transform->getInt(v1);
+		pTransform->copy(0, 2);
+		gint v1; pTransform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
 
@@ -309,31 +316,31 @@ private:
 
 	uint64_t valid(const size_t B, const gint & v2, const mpz_t & p2, double & dt)
 	{
-		Transform * const transform = _transform;
+		transform * const pTransform = _transform;
 
 		const auto t0 = timer::currentTime();
 
 		// v2 = v2^{2^B}
-		transform->setInt(v2);
+		pTransform->setInt(v2);
 		for (size_t i = 0; i < B; ++i)
 		{
-			transform->squareDup(false);
+			pTransform->squareDup(false);
 			if (_quit) return 0;
 		}
-		transform->copy(3, 0);
+		pTransform->copy(3, 0);
 
 		// v1' = v2 * 2^p2
-		transform->set(1);
+		pTransform->set(1);
 		for (size_t j = 0, p2size = mpz_sizeinbase(p2, 2); j < p2size; ++j)
 		{
 			const size_t i = p2size - 1 - j;
-			transform->squareDup(mpz_tstbit(p2, i) != 0);
+			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
 			if (_quit) return 0;
 		}
-		transform->mul(3);
+		pTransform->mul(3);
 
 		// h1 = hash64(v1')
-		gint v1; transform->getInt(v1);
+		gint v1; pTransform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
 
@@ -345,13 +352,18 @@ private:
 	static double percent(const double num, const double den) { return std::rint(num * 1000 / den) / 10; }
 
 public:
-	bool check(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const int depth)
+	bool check(const uint32_t b, const uint32_t n, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
 		// const int depth = 5;
 		const size_t L = size_t(1) << depth;
 
-		const size_t num_threads = set_num_threads(nthreads), num_regs = 4 + L;
-		Transform * const transform = createTransform(b, n, num_threads, impl, num_regs);
+#ifdef GPU
+		(void)nthreads; (void)impl;
+		transform * const pTransform = createTransformGPU(b, n, device);
+#else
+		(void)device;
+		transform * const pTransform = createTransformCPU(b, n, nthreads, impl, 4 + L);
+#endif
 
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
 
@@ -385,7 +397,7 @@ public:
 				  << "%, cert: " << percent(certTime, time) << "%, srv: " << percent(serverTime, time) << "%, valid: " << percent(validTime, time) << "%, "
 				  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
 
-		const double err = transform->getError();
+		const double err = pTransform->getError();
 
 		std::cout << b << "^" << n << " + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec." << std::endl;
 

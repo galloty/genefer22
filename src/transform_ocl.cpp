@@ -7,9 +7,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
-#include "transformCPU.h"
+#include "transformGPU.h"
 
-transform * transform::create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
+transform * transform::create_ocl(const uint32_t b, const uint32_t n, const size_t device)
 {
-	return create_transformCPU<4>(b, n, num_threads, num_regs);
+	transform * const pTransform = new transformGPU(b, n, device);
+	return pTransform;
 }

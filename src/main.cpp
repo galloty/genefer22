@@ -115,8 +115,12 @@ private:
 		ss << "  -p                            full test: a proof is generated" << std::endl;
 		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
 		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
+#ifdef GPU
+		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
+#else
 		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread per logical core)" << std::endl;
 		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
+#endif
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
 #ifdef BOINC
 		ss << "  -boinc                  operate as a BOINC client app" << std::endl;
@@ -167,36 +171,47 @@ public:
 		}
 
 		uint32_t b = 0, n = 0;
-		size_t nthreads = 1;	// 0;
+		size_t device = 0, nthreads = 1;	// 0;
 		std::string impl;
-		bool qTest = false;
 		// parse args
 		for (size_t i = 0, size = args.size(); i < size; ++i)
 		{
 			const std::string & arg = args[i];
 
-			if (arg.substr(0, 2) == "-q")
+			if (arg.substr(0, 2) == "-b")
 			{
-				const std::string exp = ((arg == "-q") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				auto b_end = exp.find('^');
-				if (b_end != std::string::npos) b = std::atoi(exp.substr(0, b_end).c_str());
-				auto n_start = exp.find('^'), n_end = exp.find('+');
-				if ((n_start != std::string::npos) && (n_end != std::string::npos)) n = std::atoi(exp.substr(n_start + 1, n_end).c_str());
+				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				b = std::atoi(bstr.c_str());
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
-				if ((n == 0) || ((n & (~n + 1)) != n)) throw std::runtime_error("exponent must be a power of two");
-				if (n > (1 << 22)) throw std::runtime_error("n > 22 is not supported");
-				qTest = true;
+				if ((b == 0) || ((b & (~b + 1)) != b)) throw std::runtime_error("b must not be a power of two");
+			}
+			if (arg.substr(0, 2) == "-n")
+			{
+				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				n = std::atoi(nstr.c_str());
+				if (n < 15) throw std::runtime_error("n < 15 is not supported");
+				if (n > 22) throw std::runtime_error("n > 22 is not supported");
+			}
+			if (arg.substr(0, 2) == "-d")
+			{
+				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				device = std::atoi(dstr.c_str());
+			}
+			if (arg.substr(0, 2) == "--device")
+			{
+				const std::string dstr = ((arg == "--device") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				device = std::atoi(dstr.c_str());
 			}
 			if (arg.substr(0, 2) == "-t")
 			{
-				const std::string nt = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				nthreads = std::min(std::atoi(nt.c_str()), 64);
+				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				nthreads = std::min(std::atoi(ntstr.c_str()), 64);
 			}
 			if (arg.substr(0, 10) == "--nthreads")
 			{
-				const std::string nt = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
-				nthreads =  std::min(std::atoi(nt.c_str()), 64);
+				const std::string ntstr = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
+				nthreads =  std::min(std::atoi(ntstr.c_str()), 64);
 			}
 			if (arg.substr(0, 2) == "-x")
 			{
@@ -208,9 +223,9 @@ public:
 		genefer & g = genefer::getInstance();
 		g.setBoinc(bBoinc);
 
-		if (qTest)
+		if ((b != 0) && (n != 0))
 		{
-			g.check(b, n, nthreads, impl, 5);
+			g.check(b, n, device, nthreads, impl, 5);
 		}
 		else
 		{
@@ -222,13 +237,13 @@ public:
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i] + 2, 1 << (10 + i), nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 1 << (10 + i), device, nthreads, impl, 5)) break;
 			}
 
 			// size_t i = 4;
 			// for (int d = 5; d <= 8; ++d)
 			// {
-			// 	if (!g.check(bp[i], 1 << (10 + i), nthreads, impl, d)) break;
+			// 	if (!g.check(bp[i], 1 << (10 + i), device, nthreads, impl, d)) break;
 			// }
 		}
 

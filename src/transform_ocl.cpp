@@ -9,8 +9,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transformGPU.h"
 
-transform * transform::create_ocl(const uint32_t b, const uint32_t n, const size_t device)
+transform * transform::create_ocl(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 {
-	transform * const pTransform = new transformGPU(b, n, device);
+	transform * const pTransform = new transformGPU(b, n, device, num_regs);
 	return pTransform;
 }

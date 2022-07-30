@@ -86,8 +86,14 @@ private:
 		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
 #endif
 
+#ifdef GPU
+		const char * const ext = "g";
+#else
+		const char * const ext = "";
+#endif
+
 		std::ostringstream ss;
-		ss << "genefer22 0.1.0 " << sysver << ssc.str() << std::endl;
+		ss << "genefer22" << ext << " 0.1.0 " << sysver << ssc.str() << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -107,8 +113,13 @@ private:
 private:
 	static std::string usage()
 	{
+#ifdef GPU
+		const char * const ext = "g";
+#else
+		const char * const ext = "";
+#endif
 		std::ostringstream ss;
-		ss << "Usage: genefer22 [options]  options may be specified in any order" << std::endl;
+		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                        the exponent of the GFN (14 <= n <= 22)" << std::endl;
 		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                            quick test (default)" << std::endl;
@@ -237,13 +248,13 @@ public:
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i] + 0, 1 << (10 + i), device, nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 10 + i, device, nthreads, impl, 5)) break;
 			}
 
 			// size_t i = 4;
 			// for (int d = 5; d <= 8; ++d)
 			// {
-			// 	if (!g.check(bp[i], 1 << (10 + i), device, nthreads, impl, d)) break;
+			// 	if (!g.check(bp[i], 10 + i, device, nthreads, impl, d)) break;
 			// }
 		}
 

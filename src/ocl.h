@@ -15,538 +15,319 @@ Please give feedback to the authors if improvement is realized. It is distribute
 	#include <CL/cl.h>
 #endif
 
-#include "pio.h"
-
-#include <cstdint>
-#include <string>
-#include <vector>
-#include <map>
 #include <algorithm>
-#include <cstring>
-#include <iomanip>
-#include <sstream>
-#include <fstream>
 
-namespace ocl
-{
-
-// #define ocl_debug		1
-#define ocl_fast_exec		1
-#define ocl_device_type		CL_DEVICE_TYPE_GPU	// CL_DEVICE_TYPE_ALL
-
-class oclObject
+class Splitter
 {
 private:
-	static const char * errorString(const cl_int & res)
+	struct Part
 	{
-		switch (res)
+		size_t size;
+		unsigned int p[8];
+	};
+
+	const bool b256, b1024;
+	const size_t mMax;
+	size_t size;
+	Part part[32];
+
+private:
+	void Split(const size_t m, const size_t i, Part & p)
+	{
+		if (b1024 && (m >= 10 + 5))
 		{
-	#define oclCheck(err) case err: return #err
-			oclCheck(CL_SUCCESS);
-			oclCheck(CL_DEVICE_NOT_FOUND);
-			oclCheck(CL_DEVICE_NOT_AVAILABLE);
-			oclCheck(CL_COMPILER_NOT_AVAILABLE);
-			oclCheck(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-			oclCheck(CL_OUT_OF_RESOURCES);
-			oclCheck(CL_OUT_OF_HOST_MEMORY);
-			oclCheck(CL_PROFILING_INFO_NOT_AVAILABLE);
-			oclCheck(CL_MEM_COPY_OVERLAP);
-			oclCheck(CL_IMAGE_FORMAT_MISMATCH);
-			oclCheck(CL_IMAGE_FORMAT_NOT_SUPPORTED);
-			oclCheck(CL_BUILD_PROGRAM_FAILURE);
-			oclCheck(CL_MAP_FAILURE);
-			oclCheck(CL_MISALIGNED_SUB_BUFFER_OFFSET);
-			oclCheck(CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST);
-			oclCheck(CL_INVALID_VALUE);
-			oclCheck(CL_INVALID_DEVICE_TYPE);
-			oclCheck(CL_INVALID_PLATFORM);
-			oclCheck(CL_INVALID_DEVICE);
-			oclCheck(CL_INVALID_CONTEXT);
-			oclCheck(CL_INVALID_QUEUE_PROPERTIES);
-			oclCheck(CL_INVALID_COMMAND_QUEUE);
-			oclCheck(CL_INVALID_HOST_PTR);
-			oclCheck(CL_INVALID_MEM_OBJECT);
-			oclCheck(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
-			oclCheck(CL_INVALID_IMAGE_SIZE);
-			oclCheck(CL_INVALID_SAMPLER);
-			oclCheck(CL_INVALID_BINARY);
-			oclCheck(CL_INVALID_BUILD_OPTIONS);
-			oclCheck(CL_INVALID_PROGRAM);
-			oclCheck(CL_INVALID_PROGRAM_EXECUTABLE);
-			oclCheck(CL_INVALID_KERNEL_NAME);
-			oclCheck(CL_INVALID_KERNEL_DEFINITION);
-			oclCheck(CL_INVALID_KERNEL);
-			oclCheck(CL_INVALID_ARG_INDEX);
-			oclCheck(CL_INVALID_ARG_VALUE);
-			oclCheck(CL_INVALID_ARG_SIZE);
-			oclCheck(CL_INVALID_KERNEL_ARGS);
-			oclCheck(CL_INVALID_WORK_DIMENSION);
-			oclCheck(CL_INVALID_WORK_GROUP_SIZE);
-			oclCheck(CL_INVALID_WORK_ITEM_SIZE);
-			oclCheck(CL_INVALID_GLOBAL_OFFSET);
-			oclCheck(CL_INVALID_EVENT_WAIT_LIST);
-			oclCheck(CL_INVALID_EVENT);
-			oclCheck(CL_INVALID_OPERATION);
-			oclCheck(CL_INVALID_GL_OBJECT);
-			oclCheck(CL_INVALID_BUFFER_SIZE);
-			oclCheck(CL_INVALID_MIP_LEVEL);
-			oclCheck(CL_INVALID_GLOBAL_WORK_SIZE);
-			oclCheck(CL_INVALID_PROPERTY);
-	#undef oclCheck
-			default: return "CL_UNKNOWN_ERROR";
+			p.p[i] = 10;
+			Split(m - 10, i + 1, p);
 		}
+		if (b256 && (m >= 8 + 5))
+		{
+			p.p[i] = 8;
+			Split(m - 8, i + 1, p);
+		}
+		if (m >= 6 + 5)
+		{
+			p.p[i] = 6;
+			Split(m - 6, i + 1, p);
+		}
+
+		if ((5 <= m) && (m <= mMax))
+		{
+			for (size_t k = 0; k < i; ++k) part[size].p[k] = p.p[k];
+			part[size].p[i] = (unsigned int)m;
+			part[size].size = i + 1;
+			size++;
+		}
+	}
+
+private:
+	static size_t Log2(const size_t n) { size_t r = 0; for (size_t m = 1; m < n; m *= 2) ++r; return r; }
+
+public:
+	Splitter(const size_t n, const size_t chunk256, const size_t chunk1024, const size_t sizeofRNS, const size_t mSquareMax,
+		const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
+		b256(maxWorkGroupSize >= (256 / 4) * chunk256),
+		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize / sizeofRNS >= 1024 * chunk1024)),
+		mMax(std::min(mSquareMax, std::min(Log2((size_t)(localMemSize / sizeofRNS)), Log2(maxWorkGroupSize * 4))))
+	{
+		size = 0;
+		Part p;
+		Split(n, 0, p);
+	}
+
+	size_t GetSize() const { return size; }
+	size_t GetPartSize(const size_t i) const { return part[i].size; }
+	unsigned int GetPart(const size_t i, const size_t j) const { return part[i].p[j]; }
+};
+
+static void GetDevice(size_t & id, const cl_uint num_platforms, const cl_platform_id * const platforms, cl_device_id *device, cl_platform_id *platform)
+{
+	for (cl_uint p = 0; p != num_platforms; ++p)
+	{
+		cl_uint num_devices;
+		cl_device_id devices[16];
+		clGetDeviceIDs(platforms[p], CL_DEVICE_TYPE_GPU, 16, devices, &num_devices);
+
+		for (cl_uint d = 0; d != num_devices; ++d)
+		{
+			if (id == 0)
+			{
+				*platform = platforms[p];
+				*device = devices[d];
+			}
+			++id;
+		}
+	}
+}
+
+static cl_int GetDevice(cl_device_id * device, cl_platform_id * platform)
+{
+	cl_uint num_platforms;
+	cl_platform_id platforms[64];
+	cl_int err = clGetPlatformIDs(64, platforms, &num_platforms);
+	if ((err != CL_SUCCESS) || (num_platforms == 0))
+	{
+		return CL_DEVICE_NOT_FOUND;
+	}
+
+	size_t id = 0;
+	GetDevice(id, num_platforms, platforms, device, platform);
+
+	return err;
+}
+
+class HostProgram
+{
+private:
+	const bool verbose;
+	bool gpuSync;
+	cl_int syncCount;
+	cl_platform_id platform;
+	cl_device_id device;
+	cl_program program;
+	cl_context context;
+	cl_command_queue queue;
+	bool selfTuning;
+	cl_ulong timerResolution;
+	cl_ulong localMemSize;
+	size_t maxWorkGroupSize;
+
+protected:
+	const size_t n;
+	const unsigned int ln;
+	cl_int error;
+
+public:
+	HostProgram(const size_t size, const unsigned int lgSize, const bool verbose) :
+		verbose(verbose), gpuSync(true), syncCount(0), platform(nullptr), selfTuning(size >= 1 * 1024), timerResolution(0), maxWorkGroupSize(0),
+		n(size), ln(lgSize), error(CL_SUCCESS)
+	{
+		cl_int err = GetDevice(&device, &platform);
+		if (err != CL_SUCCESS) { error = err; return; }
+
+		clGetDeviceInfo(device, CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(timerResolution), &timerResolution, nullptr);
+		clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(localMemSize), &localMemSize, nullptr);
+		clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroupSize), &maxWorkGroupSize, nullptr);
+	}
+
+	~HostProgram()
+	{
+	}
+
+public:
+	void IsOK() const
+	{
+		if (error != CL_SUCCESS)
+		{
+			throw std::runtime_error("OpenCL");
+		}
+	}
+
+public:
+	void Sync()
+	{
+		syncCount = 0;
+		error |= clFinish(queue);
 	}
 
 protected:
-	static constexpr bool oclError(const cl_int res)
-	{
-		return (res == CL_SUCCESS);
-	}
+	bool SelfTuning() const { return selfTuning; }
+	cl_ulong GetTimerResolution() const { return timerResolution; }
+	cl_ulong GetLocalMemSize() const { return localMemSize; }
+	size_t GetMaxWorkGroupSize() const { return maxWorkGroupSize; }
 
 protected:
-	static void oclFatal(const cl_int res)
-	{
-		if (!oclError(res))
-		{
-			std::ostringstream ss; ss << "opencl error: " << errorString(res);
-			throw std::runtime_error(ss.str());
-		}
-	}
-};
-
-class platform : oclObject
-{
-private:
-	struct deviceDesc
-	{
-		cl_platform_id platform_id;
-		cl_device_id device_id;
-		std::string name;
-	};
-	std::vector<deviceDesc> _devices;
-
-public:
-	platform()
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Create ocl platform." << std::endl;
-		pio::display(ss.str());
-#endif
-		cl_uint num_platforms;
-		cl_platform_id platforms[64];
-		oclFatal(clGetPlatformIDs(64, platforms, &num_platforms));
-
-		for (cl_uint p = 0; p < num_platforms; ++p)
-		{
-			char platformName[1024]; oclFatal(clGetPlatformInfo(platforms[p], CL_PLATFORM_NAME, 1024, platformName, nullptr));
-
-			cl_uint num_devices;
-			cl_device_id devices[64];
-			if (oclError(clGetDeviceIDs(platforms[p], ocl_device_type, 64, devices, &num_devices)))
-			{
-				for (cl_uint d = 0; d < num_devices; ++d)
-				{
-					char deviceName[1024]; oclFatal(clGetDeviceInfo(devices[d], CL_DEVICE_NAME, 1024, deviceName, nullptr));
-					char deviceVendor[1024]; oclFatal(clGetDeviceInfo(devices[d], CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
-
-					std::stringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
-					deviceDesc device;
-					device.platform_id = platforms[p];
-					device.device_id = devices[d];
-					device.name = ss.str();
-					_devices.push_back(device);
-				}
-			}
-		}
-	}
-
-	platform(const cl_platform_id platform_id, const cl_device_id device_id)
-	{
-		char platformName[1024]; oclFatal(clGetPlatformInfo(platform_id, CL_PLATFORM_NAME, 1024, platformName, nullptr));
-		char deviceName[1024]; oclFatal(clGetDeviceInfo(device_id, CL_DEVICE_NAME, 1024, deviceName, nullptr));
-		char deviceVendor[1024]; oclFatal(clGetDeviceInfo(device_id, CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
-
-		std::stringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
-		deviceDesc device;
-		device.platform_id = platform_id;
-		device.device_id = device_id;
-		device.name = ss.str();
-		_devices.push_back(device);
-	}
-
-public:
-	virtual ~platform()
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Delete ocl platform." << std::endl;
-		pio::display(ss.str());
-#endif
-	}
-
-public:
-	size_t getDeviceCount() const { return _devices.size(); }
-
-public:
-	size_t displayDevices() const
-	{
-		const size_t n = _devices.size();
-		std::ostringstream ss;
-		for (size_t i = 0; i < n; ++i)
-		{
-			ss << i << " - " << _devices[i].name << "." << std::endl;
-		}
-		ss << std::endl;
-		pio::print(ss.str());
-		return n;
-	}
-
-public:
-	cl_platform_id getPlatform(const size_t d) const { return _devices[d].platform_id; }
-	cl_device_id getDevice(const size_t d) const { return _devices[d].device_id; }
-};
-
-class device : oclObject
-{
-private:
-	const cl_platform_id _platform;
-	const cl_device_id _device;
-#if defined (ocl_debug)
-	const size_t _d;
-#endif
-	bool _profile = false;
-#if defined (__APPLE__)
-	bool _isSync = true;
-#else
-	bool _isSync = false;
-#endif
-	size_t _syncCount = 0;
-	cl_ulong _localMemSize = 0;
-	size_t _maxWorkGroupSize = 0;
-	cl_ulong _timerResolution = 0;
-	cl_context _context = nullptr;
-	cl_command_queue _queueF = nullptr;
-	cl_command_queue _queueP = nullptr;
-	cl_command_queue _queue = nullptr;
-	cl_program _program = nullptr;
-
-	enum class EVendor { Unknown, NVIDIA, AMD, INTEL };
-
-	struct profile
-	{
-		std::string name;
-		size_t count;
-		cl_ulong time;
-
-		profile() {}
-		profile(const std::string & name) : name(name), count(0), time(0) {}
-	};
-	std::map<cl_kernel, profile> _profileMap;
-
-public:
-	device(const platform & parent, const size_t d) : _platform(parent.getPlatform(d)), _device(parent.getDevice(d))
-#if defined (ocl_debug)
-		, _d(d)
-#endif
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Create ocl device " << d << "." << std::endl;
-		pio::display(ss.str());
-#endif
-
-		char deviceName[1024]; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_NAME, 1024, deviceName, nullptr));
-		char deviceVendor[1024]; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
-		char deviceVersion[1024]; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_VERSION, 1024, deviceVersion, nullptr));
-		char driverVersion[1024]; oclFatal(clGetDeviceInfo(_device, CL_DRIVER_VERSION, 1024, driverVersion, nullptr));
-
-		cl_uint computeUnits; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(computeUnits), &computeUnits, nullptr));
-		cl_uint maxClockFrequency; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(maxClockFrequency), &maxClockFrequency, nullptr));
-		cl_ulong memSize; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(memSize), &memSize, nullptr));
-		cl_ulong memCacheSize; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, sizeof(memCacheSize), &memCacheSize, nullptr));
-		cl_uint memCacheLineSize; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, sizeof(memCacheLineSize), &memCacheLineSize, nullptr));
-		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(_localMemSize), &_localMemSize, nullptr));
-		cl_ulong memConstSize; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, sizeof(memConstSize), &memConstSize, nullptr));
-		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(_maxWorkGroupSize), &_maxWorkGroupSize, nullptr));
-		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(_timerResolution), &_timerResolution, nullptr));
-
-		std::ostringstream ssd;
-		ssd << "Running on device '" << deviceName<< "', vendor '" << deviceVendor
-			<< "', version '" << deviceVersion << "' and driver '" << driverVersion << "'." << std::endl;
-		ssd << computeUnits << " compUnits @ " << maxClockFrequency << "MHz, mem=" << (memSize >> 20) << "MB, cache="
-			<< (memCacheSize >> 10) << "kB, cacheLine=" << memCacheLineSize << "B, localMem=" << (_localMemSize >> 10)
-			<< "kB, constMem=" << (memConstSize >> 10) << "kB, maxWorkGroup=" << _maxWorkGroupSize << "." << std::endl << std::endl;
-		pio::print(ssd.str());
-
-		const cl_context_properties contextProperties[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)_platform, 0 };
-		cl_int err_cc;
-		_context = clCreateContext(contextProperties, 1, &_device, nullptr, nullptr, &err_cc);
-		oclFatal(err_cc);
-		cl_int err_ccq;
-		_queueF = clCreateCommandQueue(_context, _device, 0, &err_ccq);
-		_queueP = clCreateCommandQueue(_context, _device, CL_QUEUE_PROFILING_ENABLE, &err_ccq);
-		_queue = _queueF;	// default queue is fast
-		oclFatal(err_ccq);
-
-		if (getVendor(deviceVendor) != EVendor::NVIDIA) _isSync = true;
-	}
-
-public:
-	virtual ~device()
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Delete ocl device " << _d << "." << std::endl;
-		pio::display(ss.str());
-#endif
-		oclFatal(clReleaseCommandQueue(_queue));
-		oclFatal(clReleaseContext(_context));
-	}
-
-public:
-	size_t getMaxWorkGroupSize() const { return _maxWorkGroupSize; }
-	size_t getLocalMemSize() const { return _localMemSize; }
-
-private:
-	static EVendor getVendor(const std::string & vendorString)
-	{
-		std::string lVendorString; lVendorString.resize(vendorString.size());
-		std::transform(vendorString.begin(), vendorString.end(), lVendorString.begin(), [](char c){ return std::tolower(c); });
-
-		if (strstr(lVendorString.c_str(), "nvidia") != nullptr) return EVendor::NVIDIA;
-		if (strstr(lVendorString.c_str(), "amd") != nullptr) return EVendor::AMD;
-		if (strstr(lVendorString.c_str(), "advanced micro devices") != nullptr) return EVendor::AMD;
-		if (strstr(lVendorString.c_str(), "intel") != nullptr) return EVendor::INTEL;
-		// must be tested after 'Intel' because 'ati' is in 'Intel(R) Corporation' string
-		if (strstr(lVendorString.c_str(), "ati") != nullptr) return EVendor::AMD;
-		return EVendor::Unknown;
-	}
-
-public:
-	void resetProfiles()
-	{
-		for (auto it : _profileMap)
-		{
-			profile & prof = _profileMap[it.first];	// it.first is not a reference!
-			prof.count = 0;
-			prof.time = 0;
-		}
-	}
-
-public:
-	cl_ulong getProfileTime() const
-	{
-		cl_ulong time = 0;
-		for (auto it : _profileMap) time += it.second.time;
-		return time;
-	}
-
-public:
-	void displayProfiles(const size_t count) const
-	{
-		cl_ulong ptime = 0;
-		for (auto it : _profileMap) ptime += it.second.time;
-		ptime /= count;
-
-		std::ostringstream ss;
-		for (auto it : _profileMap)
-		{
-			const profile & prof = it.second;
-			if (prof.count != 0)
-			{
-				const size_t ncount = prof.count / count;
-				const cl_ulong ntime = prof.time / count;
-				ss << "- " << prof.name << ": " << ncount << ", " << std::setprecision(3)
-					<< ntime * 100.0 / ptime << " %, " << ntime << " (" << (ntime / ncount) << ")" << std::endl;
-			}
-		}
-		pio::display(ss.str());
-	}
-
-public:
-	void setProfiling(const bool enable)
-	{
-		_profile = enable;
-		_queue = enable ? _queueP : _queueF;
-		resetProfiles();
-	}
-
-public:
-	void loadProgram(const std::string & programSrc)
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Load ocl program." << std::endl;
-		pio::display(ss.str());
-#endif
-		const char * src[1]; src[0] = programSrc.c_str();
-		cl_int err_cpws;
-		_program = clCreateProgramWithSource(_context, 1, src, nullptr, &err_cpws);
-		oclFatal(err_cpws);
-
-		char pgmOptions[1024];
-		strcpy(pgmOptions, "");
-#if defined (ocl_debug)
-		strcat(pgmOptions, " -cl-nv-verbose");
-#endif
-		const cl_int err = clBuildProgram(_program, 1, &_device, pgmOptions, nullptr, nullptr);
-
-#if !defined (ocl_debug)
-		if (err != CL_SUCCESS)
-#endif		
-		{
-			size_t logSize; clGetProgramBuildInfo(_program, _device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
-			if (logSize > 2)
-			{
-				std::vector<char> buildLog(logSize + 1);
-				clGetProgramBuildInfo(_program, _device, CL_PROGRAM_BUILD_LOG, logSize, buildLog.data(), nullptr);
-				buildLog[logSize] = '\0';
-				std::ostringstream ss; ss << buildLog.data() << std::endl;
-				pio::print(ss.str());
-#if defined (ocl_debug)
-				std::ofstream fileOut("pgm.log"); 
-				fileOut << buildLog.data() << std::endl;
-				fileOut.close();
-#endif
-			}
-		}
-
-		oclFatal(err);
-
-#if defined (ocl_debug)
-		size_t binSize; clGetProgramInfo(_program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &binSize, nullptr);
-		std::vector<char> binary(binSize);
-		clGetProgramInfo(_program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
-		std::ofstream fileOut("pgm.txt", std::ios::binary);
-		fileOut.write(binary.data(), binSize);
-		fileOut.close();
-#endif	
-	}
-
-public:
-	void clearProgram()
-	{
-#if defined (ocl_debug)
-		std::ostringstream ss; ss << "Clear ocl program." << std::endl;
-		pio::display(ss.str());
-#endif
-		oclFatal(clReleaseProgram(_program));
-		_program = nullptr;
-		_profileMap.clear();
-	}
-
-private:
-	void _sync()
-	{
-		_syncCount = 0;
-		oclFatal(clFinish(_queue));
-	}
-
-public:
-	cl_mem _createBuffer(const cl_mem_flags flags, const size_t size, const bool clear = true) const
+	cl_kernel CreateKernel(const char * kernelName)
 	{
 		cl_int err;
-		cl_mem mem = clCreateBuffer(_context, flags, size, nullptr, &err);
-		oclFatal(err);
-		if (clear)
+		cl_kernel kern = clCreateKernel(program, kernelName, &err);
+		if (err != CL_SUCCESS)
 		{
-			std::vector<uint8_t> ptr(size);
-			for (size_t i = 0; i < size; ++i) ptr[i] = 0x00;	// debug 0xff;
-			oclFatal(clEnqueueWriteBuffer(_queue, mem, CL_TRUE, 0, size, ptr.data(), 0, nullptr, nullptr));
+			if (verbose) fprintf(stderr, "Error: cannot create kernel '%s'.\n", kernelName);
+			error = err;
+			return nullptr;
+		}
+		return kern;
+	}
+
+protected:
+	cl_mem CreateBuffer(cl_mem_flags flags, size_t size)
+	{
+		cl_int err;
+		cl_mem mem = clCreateBuffer(context, flags, size, nullptr, &err);
+		if (err != CL_SUCCESS)
+		{
+			if (verbose) fprintf(stderr, "Error: cannot create buffer.\n");
+			error = err;
+			return nullptr;
 		}
 		return mem;
 	}
 
-public:
-	static void _releaseBuffer(cl_mem & mem)
+protected:
+	void ReadBuffer(cl_mem mem, size_t size, void * ptr)
 	{
-		if (mem != nullptr)
-		{
-			oclFatal(clReleaseMemObject(mem));
-			mem = nullptr;
-		}
+		error |= clEnqueueReadBuffer(queue, mem, CL_TRUE, 0, size, ptr, 0, nullptr, nullptr);
 	}
 
 protected:
-	void _readBuffer(cl_mem & mem, void * const ptr, const size_t size)
+	void WriteBuffer(cl_mem mem, size_t size, const void * ptr)
 	{
-		_sync();
-		oclFatal(clEnqueueReadBuffer(_queue, mem, CL_TRUE, 0, size, ptr, 0, nullptr, nullptr));
+		error |= clEnqueueWriteBuffer(queue, mem, CL_TRUE, 0, size, ptr, 0, nullptr, nullptr);
 	}
 
 protected:
-	void _writeBuffer(cl_mem & mem, const void * const ptr, const size_t size)
-	{
-		_sync();
-		oclFatal(clEnqueueWriteBuffer(_queue, mem, CL_TRUE, 0, size, ptr, 0, nullptr, nullptr));
-	}
-
-protected:
-	cl_kernel _createKernel(const char * const kernelName)
+	cl_int BuildProgram(const char * const programSrc)
 	{
 		cl_int err;
-		cl_kernel kernel = clCreateKernel(_program, kernelName, &err);
-		oclFatal(err);
-		_profileMap[kernel] = profile(kernelName);
-		return kernel;
-	}
 
-protected:
-	static void _releaseKernel(cl_kernel & kernel)
-	{
-		if (kernel != nullptr)
+		cl_context_properties contextProperties[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
+		context = clCreateContext(contextProperties, 1, &device, nullptr, nullptr, &err);
+		if (err != CL_SUCCESS) { if (verbose) fprintf(stderr, "Error: cannot create context.\n"); error = err; return err; }
+		queue = clCreateCommandQueue(context, device, selfTuning ? CL_QUEUE_PROFILING_ENABLE : 0, &err);
+		if (err != CL_SUCCESS) { if (verbose) fprintf(stderr, "Error: cannot create command queue.\n"); error = err; return err; }
+
+		const size_t programSrcSize = strlen(programSrc);
+		char * const src = new char[programSrcSize + 1];
+		strcpy(src, programSrc);
+		program = clCreateProgramWithSource(context, 1, (const char **)&src, &programSrcSize, &err);
+		delete[] src;
+		if (err != CL_SUCCESS) { if (verbose) fprintf(stderr, "Error: cannot create program.\n"); error = err; return err; }
+
+		char curPlatformName[1024];
+		clGetPlatformInfo(platform, CL_PLATFORM_NAME, 1024, curPlatformName, nullptr);
+
+		char pgmOptions[1024];
+		strcpy(pgmOptions, "");
+		// if (my_strcasestr(curPlatformName, "nvidia") != nullptr)
+		// {
+		// 	gpuSync = false;
+		// 	strcat(pgmOptions, "-DNVIDIA_PTX=1");
+		// 	if (verbose) strcat(pgmOptions, " -cl-nv-verbose");
+		// }
+
+		err = clBuildProgram(program, 1, &device, pgmOptions, nullptr, nullptr);
+
+		if (err != CL_SUCCESS)
 		{
-			oclFatal(clReleaseKernel(kernel));
-			kernel = nullptr;
-		}		
-	}
+			error = err;
+			fprintf(stderr, "Error: build program failed.\n");
+		}
 
-protected:
-	static void _setKernelArg(cl_kernel kernel, const cl_uint arg_index, const size_t arg_size, const void * const arg_value)
-	{
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
-		cl_int err =
-#endif
-		clSetKernelArg(kernel, arg_index, arg_size, arg_value);
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
-		oclFatal(err);
-#endif
-	}
-
-protected:
-	void _executeKernel(cl_kernel kernel, const size_t globalWorkSize, const size_t localWorkSize = 0)
-	{
-		if (!_profile)
+		if ((err != CL_SUCCESS) || verbose)
 		{
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
-			cl_int err =
-#endif
-			clEnqueueNDRangeKernel(_queue, kernel, 1, nullptr, &globalWorkSize, (localWorkSize == 0) ? nullptr : &localWorkSize, 0, nullptr, nullptr);
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
-			oclFatal(err);
-#endif
-			if (_isSync)
+			size_t logSize; clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
+			if (logSize > 0)
 			{
-				++_syncCount;
-				if (_syncCount == 1024) _sync();
+				char * buildLog = new char[logSize + 1];
+				clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, logSize, buildLog, nullptr);
+				buildLog[logSize] = '\0';
+				fprintf(stderr, "%s\n", buildLog);
+				delete[] buildLog;
 			}
 		}
-		else
-		{
-			_sync();
-			cl_event evt;
-			oclFatal(clEnqueueNDRangeKernel(_queue, kernel, 1, nullptr, &globalWorkSize, (localWorkSize == 0) ? nullptr : &localWorkSize, 0, nullptr, &evt));
-			cl_ulong dt = 0;
-			if (clWaitForEvents(1, &evt) == CL_SUCCESS)
-			{
-				cl_ulong start, end;
-				cl_int err_s = clGetEventProfilingInfo(evt, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, nullptr);
-				cl_int err_e = clGetEventProfilingInfo(evt, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, nullptr);
-				if ((err_s == CL_SUCCESS) && (err_e == CL_SUCCESS)) dt = end - start;
-			}
-			clReleaseEvent(evt);
 
-			profile & prof = _profileMap[kernel];
-			prof.count++;
-			prof.time += dt;
+		if (verbose)
+		{
+			size_t binSize; clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &binSize, nullptr);
+			char * binary = new char[binSize];
+			clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
+			FILE * const fp = fopen("genefer.acl", "wb");
+			if (fp != nullptr)
+			{
+				fwrite(binary, 1, binSize, fp);
+				fclose(fp);
+			}
+			delete[] binary;
 		}
+
+		return err;
+	}
+
+protected:
+	void ClearProgram()
+	{
+		if (error == CL_SUCCESS)
+		{
+			clReleaseProgram(program);
+
+			clReleaseCommandQueue(queue);
+			clReleaseContext(context);
+		}
+	}
+
+protected:
+	void Execute(cl_kernel kernel, const size_t globalWorkSize, const size_t localWorkSize = 0)
+	{
+		error |= clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &globalWorkSize, (localWorkSize == 0) ? nullptr : &localWorkSize, 0, nullptr, nullptr);
+		if (gpuSync)
+		{
+			++syncCount;
+			if (syncCount == 1024) Sync();
+		}
+	}
+
+protected:
+	cl_ulong ExecuteProfiling(cl_kernel kernel, const size_t globalWorkSize, const size_t localWorkSize)
+	{
+		cl_ulong dt = 0;
+
+		cl_event evt;
+		cl_int err = clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &globalWorkSize, (localWorkSize == 0) ? nullptr : &localWorkSize, 0, nullptr, &evt);
+		if (err != CL_SUCCESS) return (cl_ulong)0x0001000000000000ull; // excessive amount of time => this function will not be selected
+		if (clWaitForEvents(1, &evt) == CL_SUCCESS)
+		{
+			cl_ulong start;
+			if (clGetEventProfilingInfo(evt, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, nullptr) == CL_SUCCESS)
+			{
+				cl_ulong end;
+				if (clGetEventProfilingInfo(evt, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, nullptr) == CL_SUCCESS)
+				{
+					dt = end - start;
+				}
+			}
+		}
+		clReleaseEvent(evt);
+		Sync();
+		return dt;
 	}
 };
-
-}

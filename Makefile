@@ -2,10 +2,13 @@
 CC = g++ -m64 -std=c++17
 CFLAGS = -Wall -Wextra -fexceptions -ffinite-math-only -fprefetch-loop-arrays -frename-registers
 FLAGS_CPU = -O3 -fopenmp
-FLAGS_GPU = -O3 -DGPU
+FLAGS_GPU = -g -DGPU
 
 BIN_DIR = bin
 SRC_DIR = src
+
+OCL_INC = -I Khronos
+OCL_LIB = C:/Windows/System32/OpenCL.dll
 
 OBJS_CPU = main.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
 OBJS_GPU = maing.o transform_ocl.o
@@ -50,10 +53,10 @@ transform_512.o : $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPU)
 #	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx512f -c -S $< -o 512.asm
 
 transform_ocl.o : $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 $(EXEC_CPU): $(OBJS_CPU)
 	$(CC) $(FLAGS_CPU) -static $^ -lgmp -o $@
 
 $(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) -static $^ -lgmp -o $@
+	$(CC) $(FLAGS_GPU) -static $^ $(OCL_LIB) -lgmp -o $@

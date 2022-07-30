@@ -49,10 +49,10 @@ private:
 
 private:
 #ifdef GPU
-	transform * createTransformGPU(const uint32_t b, const uint32_t n, const size_t device)
+	transform * createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 	{
 		deleteTransform();
-		_transform = transform::create_gpu(b, n, device);
+		_transform = transform::create_gpu(b, n, device, num_regs);
 		std::cout << "Using device " << device << "." << std::endl;
 		return _transform;
 	}
@@ -123,26 +123,26 @@ private:
 		const size_t L = size_t(1) << depth, B_PL = ((esize - 1) >> depth) + 1;
 
 		pTransform->set(1);
-		pTransform->copy(2, 0);	// prod1
+		pTransform->copy(1, 0);	// prod1
 		for (size_t j = 0; j < esize; ++j)
 		{
 			const size_t i = esize - 1 - j;
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
-			// if (j == 0) x.add(1);	// error
-			// if (i == 0) x.add(1);	// error
+			// if (j == 0) pTransform->add1();	// error
+			// if (i == 0) pTransform->add1();	// error
 			if (i % B_GL == 0)
 			{
 				if (i / B_GL != 0)
 				{
-	 				pTransform->copy(3, 0);
-					pTransform->mul(2);	// prod1
-					pTransform->copy(2, 0);
-					pTransform->copy(0, 3);
+	 				pTransform->copy(2, 0);
+					pTransform->mul(1);	// prod1
+					pTransform->copy(1, 0);
+					pTransform->copy(0, 2);
 				}
 			}
 			if (i % B_PL == 0)
 			{
-				const size_t reg = 4 + i / B_PL;	// ckpt[i]
+				const size_t reg = 3 + i / B_PL;	// ckpt[i]
  				pTransform->copy(reg, 0);
 			}
 			if (_quit) return false;
@@ -153,15 +153,15 @@ private:
 
 		// Gerbicz-Li error checking
 
-		pTransform->mul(2);
-		pTransform->copy(3, 0);	// prod2 = prod1 * result
+		pTransform->mul(1);
+		pTransform->copy(2, 0);	// prod2 = prod1 * result
 
-		pTransform->copy(0, 2);
+		pTransform->copy(0, 1);
 		for (size_t i = 0; i < B_GL; ++i)
 		{
 			pTransform->squareDup(false);
 		}
-		pTransform->copy(2, 0);	// prod1^{2^B}
+		pTransform->copy(1, 0);	// prod1^{2^B}
 
 		mpz_t res; mpz_init_set_ui(res, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
@@ -184,13 +184,13 @@ private:
 		mpz_clear(res);
 
 		// prod1^{2^B} * 2^res
-		pTransform->mul(2);
+		pTransform->mul(1);
 
 		// prod1^{2^B} * 2^res ?= prod2
 		gint v1; pTransform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
-		pTransform->copy(0, 3);
+		pTransform->copy(0, 2);
 		gint v2; pTransform->getInt(v2);
 		const uint64_t h2 = v2.gethash64();
 		v2.clear();
@@ -203,7 +203,7 @@ private:
 		// generate certificates
 
 		// cert[0] = ckpt[0]
-		pTransform->copy(0, 4);
+		pTransform->copy(0, 3);
 		pTransform->getInt(cert[0]);
 
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
@@ -214,15 +214,15 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 
 			// cert[k] = ckpt[i]^w[0]
-			power(4 + i, w[0]);
-			pTransform->copy(2, 0);
+			power(3 + i, w[0]);
+			pTransform->copy(1, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
 			{
 				// cert[k] *= ckpt[i + 2 * j]^w[j]
-				power(4 + i + 2 * j, w[j]);
-				pTransform->mul(2);
-				pTransform->copy(2, 0);
+				power(3 + i + 2 * j, w[j]);
+				pTransform->mul(1);
+				pTransform->copy(1, 0);
 			}
 			pTransform->getInt(cert[k]);
 
@@ -254,33 +254,33 @@ private:
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
 
-		// v1 = cert[0]^w[0], v1: reg = 2
+		// v1 = cert[0]^w[0], v1: reg = 1
 		const uint32_t q = cert[0].gethash32();
 		mpz_set_ui(w[0], q);
 		pTransform->setInt(cert[0]);
 		power(0, q);
-		pTransform->copy(2, 0);
+		pTransform->copy(1, 0);
 
-		// v2 = 1, v2: reg = 3
+		// v2 = 1, v2: reg = 2
 		pTransform->set(1);
-		pTransform->copy(3, 0);
+		pTransform->copy(2, 0);
 
 		for (int k = 1; k <= depth; ++k)
 		{
-			// mu = cert[k], mu: reg = 4
+			// mu = cert[k], mu: reg = 3
 			const uint32_t q = cert[k].gethash32();
 			pTransform->setInt(cert[k]);
-			pTransform->copy(4, 0);
+			pTransform->copy(3, 0);
 
 			// v1 = v1 * mu^q
-			power(4, q);
-			pTransform->mul(2);
-			pTransform->copy(2, 0);
+			power(3, q);
+			pTransform->mul(1);
+			pTransform->copy(1, 0);
 
 			// v2 = v2^q * mu
-			power(3, q);
-			pTransform->mul(4);
-			pTransform->copy(3, 0);
+			power(2, q);
+			pTransform->mul(3);
+			pTransform->copy(2, 0);
 
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
@@ -288,11 +288,11 @@ private:
 			if (_quit) return 0;
 		}
 
-		pTransform->copy(0, 3);
+		pTransform->copy(0, 2);
 		pTransform->getInt(v2);
 
 		// h1 = hash64(v1);
-		pTransform->copy(0, 2);
+		pTransform->copy(0, 1);
 		gint v1; pTransform->getInt(v1);
 		const uint64_t h1 = v1.gethash64();
 		v1.clear();
@@ -327,7 +327,7 @@ private:
 			pTransform->squareDup(false);
 			if (_quit) return 0;
 		}
-		pTransform->copy(3, 0);
+		pTransform->copy(2, 0);
 
 		// v1' = v2 * 2^p2
 		pTransform->set(1);
@@ -337,7 +337,7 @@ private:
 			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
 			if (_quit) return 0;
 		}
-		pTransform->mul(3);
+		pTransform->mul(2);
 
 		// h1 = hash64(v1')
 		gint v1; pTransform->getInt(v1);
@@ -357,15 +357,16 @@ public:
 		// const int depth = 5;
 		const size_t L = size_t(1) << depth;
 
+		const size_t num_regs = 3 + L;
 #ifdef GPU
 		(void)nthreads; (void)impl;
-		transform * const pTransform = createTransformGPU(b, n, device);
+		transform * const pTransform = createTransformGPU(b, n, device, num_regs);
 #else
 		(void)device;
-		transform * const pTransform = createTransformCPU(b, n, nthreads, impl, 4 + L);
+		transform * const pTransform = createTransformCPU(b, n, nthreads, impl, num_regs);
 #endif
 
-		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, n);
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
 
 		const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
 
@@ -374,11 +375,11 @@ public:
 		gint cert[depth + 1];
 
 		double testTime = 0, checkTime = 0, certTime = 0; const bool success = test(depth, exponent, cert, testTime, checkTime, certTime);
-		if (!success) return false;
+		// if (!success) return false;
 
 		gint v2; mpz_t p2; mpz_init(p2);
 		double serverTime = 0; const uint64_t hv1srv = server(depth, exponent, cert, v2, p2, serverTime);
-		if (hv1srv == 0) return false;
+		// if (hv1srv == 0) return false;
 
 		const bool isPrp = cert[0].isOne();
 
@@ -386,7 +387,7 @@ public:
 		mpz_clear(exponent);
 
 		double validTime = 0; const uint64_t hv1val = valid(B, v2, p2, validTime);
-		if (hv1val == 0) return false;
+		// if (hv1val == 0) return false;
 
 		v2.clear();
 		mpz_clear(p2);
@@ -399,7 +400,7 @@ public:
 
 		const double err = pTransform->getError();
 
-		std::cout << b << "^" << n << " + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec." << std::endl;
+		std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec." << std::endl;
 
 		deleteTransform();
 

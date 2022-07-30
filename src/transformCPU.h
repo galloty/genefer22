@@ -1411,7 +1411,7 @@ public:
 
 	void initMultiplicand(const size_t src) override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + src * zSize];
 		Vc * const zp = (Vc *)&_mem[zpOffset];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
 
@@ -1462,8 +1462,8 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + (src - 1) * zSize];
-		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + (dst - 1) * zSize];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + src * zSize];
+		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + dst * zSize];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
 	}
 
@@ -1475,19 +1475,19 @@ template<size_t VSIZE>
 inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
 	transform * pTransform = nullptr;
-	if (n == (1 << 10))      pTransform = new transformCPU<(1 << 10), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 11)) pTransform = new transformCPU<(1 << 11), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 12)) pTransform = new transformCPU<(1 << 12), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 13)) pTransform = new transformCPU<(1 << 13), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 14)) pTransform = new transformCPU<(1 << 14), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 15)) pTransform = new transformCPU<(1 << 15), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 16)) pTransform = new transformCPU<(1 << 16), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 17)) pTransform = new transformCPU<(1 << 17), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 18)) pTransform = new transformCPU<(1 << 18), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 19)) pTransform = new transformCPU<(1 << 19), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 20)) pTransform = new transformCPU<(1 << 20), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 21)) pTransform = new transformCPU<(1 << 21), VSIZE>(b, num_threads, num_regs);
-	else if (n == (1 << 22)) pTransform = new transformCPU<(1 << 22), VSIZE>(b, num_threads, num_regs);
+	if (n == 10)      pTransform = new transformCPU<(1 << 10), VSIZE>(b, num_threads, num_regs);
+	else if (n == 11) pTransform = new transformCPU<(1 << 11), VSIZE>(b, num_threads, num_regs);
+	else if (n == 12) pTransform = new transformCPU<(1 << 12), VSIZE>(b, num_threads, num_regs);
+	else if (n == 13) pTransform = new transformCPU<(1 << 13), VSIZE>(b, num_threads, num_regs);
+	else if (n == 14) pTransform = new transformCPU<(1 << 14), VSIZE>(b, num_threads, num_regs);
+	else if (n == 15) pTransform = new transformCPU<(1 << 15), VSIZE>(b, num_threads, num_regs);
+	else if (n == 16) pTransform = new transformCPU<(1 << 16), VSIZE>(b, num_threads, num_regs);
+	else if (n == 17) pTransform = new transformCPU<(1 << 17), VSIZE>(b, num_threads, num_regs);
+	else if (n == 18) pTransform = new transformCPU<(1 << 18), VSIZE>(b, num_threads, num_regs);
+	else if (n == 19) pTransform = new transformCPU<(1 << 19), VSIZE>(b, num_threads, num_regs);
+	else if (n == 20) pTransform = new transformCPU<(1 << 20), VSIZE>(b, num_threads, num_regs);
+	else if (n == 21) pTransform = new transformCPU<(1 << 21), VSIZE>(b, num_threads, num_regs);
+	else if (n == 22) pTransform = new transformCPU<(1 << 22), VSIZE>(b, num_threads, num_regs);
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 
 	return pTransform;

@@ -24,10 +24,10 @@ protected:
 	virtual void setZi(int32_t * const zi) = 0;
 
 public:
-	virtual void set(const int32_t a) = 0;					// r0 = a
-	virtual void squareDup(const bool dup) = 0;				// r0 = r0^2 or 2*r0^2
-	virtual void initMultiplicand(const size_t src) = 0;	// r1 = transform(r_src)
-	virtual void mul() = 0;									// r0 *= r1
+	virtual void set(const int32_t a) = 0;					// r_0 = a
+	virtual void squareDup(const bool dup) = 0;				// r_0 = r_0^2 or 2*r_0^2
+	virtual void initMultiplicand(const size_t src) = 0;	// r_m = transform(r_src)
+	virtual void mul() = 0;									// r_0 *= r_m
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 
@@ -38,7 +38,7 @@ public:
 
 private:
 #ifdef GPU
-	static transform * create_ocl(const uint32_t b, const uint32_t n, const size_t device);
+	static transform * create_ocl(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs);
 #else
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
 	static transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
@@ -51,10 +51,12 @@ public:
 	transform(const size_t size, const uint32_t b) : _size(size), _b(b) {}
 	virtual ~transform() {}
 
+	size_t getSize() const { return _size; }
+
 #ifdef GPU
-	static transform * create_gpu(const uint32_t b, const uint32_t n, const size_t device)
+	static transform * create_gpu(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 	{
-		transform * const pTransform = transform::create_ocl(b, n, device);
+		transform * const pTransform = transform::create_ocl(b, n, device, num_regs);
 		if (pTransform == nullptr) throw std::runtime_error("OpenCL device not found");
 		return pTransform;
 	}
@@ -115,5 +117,14 @@ public:
 	{
 		g.balance();
 		setZi(g.d());
+	}
+
+	void add1()
+	{
+		int32_t * const zi = new int32_t[_size];
+		getZi(zi);
+		zi[0] += 1;
+		setZi(zi);
+		delete[] zi;
 	}
 };

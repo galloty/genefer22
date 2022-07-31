@@ -8,21 +8,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 typedef uint2	RNS;
-typedef uint4	RNS_W;
+typedef RNS		RNS_W;
 typedef uint	RNSe;
-typedef uint2	RNS_We;
+typedef RNSe	RNS_We;
 
-typedef struct
-{
-	ulong lo;
-	uint hi;
-} uint96;
-
-typedef struct
-{
-	ulong lo;
-	int hi;
-} int96;
+typedef struct { ulong lo; uint hi; } uint96;
+typedef struct { ulong lo; int hi; } int96;
 
 int96 MAdd96_64_32_64(const ulong a, const uint b, const ulong c)
 {
@@ -62,24 +53,97 @@ long MulHi64_96_u64(const int96 lhs, const long rhs)
 	return (long)mul_hi(lhs.lo, (ulong)rhs) + lhs.hi * rhs;
 }
 
-#define	P1			2130706433u		// 127 * 2^24 + 1
-#define	P2			2013265921u		// 15 * 2^27 + 1
-#define	P3			1711276033u		// 51 * 2^25 + 1
-#define	R1			2164392967u		// 2^62 / P1
-#define	R2			2290649223u		// 2^62 / P2
-#define	R3			2694881439u		// 2^62 / P3
-#define	InvP2_P1	 913159918u		// 1 / P2 mod P1
-#define	InvP2_P1p	1840700306u		// (InvP2_P1 * 2^32) / P1
-#define	InvP3_P2	 671088647u		// 1 / P3 mod P2
-#define	InvP3_P2p	1431655779u		// (InvP3_P2 * 2^32) / P2
-#define	InvP2P3_P1	1059265576u		// 1 / (P2*P3) mod P1
-#define	InvP2P3_P1p	2135212498u		// (InvP2P3_P1 * 2^32) / P1
+#define P1			4253024257u		// 507 * 2^23 + 1
+#define P2			4194304001u		// 125 * 2^25 + 1
+#define P3			4076863489u		// 243 * 2^24 + 1
+#define P1_INV		42356678u		// (2^64 - 1) / P1 - 2^32
+#define P2_INV		103079214u		// (2^64 - 1) / P2 - 2^32
+#define P3_INV		229771911u		// (2^64 - 1) / P3 - 2^32
+#define InvP2_P1	1822724754u		// 1 / P2 mod P1
+#define InvP3_P1	607574918u		// 1 / P3 mod P1
+#define InvP3_P2	2995931465u		// 1 / P3 mod P2
 
 #define	P1P2	(P1 * (ulong)P2)
 #define	P2P3	(P2 * (ulong)P3)
 
-#define	P1P2P3hi	397946880				// P1 * P2 * P3 / 2^64
-#define	P1P2P3lo	11381159214173913089ul	// P1 * P2 * P3 mod 2^64
+#define P1P2P3l		15383592652180029441ul
+#define P1P2P3h		3942432002u
+#define P1P2P3_2l	7691796326090014720ul
+#define P1P2P3_2h	1971216001u
+
+inline uint _addMod(const uint lhs, const uint rhs, const uint p)
+{
+	const uint c = (lhs >= p - rhs) ? p : 0;
+	return lhs + rhs - c;
+}
+
+inline uint _subMod(const uint lhs, const uint rhs, const uint p)
+{
+	const uint c = (lhs < rhs) ? p : 0;
+	return lhs - rhs + c;
+}
+
+inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_inv)
+{
+	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
+	const ulong m = lhs * (ulong)(rhs), q = (m >> 32) * p_inv + m;
+	uint r = (uint)m - (1 + (uint)(q >> 32)) * p;
+	if (r > (uint)q) r += p;
+	return (r >= p) ? r - p : r;
+}
+
+inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }
+inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }
+inline uint add_P3(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P3); }
+
+inline uint sub_P1(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P1); }
+inline uint sub_P2(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P2); }
+inline uint sub_P3(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P3); }
+
+inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }
+inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }
+inline uint mul_P3(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P3, P3_INV); }
+
+inline uint96 uint96_set(const ulong s0, const uint s1) { uint96 r; r.lo = s0; r.hi = s1; return r; }
+
+inline int96 uint96_i(const uint96 x) { int96 r; r.lo = x.lo; r.hi = (int)x.hi; return r; }
+
+inline bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.hi > y.hi) || ((x.hi == y.hi) && (x.lo > y.lo)); }
+
+inline uint96 uint96_add_64(const uint96 x, const ulong y)
+{
+	const ulong s0 = x.lo + y;
+	const uint c = (s0 < y) ? 1 : 0;
+	uint96 r; r.lo = s0; r.hi = x.hi + c;
+	return r;
+}
+
+inline int96 uint96_subi(const uint96 x, const uint96 y)
+{
+	const uint c = (x.lo < y.lo) ? 1 : 0;
+	int96 r; r.lo = x.lo - y.lo; r.hi = (int)(x.hi - y.hi - c);
+	return r;
+}
+
+inline uint96 uint96_mul_64_32(const ulong x, const uint y)
+{
+	const ulong l = (uint)x * (ulong)y, h = (x >> 32) * y + (l >> 32);
+	uint96 r; r.lo = (h << 32) | (uint)l; r.hi = (uint)(h >> 32);
+	return r;
+}
+
+inline int96 garner3(const uint r1, const uint r2, const uint r3)
+{
+	const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
+	const uint u23 = mul_P2(sub_P2(r2, r3), InvP3_P2);
+	const uint u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);
+	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (ulong)P3 + r3);
+	const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
+	const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
+	return r;
+}
+
+
 
 /*
 Barrett's product/reduction, where P is such that h (the number of iterations in the 'while loop') is 0 or 1.
@@ -99,52 +163,32 @@ P =  51 * 2^25 + 1 = 1711276033 => R = 2694881439, h < 1.69
 
 inline uint MulMod_P1(const uint lhs, const uint rhs)
 {
-	const ulong m = lhs * (ulong)rhs;
+	return _mulMod(lhs, rhs, P1, P1_INV);
+	/*const ulong m = lhs * (ulong)rhs;
 	const uint q = mul_hi((uint)(m >> 30), R1);
 	uint r = (uint)m - q * P1;
 	if (r >= P1) r -= P1;
-	return r;
+	return r;*/
 }
 
 inline uint MulMod_P2(const uint lhs, const uint rhs)
 {
-	const ulong m = lhs * (ulong)rhs;
+	return _mulMod(lhs, rhs, P2, P2_INV);
+	/*const ulong m = lhs * (ulong)rhs;
 	const uint q = mul_hi((uint)(m >> 30), R2);
 	uint r = (uint)m - q * P2;
 	if (r >= P2) r -= P2;
-	return r;
+	return r;*/
 }
 
 inline uint MulMod_P3(const uint lhs, const uint rhs)
 {
-	const ulong m = lhs * (ulong)rhs;
+	return _mulMod(lhs, rhs, P3, P3_INV);
+	/*const ulong m = lhs * (ulong)rhs;
 	const uint q = mul_hi((uint)(m >> 30), R3);
 	uint r = (uint)m - q * P3;
 	if (r >= P3) r -= P3;
-	return r;
-}
-
-// Shoup's modular multiplication: Faster arithmetic for number-theoretic transforms, David Harvey, J.Symb.Comp. 60 (2014) 113-119
-
-inline uint MulConstMod_P1(const uint lhs, const uint c, const uint cp)
-{
-	uint r = lhs * c - mul_hi(lhs, cp) * P1;
-	if (r >= P1) r -= P1;
-	return r;
-}
-
-inline uint MulConstMod_P2(const uint lhs, const uint c, const uint cp)
-{
-	uint r = lhs * c - mul_hi(lhs, cp) * P2;
-	if (r >= P2) r -= P2;
-	return r;
-}
-
-inline uint MulConstMod_P3(const uint lhs, const uint c, const uint cp)
-{
-	uint r = lhs * c - mul_hi(lhs, cp) * P3;
-	if (r >= P3) r -= P3;
-	return r;
+	return r;*/
 }
 
 // ---------------------------------------------
@@ -152,13 +196,14 @@ inline uint MulConstMod_P3(const uint lhs, const uint c, const uint cp)
 
 inline int96 GetLong_e(const RNS lhs, const RNSe lhse)
 {
-	uint d2 = lhs.s1 - lhse; if (lhs.s1 < lhse) d2 += P2;	// mod P2
-	const uint u2 = MulConstMod_P2(d2, InvP3_P2, InvP3_P2p);
+	return garner3(lhs.s0, lhs.s1, lhse);
+/*	uint d2 = lhs.s1 - lhse; if (lhs.s1 < lhse) d2 += P2;	// mod P2
+	const uint u2 = MulMod_P2(d2, InvP3_P2);
 	const ulong n2 = lhse + u2 * (ulong)P3;
 
 	const uint n1 = (uint)(n2 % P1);
 	uint d1 = lhs.s0 - n1; if (lhs.s0 < n1) d1 += P1;		// mod P1
-	const uint u1 = MulConstMod_P1(d1, InvP2P3_P1, InvP2P3_P1p);
+	const uint u1 = MulMod_P1(d1, InvP2P3_P1);
 
 	int96 r = MAdd96_64_32_64(P2P3, u1, n2);
 
@@ -168,28 +213,33 @@ inline int96 GetLong_e(const RNS lhs, const RNSe lhse)
 		r = Sub96(r, P1P2P3);
 	}
 
-	return r;
+	return r;*/
 }
 
 // ---------------------------------------------
 
 inline RNS ToRNS(const int i) { return (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0)); }
 
-inline int GetInt(const RNS lhs) { return (lhs.s0 >= P1 / 2) ? lhs.s0 - P1 : lhs.s0; }
+inline int GetInt(const RNS lhs) { return (lhs.s0 > P1 / 2) ? lhs.s0 - P1 : lhs.s0; }
 
 inline RNS Add(const RNS lhs, const RNS rhs)
 {
-	RNS r = lhs + rhs;
+	RNS r; r.s0 = _addMod(lhs.s0, rhs.s0, P1);
+	r.s1 = _addMod(lhs.s1, rhs.s1, P2);
+/*	RNS r = lhs + rhs;
 	if (r.s0 >= P1) r.s0 -= P1;
-	if (r.s1 >= P2) r.s1 -= P2;
+	if (r.s1 >= P2) r.s1 -= P2;*/
 	return r;
 }
 
 inline RNS Sub(const RNS lhs, const RNS rhs)
 {
-	RNS r = lhs - rhs;
+	RNS r; r.s0 = _subMod(lhs.s0, rhs.s0, P1);
+	r.s1 = _subMod(lhs.s1, rhs.s1, P2);
+
+/*	RNS r = lhs - rhs;
 	if (lhs.s0 < rhs.s0) r.s0 += P1;
-	if (lhs.s1 < rhs.s1) r.s1 += P2;
+	if (lhs.s1 < rhs.s1) r.s1 += P2;*/
 	return r;
 }
 
@@ -202,7 +252,7 @@ inline RNS Sqr(const RNS lhs) { return Mul(lhs, lhs); }
 
 inline RNS MulW(const RNS lhs, const RNS_W w)
 {
-	return (RNS)(MulConstMod_P1(lhs.s0, w.s0, w.s2), MulConstMod_P2(lhs.s1, w.s1, w.s3));
+	return (RNS)(MulMod_P1(lhs.s0, w.s0), MulMod_P2(lhs.s1, w.s1));
 }
 
 // ---------------------------------------------
@@ -211,16 +261,18 @@ inline RNSe ToRNSe(const int i) { return (RNSe)(i) + ((i < 0) ? (RNSe)(P3) : (RN
 
 inline RNSe Adde(const RNSe lhs, const RNSe rhs)
 {
-	RNSe r = lhs + rhs;
+	return _addMod(lhs, rhs, P3);
+/*	RNSe r = lhs + rhs;
 	if (r >= P3) r -= P3;
-	return r;
+	return r;*/
 }
 
 inline RNSe Sube(const RNSe lhs, const RNSe rhs)
 {
-	RNSe r = lhs - rhs;
+	return _subMod(lhs, rhs, P3);
+	/*RNSe r = lhs - rhs;
 	if (lhs < rhs) r += P3;
-	return r;
+	return r;*/
 }
 
 inline RNSe Mule(const RNSe lhs, const RNSe rhs)
@@ -232,7 +284,7 @@ inline RNSe Sqre(const RNSe lhs) { return Mule(lhs, lhs); }
 
 inline RNSe MulWe(const RNSe lhs, const RNS_We w)
 {
-	return (RNSe)(MulConstMod_P3(lhs, w.s0, w.s1));
+	return (RNSe)(MulMod_P3(lhs, w));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -843,6 +895,8 @@ void BaseMod0(__global RNS * restrict const z, __global RNSe * restrict const ze
 	{
 		const int96 l = GetLong_e(Mul(zi[j], norm), Mule(zie[j], norme));
 		f = Add96(f, Mul96_96_u32(l, g));
+
+		// const int r = reduce96(&f, base, recBase, b_s);
 
 		const long d1 = MulHi64_96_u64(f, recBase);
 		const int96 r = Sub96(f, Mul96_64_u32(d1, base));

@@ -21,19 +21,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 //#define CHECK256
 //#define CHECK1024
 
-#define	P1_i31			2130706433u		// 127 * 2^24 + 1
-#define	P2_i31			2013265921u		// 15 * 2^27 + 1
-#define	P3_i31			1711276033u		// 51 * 2^25 + 1
-#define	InvP2_P1_i31	 913159918u		// 1 / P2 mod P1
-#define	InvP3_P2_i31	 671088647u		// 1 / P3 mod P2
-#define	InvP2P3_P1_i31	1059265576u		// 1 / (P2*P3) mod P1
-
-#define	P1P2_i31	(P1_i31 * (cl_ulong)P2_i31)
-#define	P2P3_i31	(P2_i31 * (cl_ulong)P3_i31)
-
-#define	P1P2P3hi_i31	397946880u				// P1 * P2 * P3 / 2^64
-#define	P1P2P3lo_i31	11381159214173913089ull	// P1 * P2 * P3 mod 2^64
-
 template <cl_uint p, cl_uint prRoot>
 class Zp
 {
@@ -50,10 +37,11 @@ private:
 
 public:
 	Zp() {}
-	explicit Zp(const int i) :n(i + ((i < 0) ? p : 0)) {}
-	explicit Zp(const int64_t i) :n((cl_uint)(i + ((i < 0) ? p : 0))) {}
+	explicit Zp(const int32_t i) :n(i + ((i < 0) ? p : 0)) {}
 
 	cl_uint Get() const { return n; }
+	int32_t GetInt() const { return (n > p / 2) ? int32_t(n - p) : int32_t(n); }
+
 	void Set(const cl_uint _n) { n = _n; }
 
 	Zp operator-() const { return Zp((n != 0) ? p - n : 0); }
@@ -61,12 +49,12 @@ public:
 	Zp & operator*=(const Zp & rhs) { *this = MulMod(rhs); return *this; }
 	Zp operator*(const Zp & rhs) const { return MulMod(rhs); }
 
-	Zp Pow(const unsigned int e) const
+	Zp Pow(const uint32_t e) const
 	{
 		if (e == 0) return Zp(1);
 
 		Zp r = Zp(1), y = *this;
-		for (unsigned int i = e; i != 1; i /= 2)
+		for (uint32_t i = e; i != 1; i /= 2)
 		{
 			if (i % 2 != 0) r *= y;
 			y *= y;
@@ -76,12 +64,12 @@ public:
 		return r;
 	}
 
-	static const Zp PrRoot_n(const unsigned int n) { return Zp(prRoot).Pow((p - 1) / n); }
+	static const Zp PrRoot_n(const uint32_t n) { return Zp(prRoot).Pow((p - 1) / n); }
 };
 
-typedef Zp<P1_i31, 3> Zp1;
-typedef Zp<P2_i31, 31> Zp2;
-typedef Zp<P3_i31, 29> Zp3;
+typedef Zp<4253024257u, 5> Zp1;		// 507 * 2^23 + 1
+typedef Zp<4194304001u, 3> Zp2;		// 125 * 2^25 + 1
+typedef Zp<4076863489u, 7> Zp3;		// 243 * 2^24 + 1
 
 class RNS
 {
@@ -90,25 +78,22 @@ private:
 
 private:
 	explicit RNS(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.Get(); r.s[1] = r2.Get(); }
-	Zp1 r1() const { Zp1 r1; r1.Set(r.s[0]); return r1; }
-	Zp2 r2() const { Zp2 r2; r2.Set(r.s[1]); return r2; }
 
 public:
 	RNS() {}
-	explicit RNS(const int i) { r.s[0] = Zp1(i).Get(); r.s[1] = Zp2(i).Get(); }
-	explicit RNS(const int64_t i) { r.s[0] = Zp1(i).Get(); r.s[1] = Zp2(i).Get(); }
+	explicit RNS(const int32_t i) { r.s[0] = Zp1(i).Get(); r.s[1] = Zp2(i).Get(); }
 
-	cl_uint Get1() const { return r.s[0]; }
-	cl_uint Get2() const { return r.s[1]; }
+	Zp1 r1() const { Zp1 r1; r1.Set(r.s[0]); return r1; }
+	Zp2 r2() const { Zp2 r2; r2.Set(r.s[1]); return r2; }
 	void Set(const cl_uint r1, const cl_uint r2) { r.s[0] = r1; r.s[1] = r2; }
 
 	RNS operator-() const { return RNS(-r1(), -r2()); }
 
 	RNS operator*(const RNS & rhs) const { return RNS(r1() * rhs.r1(), r2() * rhs.r2()); }
 
-	RNS Pow(const unsigned int e) const { return RNS(r1().Pow(e), r2().Pow(e)); }
+	RNS Pow(const uint32_t e) const { return RNS(r1().Pow(e), r2().Pow(e)); }
 
-	static const RNS PrRoot_n(const unsigned int n) { return RNS(Zp1::PrRoot_n(n), Zp2::PrRoot_n(n)); }
+	static const RNS PrRoot_n(const uint32_t n) { return RNS(Zp1::PrRoot_n(n), Zp2::PrRoot_n(n)); }
 };
 
 class RNSe
@@ -118,109 +103,25 @@ private:
 
 private:
 	explicit RNSe(const Zp3 & r3) { r = r3.Get(); }
-	Zp3 r3() const { Zp3 _r3; _r3.Set(r); return _r3; }
 
 public:
 	RNSe() {}
-	explicit RNSe(const int i) { r = Zp3(i).Get(); }
-	explicit RNSe(const int64_t i) { r = Zp3(i).Get(); }
+	explicit RNSe(const int32_t i) { r = Zp3(i).Get(); }
 
-	cl_uint Get3() const { return r; }
+	Zp3 r3() const { Zp3 _r3; _r3.Set(r); return _r3; }
 	void Set(const cl_uint r3) { r = r3; }
 
 	RNSe operator-() const { return RNSe(-r3()); }
 
 	RNSe operator*(const RNSe & rhs) const { return RNSe(r3() * rhs.r3()); }
 
-	RNSe Pow(const unsigned int e) const { return RNSe(r3().Pow(e)); }
+	RNSe Pow(const uint32_t e) const { return RNSe(r3().Pow(e)); }
 
-	static const RNSe PrRoot_n(const unsigned int n) { return RNSe(Zp3::PrRoot_n(n)); }
+	static const RNSe PrRoot_n(const uint32_t n) { return RNSe(Zp3::PrRoot_n(n)); }
 };
 
-class RNS_W
-{
-private:
-	cl_uint4 r;	// r1 in Zp1, r2 in Zp2, (r1 * 2^32) / p1, (r2 * 2^32) / p2)
-
-public:
-	RNS_W & operator=(const RNS & rhs)
-	{
-		const cl_uint r1 = rhs.Get1(), r2 = rhs.Get2();
-		r.s[0] = r1; r.s[1] = r2;
-		r.s[2] = (cl_uint)(((cl_ulong)r1 << 32) / P1_i31);
-		r.s[3] = (cl_uint)(((cl_ulong)r2 << 32) / P2_i31);
-		return *this;
-	}
-
-	RNS Get() const { RNS r12; r12.Set(r.s[0], r.s[1]); return r12; }
-};
-
-class RNS_We
-{
-private:
-	cl_uint2 r;	// r3 in Zp3, (r3 * 2^32) / p3
-
-public:
-	RNS_We & operator=(const RNSe & rhs)
-	{
-		const cl_uint r3 = rhs.Get3();
-		r.s[0] = r3;
-		r.s[1] = (cl_uint)(((cl_ulong)r3 << 32) / P3_i31);
-		return *this;
-	}
-
-	RNSe Get() const { RNSe r3; r3.Set(r.s[0]); return r3; }
-};
-
-// Garner Algorithm
-
-struct uint96
-{
-	cl_ulong lo;
-	cl_uint hi;
-
-	uint96() {}
-	explicit uint96(const cl_uint h, const cl_ulong l) :lo(l), hi(h) {}
-
-	static uint96 Mul(const cl_uint lhs, const cl_ulong rhs)
-	{
-		const cl_uint bl = (cl_uint)rhs, bh = (cl_uint)(rhs >> 32);
-		const cl_ulong abl = lhs * (cl_ulong)bl, abh = lhs * (cl_ulong)bh;
-		const cl_uint lo = (cl_uint)abl;
-		const cl_ulong hi = abh + (abl >> 32);
-		uint96 r; r.lo = (hi << 32) | lo; r.hi = (cl_uint)(hi >> 32);
-		return r;
-	}
-
-	uint96 operator+(const cl_ulong rhs) const
-	{
-		uint96 r; r.lo = lo + rhs; r.hi = hi + ((r.lo < lo) ? 1u : 0u);
-		return r;
-	}
-
-	uint96 & operator-=(const uint96 & rhs)
-	{
-		const cl_uint c = (this->lo < rhs.lo) ? 1u : 0u;
-		this->lo -= rhs.lo; this->hi -= rhs.hi + c;
-		return *this;
-	}
-};
-
-static int64_t GetInt(const cl_uint r1, const cl_uint r2, const cl_uint r3)
-{
-	cl_uint d2 = r2 - r3; if (r2 < r3) d2 += P2_i31;		// mod P2
-	const cl_uint u2 = (cl_uint)((d2 * (cl_ulong)InvP3_P2_i31) % P2_i31);
-	const cl_ulong n2 = r3 + u2 * (cl_ulong)P3_i31;
-
-	const cl_uint n1 = (cl_uint)(n2 % P1_i31);
-	cl_uint d1 = r1 - n1; if (r1 < n1) d1 += P1_i31;		// mod P1
-	const cl_uint u1 = (cl_uint)((d1 * (cl_ulong)InvP2P3_P1_i31) % P1_i31);
-	uint96 n = uint96::Mul(u1, P2P3_i31) + n2;
-
-	if (n.hi > P1P2P3hi_i31 / 2) n -= uint96(P1P2P3hi_i31, P1P2P3lo_i31);
-
-	return (int64_t)n.lo;
-}
+typedef RNS		RNS_W;
+typedef RNSe	RNS_We;
 
 #define BLK32_i31a		8
 #define BLK64_i31a		4
@@ -971,7 +872,7 @@ protected:
 
 		pProgram->ReadZBuffer(z, ze);
 
-		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = GetInt(z[i].Get1(), z[i].Get2(), ze[i].Get3());
+		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = z[i].r1().GetInt();
 	}
 
 	void setZi(int32_t * const zi) override

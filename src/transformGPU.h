@@ -25,31 +25,28 @@ template <cl_uint p, cl_uint prRoot>
 class Zp
 {
 private:
-	cl_uint n;
+	cl_uint _n;
 
 private:
-	explicit Zp(const cl_uint l) :n(l) {}
+	explicit Zp(const cl_uint n) : _n(n) {}
 
-	Zp MulMod(const Zp & rhs) const
-	{
-		return Zp((cl_uint)((n * (cl_ulong)rhs.n) % p));
-	}
+	Zp _mulMod(const Zp & rhs) const { return Zp((cl_uint)((_n * (cl_ulong)rhs._n) % p)); }
 
 public:
 	Zp() {}
-	explicit Zp(const int32_t i) :n(i + ((i < 0) ? p : 0)) {}
+	explicit Zp(const int32_t i) : _n(i + ((i < 0) ? p : 0)) {}
 
-	cl_uint Get() const { return n; }
-	int32_t GetInt() const { return (n > p / 2) ? int32_t(n - p) : int32_t(n); }
+	cl_uint get() const { return _n; }
+	int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
 
-	void Set(const cl_uint _n) { n = _n; }
+	void set(const cl_uint n) { _n = n; }
 
-	Zp operator-() const { return Zp((n != 0) ? p - n : 0); }
+	Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
 
-	Zp & operator*=(const Zp & rhs) { *this = MulMod(rhs); return *this; }
-	Zp operator*(const Zp & rhs) const { return MulMod(rhs); }
+	Zp & operator*=(const Zp & rhs) { *this = _mulMod(rhs); return *this; }
+	Zp operator*(const Zp & rhs) const { return _mulMod(rhs); }
 
-	Zp Pow(const uint32_t e) const
+	Zp pow(const uint32_t e) const
 	{
 		if (e == 0) return Zp(1);
 
@@ -64,7 +61,8 @@ public:
 		return r;
 	}
 
-	static const Zp PrRoot_n(const uint32_t n) { return Zp(prRoot).Pow((p - 1) / n); }
+	static Zp norm(const size_t n) { return -Zp(int32_t((p - 1) / n)); }
+	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
 typedef Zp<4253024257u, 5> Zp1;		// 507 * 2^23 + 1
@@ -77,23 +75,23 @@ private:
 	cl_uint2 r;	// Zp1, Zp2
 
 private:
-	explicit RNS(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.Get(); r.s[1] = r2.Get(); }
+	explicit RNS(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.get(); r.s[1] = r2.get(); }
 
 public:
 	RNS() {}
-	explicit RNS(const int32_t i) { r.s[0] = Zp1(i).Get(); r.s[1] = Zp2(i).Get(); }
+	explicit RNS(const int32_t i) { r.s[0] = Zp1(i).get(); r.s[1] = Zp2(i).get(); }
 
-	Zp1 r1() const { Zp1 r1; r1.Set(r.s[0]); return r1; }
-	Zp2 r2() const { Zp2 r2; r2.Set(r.s[1]); return r2; }
-	void Set(const cl_uint r1, const cl_uint r2) { r.s[0] = r1; r.s[1] = r2; }
+	Zp1 r1() const { Zp1 r1; r1.set(r.s[0]); return r1; }
+	Zp2 r2() const { Zp2 r2; r2.set(r.s[1]); return r2; }
+	void set(const cl_uint r1, const cl_uint r2) { r.s[0] = r1; r.s[1] = r2; }
 
 	RNS operator-() const { return RNS(-r1(), -r2()); }
 
 	RNS operator*(const RNS & rhs) const { return RNS(r1() * rhs.r1(), r2() * rhs.r2()); }
 
-	RNS Pow(const uint32_t e) const { return RNS(r1().Pow(e), r2().Pow(e)); }
+	RNS pow(const uint32_t e) const { return RNS(r1().pow(e), r2().pow(e)); }
 
-	static const RNS PrRoot_n(const uint32_t n) { return RNS(Zp1::PrRoot_n(n), Zp2::PrRoot_n(n)); }
+	static const RNS prRoot_n(const uint32_t n) { return RNS(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
 };
 
 class RNSe
@@ -102,35 +100,35 @@ private:
 	cl_uint r;	// Zp3
 
 private:
-	explicit RNSe(const Zp3 & r3) { r = r3.Get(); }
+	explicit RNSe(const Zp3 & r3) { r = r3.get(); }
 
 public:
 	RNSe() {}
-	explicit RNSe(const int32_t i) { r = Zp3(i).Get(); }
+	explicit RNSe(const int32_t i) { r = Zp3(i).get(); }
 
-	Zp3 r3() const { Zp3 _r3; _r3.Set(r); return _r3; }
-	void Set(const cl_uint r3) { r = r3; }
+	Zp3 r3() const { Zp3 _r3; _r3.set(r); return _r3; }
+	void set(const cl_uint r3) { r = r3; }
 
 	RNSe operator-() const { return RNSe(-r3()); }
 
 	RNSe operator*(const RNSe & rhs) const { return RNSe(r3() * rhs.r3()); }
 
-	RNSe Pow(const uint32_t e) const { return RNSe(r3().Pow(e)); }
+	RNSe pow(const uint32_t e) const { return RNSe(r3().pow(e)); }
 
-	static const RNSe PrRoot_n(const uint32_t n) { return RNSe(Zp3::PrRoot_n(n)); }
+	static const RNSe prRoot_n(const uint32_t n) { return RNSe(Zp3::prRoot_n(n)); }
 };
 
 typedef RNS		RNS_W;
 typedef RNSe	RNS_We;
 
-#define BLK32_i31a		8
-#define BLK64_i31a		4
-#define BLK128_i31a		2
-#define BLK256_i31a		1
+#define BLK32		8
+#define BLK64		4
+#define BLK128		2
+#define BLK256		1
 
-#define CHUNK64_i31a	8
-#define CHUNK256_i31a	4
-#define CHUNK1024_i31a	2
+#define CHUNK64		8
+#define CHUNK256	4
+#define CHUNK1024	2
 
 class Program_i31a : public HostProgram
 {
@@ -138,9 +136,9 @@ private:
 	const unsigned int base;
 	cl_kernel forward64, backward64, forward256, backward256, forward1024, backward1024;
 	cl_kernel square32, square64, square128, square256, square512, square1024, square2048;
-	cl_kernel baseMod0, baseMod1;
+	cl_kernel normalize3a, normalize3b;
 	cl_mem z, ze, w, we, c, bErr;
-	size_t baseMod0LocalWorkSize, baseMod1LocalWorkSize, baseModBlk, splitIndex;
+	size_t n3aLocalWS, n3bLocalWS, baseModBlk, splitIndex;
 	cl_uint * const ePtr;
 	Splitter * pSplit;
 
@@ -202,33 +200,37 @@ public:
 		HostProgram(size, lgSize, verbose),
 		base(b),
 		z(nullptr), ze(nullptr), w(nullptr), we(nullptr), c(nullptr), bErr(nullptr),
-		baseMod0LocalWorkSize(32), baseMod1LocalWorkSize(32), baseModBlk(16), splitIndex(0),
+		n3aLocalWS(32), n3bLocalWS(32), baseModBlk(16), splitIndex(0),
 		ePtr(new cl_uint[size / 4]), pSplit(nullptr)
 	{
 		std::stringstream src;
+		src << "#define\tnorm1\t" << Zp1::norm(size / 2).get() << "u" << std::endl;
+		src << "#define\tnorm2\t" << Zp2::norm(size / 2).get() << "u" << std::endl;
+		src << "#define\tnorm3\t" << Zp3::norm(size / 2).get() << "u" << std::endl;
+ 		src << std::endl;
 		if (!readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		cl_int err = BuildProgram(src.str().c_str());
 		if (err != CL_SUCCESS) return;
 
-		pSplit = new Splitter(lgSize, CHUNK256_i31a, CHUNK1024_i31a, sizeof(RNS) + sizeof(RNSe), 11, GetLocalMemSize(), GetMaxWorkGroupSize());
+		pSplit = new Splitter(lgSize, CHUNK256, CHUNK1024, sizeof(RNS) + sizeof(RNSe), 11, GetLocalMemSize(), GetMaxWorkGroupSize());
 		if (pSplit->GetSize() == 0) return;
 
-		forward64 = CreateKernel("Forward64"); if (forward64 == nullptr) return;
-		backward64 = CreateKernel("Backward64"); if (backward64 == nullptr) return;
-		forward256 = CreateKernel("Forward256"); if (forward256 == nullptr) return;
-		backward256 = CreateKernel("Backward256"); if (backward256 == nullptr) return;
-		forward1024 = CreateKernel("Forward1024"); if (forward1024 == nullptr) return;
-		backward1024 = CreateKernel("Backward1024"); if (backward1024 == nullptr) return;
-		square32 = CreateKernel("Square32"); if (square32 == nullptr) return;
-		square64 = CreateKernel("Square64"); if (square64 == nullptr) return;
-		square128 = CreateKernel("Square128"); if (square128 == nullptr) return;
-		square256 = CreateKernel("Square256"); if (square256 == nullptr) return;
-		square512 = CreateKernel("Square512"); if (square512 == nullptr) return;
-		square1024 = CreateKernel("Square1024"); if (square1024 == nullptr) return;
-		square2048 = CreateKernel("Square2048"); if (square2048 == nullptr) return;
-		baseMod0 = CreateKernel("BaseMod0"); if (baseMod0 == nullptr) return;
-		baseMod1 = CreateKernel("BaseMod1"); if (baseMod1 == nullptr) return;
+		forward64 = CreateKernel("forward64"); if (forward64 == nullptr) return;
+		backward64 = CreateKernel("backward64"); if (backward64 == nullptr) return;
+		forward256 = CreateKernel("forward256"); if (forward256 == nullptr) return;
+		backward256 = CreateKernel("backward256"); if (backward256 == nullptr) return;
+		forward1024 = CreateKernel("forward1024"); if (forward1024 == nullptr) return;
+		backward1024 = CreateKernel("backward1024"); if (backward1024 == nullptr) return;
+		square32 = CreateKernel("square32"); if (square32 == nullptr) return;
+		square64 = CreateKernel("square64"); if (square64 == nullptr) return;
+		square128 = CreateKernel("square128"); if (square128 == nullptr) return;
+		square256 = CreateKernel("square256"); if (square256 == nullptr) return;
+		square512 = CreateKernel("square512"); if (square512 == nullptr) return;
+		square1024 = CreateKernel("square1024"); if (square1024 == nullptr) return;
+		square2048 = CreateKernel("square2048"); if (square2048 == nullptr) return;
+		normalize3a = CreateKernel("normalize3a"); if (normalize3a == nullptr) return;
+		normalize3b = CreateKernel("normalize3b"); if (normalize3b == nullptr) return;
 
 		if (n > 0)
 		{
@@ -254,23 +256,23 @@ public:
 		err |= SetArgs(square1024);
 		err |= SetArgs(square2048);
 
-		const cl_int ibase = (cl_int)base;
-		const cl_long recBase = (cl_long)(0xffffffffffffffffull / (unsigned int)base);
-		const cl_uint iln = (cl_uint)ln;
+		const cl_uint cb = cl_uint(b);
+		const cl_int b_s = cl_int(30 - __builtin_clz(b));
+		const cl_uint b_inv = cl_uint((uint64_t(1) << (b_s + 32)) / b);
 
-		err |= clSetKernelArg(baseMod0, 0, sizeof(cl_mem), &z);
-		err |= clSetKernelArg(baseMod0, 1, sizeof(cl_mem), &ze);
-		err |= clSetKernelArg(baseMod0, 2, sizeof(cl_mem), &c);
-		err |= clSetKernelArg(baseMod0, 3, sizeof(cl_mem), &bErr);
-		err |= clSetKernelArg(baseMod0, 4, sizeof(cl_int), &ibase);
-		err |= clSetKernelArg(baseMod0, 5, sizeof(cl_long), &recBase);
-		err |= clSetKernelArg(baseMod0, 6, sizeof(cl_uint), &iln);
+		err |= clSetKernelArg(normalize3a, 0, sizeof(cl_mem), &z);
+		err |= clSetKernelArg(normalize3a, 1, sizeof(cl_mem), &ze);
+		err |= clSetKernelArg(normalize3a, 2, sizeof(cl_mem), &c);
+		err |= clSetKernelArg(normalize3a, 3, sizeof(cl_uint), &cb);
+		err |= clSetKernelArg(normalize3a, 4, sizeof(cl_uint), &b_inv);
+		err |= clSetKernelArg(normalize3a, 5, sizeof(cl_int), &b_s);
 
-		err |= clSetKernelArg(baseMod1, 0, sizeof(cl_mem), &z);
-		err |= clSetKernelArg(baseMod1, 1, sizeof(cl_mem), &ze);
-		err |= clSetKernelArg(baseMod1, 2, sizeof(cl_mem), &c);
-		err |= clSetKernelArg(baseMod1, 3, sizeof(cl_int), &ibase);
-		err |= clSetKernelArg(baseMod1, 4, sizeof(cl_long), &recBase);
+		err |= clSetKernelArg(normalize3b, 0, sizeof(cl_mem), &z);
+		err |= clSetKernelArg(normalize3b, 1, sizeof(cl_mem), &ze);
+		err |= clSetKernelArg(normalize3b, 2, sizeof(cl_mem), &c);
+		err |= clSetKernelArg(normalize3b, 3, sizeof(cl_uint), &cb);
+		err |= clSetKernelArg(normalize3b, 4, sizeof(cl_uint), &b_inv);
+		err |= clSetKernelArg(normalize3b, 5, sizeof(cl_int), &b_s);
 
 		if (err != CL_SUCCESS) { if (verbose) fprintf(stderr, "Error: cannot set args.\n"); error = err; return; }
 	}
@@ -299,8 +301,8 @@ public:
 			clReleaseKernel(square512);
 			clReleaseKernel(square1024);
 			clReleaseKernel(square2048);
-			clReleaseKernel(baseMod0);
-			clReleaseKernel(baseMod1);
+			clReleaseKernel(normalize3a);
+			clReleaseKernel(normalize3b);
 
 			ClearProgram();
 		}
@@ -363,14 +365,14 @@ private:
 	void Forward64(const unsigned int lm)
 	{
 		_Forward64(lm);
-		Execute(forward64, n / 4, 64 / 4 * CHUNK64_i31a);
+		Execute(forward64, n / 4, 64 / 4 * CHUNK64);
 	}
 
 private:
 	cl_ulong Forward64Tune(const unsigned int lm)
 	{
 		_Forward64(lm);
-		return ExecuteProfiling(forward64, n / 4, 64 / 4 * CHUNK64_i31a);
+		return ExecuteProfiling(forward64, n / 4, 64 / 4 * CHUNK64);
 	}
 
 private:
@@ -387,14 +389,14 @@ private:
 	void Backward64(const unsigned int lm)
 	{
 		_Backward64(lm);
-		Execute(backward64, n / 4, 64 / 4 * CHUNK64_i31a);
+		Execute(backward64, n / 4, 64 / 4 * CHUNK64);
 	}
 
 private:
 	cl_ulong Backward64Tune(const unsigned int lm)
 	{
 		_Backward64(lm);
-		return ExecuteProfiling(backward64, n / 4, 64 / 4 * CHUNK64_i31a);
+		return ExecuteProfiling(backward64, n / 4, 64 / 4 * CHUNK64);
 	}
 
 ///////////////////////////////
@@ -413,14 +415,14 @@ private:
 	void Forward256(const unsigned int lm)
 	{
 		_Forward256(lm);
-		Execute(forward256, n / 4, 256 / 4 * CHUNK256_i31a);
+		Execute(forward256, n / 4, 256 / 4 * CHUNK256);
 	}
 
 private:
 	cl_ulong Forward256Tune(const unsigned int lm)
 	{
 		_Forward256(lm);
-		return ExecuteProfiling(forward256, n / 4, 256 / 4 * CHUNK256_i31a);
+		return ExecuteProfiling(forward256, n / 4, 256 / 4 * CHUNK256);
 	}
 
 private:
@@ -437,14 +439,14 @@ private:
 	void Backward256(const unsigned int lm)
 	{
 		_Backward256(lm);
-		Execute(backward256, n / 4, 256 / 4 * CHUNK256_i31a);
+		Execute(backward256, n / 4, 256 / 4 * CHUNK256);
 	}
 
 private:
 	cl_ulong Backward256Tune(const unsigned int lm)
 	{
 		_Backward256(lm);
-		return ExecuteProfiling(backward256, n / 4, 256 / 4 * CHUNK256_i31a);
+		return ExecuteProfiling(backward256, n / 4, 256 / 4 * CHUNK256);
 	}
 
 ///////////////////////////////
@@ -463,14 +465,14 @@ private:
 	void Forward1024(const unsigned int lm)
 	{
 		_Forward1024(lm);
-		Execute(forward1024, n / 4, 1024 / 4 * CHUNK1024_i31a);
+		Execute(forward1024, n / 4, 1024 / 4 * CHUNK1024);
 	}
 
 private:
 	cl_ulong Forward1024Tune(const unsigned int lm)
 	{
 		_Forward1024(lm);
-		return ExecuteProfiling(forward1024, n / 4, 1024 / 4 * CHUNK1024_i31a);
+		return ExecuteProfiling(forward1024, n / 4, 1024 / 4 * CHUNK1024);
 	}
 
 private:
@@ -487,32 +489,32 @@ private:
 	void Backward1024(const unsigned int lm)
 	{
 		_Backward1024(lm);
-		Execute(backward1024, n / 4, 1024 / 4 * CHUNK1024_i31a);
+		Execute(backward1024, n / 4, 1024 / 4 * CHUNK1024);
 	}
 
 private:
 	cl_ulong Backward1024Tune(const unsigned int lm)
 	{
 		_Backward1024(lm);
-		return ExecuteProfiling(backward1024, n / 4, 1024 / 4 * CHUNK1024_i31a);
+		return ExecuteProfiling(backward1024, n / 4, 1024 / 4 * CHUNK1024);
 	}
 
 ///////////////////////////////
 
 private:
-	void Square32() { Execute(square32, n / 4, std::min(n / 4, (size_t)(32 / 4 * BLK32_i31a))); }
-	void Square64() { Execute(square64, n / 4, std::min(n / 4, (size_t)(64 / 4 * BLK64_i31a))); }
-	void Square128() { Execute(square128, n / 4, std::min(n / 4, (size_t)(128 / 4 * BLK128_i31a))); }
-	void Square256() { Execute(square256, n / 4, std::min(n / 4, (size_t)(256 / 4 * BLK256_i31a))); }
+	void Square32() { Execute(square32, n / 4, std::min(n / 4, (size_t)(32 / 4 * BLK32))); }
+	void Square64() { Execute(square64, n / 4, std::min(n / 4, (size_t)(64 / 4 * BLK64))); }
+	void Square128() { Execute(square128, n / 4, std::min(n / 4, (size_t)(128 / 4 * BLK128))); }
+	void Square256() { Execute(square256, n / 4, std::min(n / 4, (size_t)(256 / 4 * BLK256))); }
 	void Square512() { Execute(square512, n / 4, 512 / 4); }
 	void Square1024() { Execute(square1024, n / 4, 1024 / 4); }
 	void Square2048() { Execute(square2048, n / 4, 2048 / 4); }
 
 private:
-	cl_ulong Square32Tune() { return ExecuteProfiling(square32, n / 4, std::min(n / 4, (size_t)(32 / 4 * BLK32_i31a))); }
-	cl_ulong Square64Tune() { return ExecuteProfiling(square64, n / 4, std::min(n / 4, (size_t)(64 / 4 * BLK64_i31a))); }
-	cl_ulong Square128Tune() { return ExecuteProfiling(square128, n / 4, std::min(n / 4, (size_t)(128 / 4 * BLK128_i31a))); }
-	cl_ulong Square256Tune() { return ExecuteProfiling(square256, n / 4, std::min(n / 4, (size_t)(256 / 4 * BLK256_i31a))); }
+	cl_ulong Square32Tune() { return ExecuteProfiling(square32, n / 4, std::min(n / 4, (size_t)(32 / 4 * BLK32))); }
+	cl_ulong Square64Tune() { return ExecuteProfiling(square64, n / 4, std::min(n / 4, (size_t)(64 / 4 * BLK64))); }
+	cl_ulong Square128Tune() { return ExecuteProfiling(square128, n / 4, std::min(n / 4, (size_t)(128 / 4 * BLK128))); }
+	cl_ulong Square256Tune() { return ExecuteProfiling(square256, n / 4, std::min(n / 4, (size_t)(256 / 4 * BLK256))); }
 	cl_ulong Square512Tune() { return ExecuteProfiling(square512, n / 4, 512 / 4); }
 	cl_ulong Square1024Tune() { return ExecuteProfiling(square1024, n / 4, 1024 / 4); }
 	cl_ulong Square2048Tune() { return ExecuteProfiling(square2048, n / 4, 2048 / 4); }
@@ -662,19 +664,18 @@ private:
 	}
 
 public:
-	void BaseMod(const int g)
+	void BaseMod(const bool dup)
 	{
-		const cl_uint blk = (cl_uint)baseModBlk;
-		const cl_int ig = (cl_int)g;
-		const size_t size = (int)n / (int)baseModBlk;
+		const cl_uint blk = cl_uint(baseModBlk);
+		const cl_int sblk = dup ? -cl_int(blk) : cl_int(blk);
+		const size_t size = int(n) / int(baseModBlk);
 
 		cl_int err = CL_SUCCESS;
-		err |= clSetKernelArg(baseMod0, 7, sizeof(cl_uint), &blk);
-		err |= clSetKernelArg(baseMod0, 8, sizeof(cl_int), &ig);
-		err |= clSetKernelArg(baseMod1, 5, sizeof(cl_uint), &blk);
+		err |= clSetKernelArg(normalize3a, 6, sizeof(cl_int), &sblk);
+		err |= clSetKernelArg(normalize3b, 6, sizeof(cl_uint), &blk);
 		error |= err; if (err != CL_SUCCESS) return;
-		Execute(baseMod0, size, std::min(size, baseMod0LocalWorkSize));
-		Execute(baseMod1, size, std::min(size, baseMod1LocalWorkSize));
+		Execute(normalize3a, size, std::min(size, n3aLocalWS));
+		Execute(normalize3b, size, std::min(size, n3bLocalWS));
 	}
 
 private:
@@ -682,21 +683,20 @@ private:
 	{
 		t0 = t1 = 0;
 
-		const cl_uint b = (cl_uint)blk;
-		const cl_int ig = (cl_int)1;
-		const size_t size = (int)n / (int)blk;
+		const cl_uint cblk = cl_uint(blk);
+		const cl_int sblk = cl_int(blk);
+		const size_t size = int(n) / int(blk);
 
 		for (size_t i = 0; i != count; ++i)
 		{
 			WriteZBuffer(Z, Ze);
 
 			cl_int err = CL_SUCCESS;
-			err |= clSetKernelArg(baseMod0, 7, sizeof(cl_uint), &b);
-			err |= clSetKernelArg(baseMod0, 8, sizeof(cl_int), &ig);
-			err |= clSetKernelArg(baseMod1, 5, sizeof(cl_uint), &b);
+			err |= clSetKernelArg(normalize3a, 6, sizeof(cl_int), &sblk);
+			err |= clSetKernelArg(normalize3b, 6, sizeof(cl_uint), &cblk);
 			error |= err; if (err != CL_SUCCESS) return;
-			t0 += ExecuteProfiling(baseMod0, size, std::min(size, localWorkSize));
-			t1 += ExecuteProfiling(baseMod1, size, std::min(size, localWorkSize));
+			t0 += ExecuteProfiling(normalize3a, size, std::min(size, localWorkSize));
+			t1 += ExecuteProfiling(normalize3b, size, std::min(size, localWorkSize));
 		}
 	}
 
@@ -758,13 +758,11 @@ public:
 			if (minT0 + minT1 < minT)
 			{
 				minT = minT0 + minT1;
-				baseMod0LocalWorkSize = s0;
-				baseMod1LocalWorkSize = s1;
+				n3aLocalWS = s0;
+				n3bLocalWS = s1;
 				baseModBlk = b;
 			}
 		}
-
-		//printf("localWorkSize0 = %d, localWorkSize1 = %d, baseModBlk = %d.\n", (int)baseMod0LocalWorkSize, (int)baseMod1LocalWorkSize, (int)baseModBlk);
 
 		const size_t ns = pSplit->GetSize();
 		if (ns > 1)
@@ -772,11 +770,8 @@ public:
 			minT = (cl_ulong)(-1);
 			for (size_t i = 0; i < ns; ++i)
 			{
-				//printf("[%u]", (unsigned int)i);
-				//for (size_t j = 0, nps = pSplit->GetPartSize(i); j < nps; ++j) printf(" %u", pSplit->GetPart(i, j));
 				cl_ulong t;
 				SquareTune(2, i, Z, Ze, t);
-				//printf(": %u\n", (unsigned int)t);
 
 				if (t < minT)
 				{
@@ -784,9 +779,6 @@ public:
 					splitIndex = i;
 				}
 			}
-
-			//for (size_t j = 0, nps = pSplit->GetPartSize(splitIndex); j < nps; ++j) printf(" %u", pSplit->GetPart(splitIndex, j));
-			//printf("\n");
 		}
 
 		delete[] Z;
@@ -821,28 +813,28 @@ public:
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
-			const RNS prRoot_m = RNS::PrRoot_n((unsigned int)m);
-			const RNSe prRoot_me = RNSe::PrRoot_n((unsigned int)m);
+			const RNS prRoot_m = RNS::prRoot_n((unsigned int)m);
+			const RNSe prRoot_me = RNSe::prRoot_n((unsigned int)m);
 			for (size_t i = 0; i < s; ++i)
 			{
 				const size_t e = bitRev(i, 2 * s) + 1;
-				const RNS wrsi = prRoot_m.Pow((unsigned int)e);
+				const RNS wrsi = prRoot_m.pow((unsigned int)e);
 				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
-				const RNSe wrsie = prRoot_me.Pow((unsigned int)e);
+				const RNSe wrsie = prRoot_me.pow((unsigned int)e);
 				wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
 			}
 		}
 
 		const size_t m = 4 * size / 2;
-		const RNS prRoot_m = RNS::PrRoot_n((unsigned int)m);
-		const RNSe prRoot_me = RNSe::PrRoot_n((unsigned int)m);
+		const RNS prRoot_m = RNS::prRoot_n((unsigned int)m);
+		const RNSe prRoot_me = RNSe::prRoot_n((unsigned int)m);
 		for (size_t i = 0; i != size / 4; ++i)
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-			wr[size / 2 + i] = prRoot_m.Pow((unsigned int)e);
-			wri[size / 2 + i] = prRoot_m.Pow((unsigned int)(m - e));
-			wre[size / 2 + i] = prRoot_me.Pow((unsigned int)e);
-			wrie[size / 2 + i] = prRoot_me.Pow((unsigned int)(m - e));
+			wr[size / 2 + i] = prRoot_m.pow((unsigned int)e);
+			wri[size / 2 + i] = prRoot_m.pow((unsigned int)(m - e));
+			wre[size / 2 + i] = prRoot_me.pow((unsigned int)e);
+			wrie[size / 2 + i] = prRoot_me.pow((unsigned int)(m - e));
 		}
 
 		pProgram->IsOK();
@@ -872,7 +864,7 @@ protected:
 
 		pProgram->ReadZBuffer(z, ze);
 
-		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = z[i].r1().GetInt();
+		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = z[i].r1().getInt();
 	}
 
 	void setZi(int32_t * const zi) override
@@ -897,7 +889,7 @@ public:
 	void squareDup(const bool dup) override
 	{
 		pProgram->Square();
-		pProgram->BaseMod(dup ? 2 : 1);
+		pProgram->BaseMod(dup);
 		pProgram->IsOK();
 	}
 

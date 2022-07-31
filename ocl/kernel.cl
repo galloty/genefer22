@@ -5,53 +5,65 @@ genefer22 is free source code, under the MIT license (see LICENSE). You can redi
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// --- uint96/int96 ---
 
-typedef uint2	RNS;
-typedef RNS		RNS_W;
-typedef uint	RNSe;
-typedef RNSe	RNS_We;
+typedef struct { ulong s0; uint s1; } uint96;
+typedef struct { ulong s0; int s1; } int96;
 
-typedef struct { ulong lo; uint hi; } uint96;
-typedef struct { ulong lo; int hi; } int96;
+inline int96 int96_set_si(const long n) { int96 r; r.s0 = (ulong)n; r.s1 = (n < 0) ? -1 : 0; return r; }
+inline uint96 uint96_set(const ulong s0, const uint s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
 
-int96 MAdd96_64_32_64(const ulong a, const uint b, const ulong c)
+inline int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int)x.s1; return r; }
+inline uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint)x.s1; return r; }
+
+inline bool int96_is_neg(const int96 x) { return (x.s1 < 0); }
+
+inline bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }
+
+inline int96 int96_neg(const int96 x)
 {
-	int96 r; r.lo = a * b + c; r.hi = (int)mul_hi(a, (ulong)b) + (r.lo < c);
+	const int c = (x.s0 != 0) ? 1 : 0;
+	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - c;
 	return r;
 }
 
-int96 Add96(const int96 lhs, const int96 rhs)
+inline uint96 int96_abs(const int96 x)
 {
-	int96 r; r.lo = lhs.lo + rhs.lo; r.hi = lhs.hi + rhs.hi;
-	r.hi += (r.lo < rhs.lo);
+	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;
+	return int96_u(t);
+}
+
+inline int96 int96_add(const int96 x, const int96 y)
+{
+	const ulong s0 = x.s0 + y.s0;
+	const int c = (s0 < y.s0) ? 1 : 0;
+	int96 r; r.s0 = s0; r.s1 = x.s1 + y.s1 + c;
 	return r;
 }
 
-int96 Sub96(const int96 lhs, const int96 rhs)
+inline uint96 uint96_add_64(const uint96 x, const ulong y)
 {
-	int96 r; r.lo = lhs.lo - rhs.lo; r.hi = lhs.hi - rhs.hi;
-	r.hi -= (lhs.lo < rhs.lo);
+	const ulong s0 = x.s0 + y;
+	const uint c = (s0 < y) ? 1 : 0;
+	uint96 r; r.s0 = s0; r.s1 = x.s1 + c;
 	return r;
 }
 
-int96 Mul96_96_u32(const int96 lhs, const int rhs)
+inline int96 uint96_subi(const uint96 x, const uint96 y)
 {
-	int96 r; r.lo = lhs.lo * (ulong)rhs; r.hi = (int)mul_hi(lhs.lo, (ulong)rhs);
-	r.hi += lhs.hi * rhs;
+	const uint c = (x.s0 < y.s0) ? 1 : 0;
+	int96 r; r.s0 = x.s0 - y.s0; r.s1 = (int)(x.s1 - y.s1 - c);
 	return r;
 }
 
-int96 Mul96_64_u32(const long lhs, const int rhs)
+inline uint96 uint96_mul_64_32(const ulong x, const uint y)
 {
-	int96 r; r.lo = lhs * (long)rhs; r.hi = (int)mul_hi(lhs, (long)rhs);
+	const ulong l = (uint)x * (ulong)y, h = (x >> 32) * y + (l >> 32);
+	uint96 r; r.s0 = (h << 32) | (uint)l; r.s1 = (uint)(h >> 32);
 	return r;
 }
 
-long MulHi64_96_u64(const int96 lhs, const long rhs)
-{
-	return (long)mul_hi(lhs.lo, (ulong)rhs) + lhs.hi * rhs;
-}
+// --- mod arith ---
 
 #define P1			4253024257u		// 507 * 2^23 + 1
 #define P2			4194304001u		// 125 * 2^25 + 1
@@ -62,10 +74,8 @@ long MulHi64_96_u64(const int96 lhs, const long rhs)
 #define InvP2_P1	1822724754u		// 1 / P2 mod P1
 #define InvP3_P1	607574918u		// 1 / P3 mod P1
 #define InvP3_P2	2995931465u		// 1 / P3 mod P2
-
-#define	P1P2	(P1 * (ulong)P2)
-#define	P2P3	(P2 * (ulong)P3)
-
+#define	P1P2		(P1 * (ulong)P2)
+#define	P2P3		(P2 * (ulong)P3)
 #define P1P2P3l		15383592652180029441ul
 #define P1P2P3h		3942432002u
 #define P1P2P3_2l	7691796326090014720ul
@@ -92,6 +102,8 @@ inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_i
 	return (r >= p) ? r - p : r;
 }
 
+inline int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n; }
+
 inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }
 inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }
 inline uint add_P3(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P3); }
@@ -104,34 +116,6 @@ inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1
 inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }
 inline uint mul_P3(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P3, P3_INV); }
 
-inline uint96 uint96_set(const ulong s0, const uint s1) { uint96 r; r.lo = s0; r.hi = s1; return r; }
-
-inline int96 uint96_i(const uint96 x) { int96 r; r.lo = x.lo; r.hi = (int)x.hi; return r; }
-
-inline bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.hi > y.hi) || ((x.hi == y.hi) && (x.lo > y.lo)); }
-
-inline uint96 uint96_add_64(const uint96 x, const ulong y)
-{
-	const ulong s0 = x.lo + y;
-	const uint c = (s0 < y) ? 1 : 0;
-	uint96 r; r.lo = s0; r.hi = x.hi + c;
-	return r;
-}
-
-inline int96 uint96_subi(const uint96 x, const uint96 y)
-{
-	const uint c = (x.lo < y.lo) ? 1 : 0;
-	int96 r; r.lo = x.lo - y.lo; r.hi = (int)(x.hi - y.hi - c);
-	return r;
-}
-
-inline uint96 uint96_mul_64_32(const ulong x, const uint y)
-{
-	const ulong l = (uint)x * (ulong)y, h = (x >> 32) * y + (l >> 32);
-	uint96 r; r.lo = (h << 32) | (uint)l; r.hi = (uint)(h >> 32);
-	return r;
-}
-
 inline int96 garner3(const uint r1, const uint r2, const uint r3)
 {
 	const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
@@ -143,153 +127,36 @@ inline int96 garner3(const uint r1, const uint r2, const uint r3)
 	return r;
 }
 
+// --- RNS/RNSe ---
 
+typedef uint2	RNS;
+typedef RNS		RNS_W;
+typedef uint	RNSe;
+typedef RNSe	RNS_We;
 
-/*
-Barrett's product/reduction, where P is such that h (the number of iterations in the 'while loop') is 0 or 1.
+inline RNS toRNS(const int i) { return (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0)); }
 
-Let m < P^2 < 2^62, R = [2^62/P] and h = [m/P] - [[m/2^30] R / 2^32].
+inline RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }
+inline RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }
+inline RNS mul(const RNS lhs, const RNS rhs) { return (RNS)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }
 
-We have h = ([m/P] - m/P) + m/2^62 (2^62/P - R) + R/2^32 (m/2^30 - [m/2^30]) + ([m/2^30] R / 2^32 - [[m/2^30] * R / 2^32]).
-Then -1 + 0 + 0 + 0 < h < 0 + (2^62/P - R) + R/2^32 + 1,
-0 <= h < 1 + (2^62/P - R) + R/2^32.
+inline RNS sqr(const RNS lhs) { return mul(lhs, lhs); }
 
-P = 127 * 2^24 + 1 = 2130706433 => R = 2164392967, h < 1.56
-P =  63 * 2^25 + 1 = 2113929217 => R = 2181570688, h < 2.51 NOK
-P =  15 * 2^27 + 1 = 2013265921 => R = 2290649223, h < 1.93
-P =  27 * 2^26 + 1 = 1811939329 => R = 2545165803, h < 2.23 NOK
-P =  51 * 2^25 + 1 = 1711276033 => R = 2694881439, h < 1.69
-*/
+inline RNS mulW(const RNS lhs, const RNS_W w) { return mul(lhs, w); }
 
-inline uint MulMod_P1(const uint lhs, const uint rhs)
-{
-	return _mulMod(lhs, rhs, P1, P1_INV);
-	/*const ulong m = lhs * (ulong)rhs;
-	const uint q = mul_hi((uint)(m >> 30), R1);
-	uint r = (uint)m - q * P1;
-	if (r >= P1) r -= P1;
-	return r;*/
-}
+inline RNSe toRNSe(const int i) { return (RNSe)(i) + ((i < 0) ? (RNSe)(P3) : (RNSe)(0)); }
 
-inline uint MulMod_P2(const uint lhs, const uint rhs)
-{
-	return _mulMod(lhs, rhs, P2, P2_INV);
-	/*const ulong m = lhs * (ulong)rhs;
-	const uint q = mul_hi((uint)(m >> 30), R2);
-	uint r = (uint)m - q * P2;
-	if (r >= P2) r -= P2;
-	return r;*/
-}
+inline RNSe adde(const RNSe lhs, const RNSe rhs) { return (RNSe)(add_P3(lhs, rhs)); }
+inline RNSe sube(const RNSe lhs, const RNSe rhs) { return (RNSe)(sub_P3(lhs, rhs)); }
+inline RNSe mule(const RNSe lhs, const RNSe rhs) { return (RNSe)(mul_P3(lhs, rhs)); }
 
-inline uint MulMod_P3(const uint lhs, const uint rhs)
-{
-	return _mulMod(lhs, rhs, P3, P3_INV);
-	/*const ulong m = lhs * (ulong)rhs;
-	const uint q = mul_hi((uint)(m >> 30), R3);
-	uint r = (uint)m - q * P3;
-	if (r >= P3) r -= P3;
-	return r;*/
-}
+inline RNSe sqre(const RNSe lhs) { return mule(lhs, lhs); }
 
-// ---------------------------------------------
-// Garner Algorithm
+inline RNSe mulWe(const RNSe lhs, const RNS_We w) { return mule(lhs, w); }
 
-inline int96 GetLong_e(const RNS lhs, const RNSe lhse)
-{
-	return garner3(lhs.s0, lhs.s1, lhse);
-/*	uint d2 = lhs.s1 - lhse; if (lhs.s1 < lhse) d2 += P2;	// mod P2
-	const uint u2 = MulMod_P2(d2, InvP3_P2);
-	const ulong n2 = lhse + u2 * (ulong)P3;
+// --- transform/inline ---
 
-	const uint n1 = (uint)(n2 % P1);
-	uint d1 = lhs.s0 - n1; if (lhs.s0 < n1) d1 += P1;		// mod P1
-	const uint u1 = MulMod_P1(d1, InvP2P3_P1);
-
-	int96 r = MAdd96_64_32_64(P2P3, u1, n2);
-
-	if (r.hi > P1P2P3hi / 2)
-	{
-		int96 P1P2P3; P1P2P3.lo = P1P2P3lo; P1P2P3.hi = P1P2P3hi;
-		r = Sub96(r, P1P2P3);
-	}
-
-	return r;*/
-}
-
-// ---------------------------------------------
-
-inline RNS ToRNS(const int i) { return (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0)); }
-
-inline int GetInt(const RNS lhs) { return (lhs.s0 > P1 / 2) ? lhs.s0 - P1 : lhs.s0; }
-
-inline RNS Add(const RNS lhs, const RNS rhs)
-{
-	RNS r; r.s0 = _addMod(lhs.s0, rhs.s0, P1);
-	r.s1 = _addMod(lhs.s1, rhs.s1, P2);
-/*	RNS r = lhs + rhs;
-	if (r.s0 >= P1) r.s0 -= P1;
-	if (r.s1 >= P2) r.s1 -= P2;*/
-	return r;
-}
-
-inline RNS Sub(const RNS lhs, const RNS rhs)
-{
-	RNS r; r.s0 = _subMod(lhs.s0, rhs.s0, P1);
-	r.s1 = _subMod(lhs.s1, rhs.s1, P2);
-
-/*	RNS r = lhs - rhs;
-	if (lhs.s0 < rhs.s0) r.s0 += P1;
-	if (lhs.s1 < rhs.s1) r.s1 += P2;*/
-	return r;
-}
-
-inline RNS Mul(const RNS lhs, const RNS rhs)
-{
-	return (RNS)(MulMod_P1(lhs.s0, rhs.s0), MulMod_P2(lhs.s1, rhs.s1));
-}
-
-inline RNS Sqr(const RNS lhs) { return Mul(lhs, lhs); }
-
-inline RNS MulW(const RNS lhs, const RNS_W w)
-{
-	return (RNS)(MulMod_P1(lhs.s0, w.s0), MulMod_P2(lhs.s1, w.s1));
-}
-
-// ---------------------------------------------
-
-inline RNSe ToRNSe(const int i) { return (RNSe)(i) + ((i < 0) ? (RNSe)(P3) : (RNSe)(0)); }
-
-inline RNSe Adde(const RNSe lhs, const RNSe rhs)
-{
-	return _addMod(lhs, rhs, P3);
-/*	RNSe r = lhs + rhs;
-	if (r >= P3) r -= P3;
-	return r;*/
-}
-
-inline RNSe Sube(const RNSe lhs, const RNSe rhs)
-{
-	return _subMod(lhs, rhs, P3);
-	/*RNSe r = lhs - rhs;
-	if (lhs < rhs) r += P3;
-	return r;*/
-}
-
-inline RNSe Mule(const RNSe lhs, const RNSe rhs)
-{
-	return (RNSe)(MulMod_P3(lhs, rhs));
-}
-
-inline RNSe Sqre(const RNSe lhs) { return Mule(lhs, lhs); }
-
-inline RNSe MulWe(const RNSe lhs, const RNS_We w)
-{
-	return (RNSe)(MulMod_P3(lhs, w));
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-inline void Forward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
+inline void forward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)
 {
 	__global const RNS_W * restrict const w_j = &w[j];
@@ -297,15 +164,15 @@ inline void Forward_4(const size_t m, __local RNS * restrict const Z, __local RN
 	__global const RNS_We * restrict const we_j = &we[j];
 	const RNS_We w1e = we_j[0], w2e = we_j[j], w3e = we_j[j + 1];
 	barrier(CLK_LOCAL_MEM_FENCE);
-	const RNS u0 = Z[0 * m], u2 = MulW(Z[2 * m], w1), u1 = Z[1 * m], u3 = MulW(Z[3 * m], w1);
-	const RNSe u0e = Ze[0 * m], u2e = MulWe(Ze[2 * m], w1e), u1e = Ze[1 * m], u3e = MulWe(Ze[3 * m], w1e);
-	const RNS v0 = Add(u0, u2), v2 = Sub(u0, u2), v1 = MulW(Add(u1, u3), w2), v3 = MulW(Sub(u1, u3), w3);
-	const RNSe v0e = Adde(u0e, u2e), v2e = Sube(u0e, u2e), v1e = MulWe(Adde(u1e, u3e), w2e), v3e = MulWe(Sube(u1e, u3e), w3e);
-	Z[0 * m] = Add(v0, v1); Z[1 * m] = Sub(v0, v1); Z[2 * m] = Add(v2, v3); Z[3 * m] = Sub(v2, v3);
-	Ze[0 * m] = Adde(v0e, v1e); Ze[1 * m] = Sube(v0e, v1e); Ze[2 * m] = Adde(v2e, v3e); Ze[3 * m] = Sube(v2e, v3e);
+	const RNS u0 = Z[0 * m], u2 = mulW(Z[2 * m], w1), u1 = Z[1 * m], u3 = mulW(Z[3 * m], w1);
+	const RNSe u0e = Ze[0 * m], u2e = mulWe(Ze[2 * m], w1e), u1e = Ze[1 * m], u3e = mulWe(Ze[3 * m], w1e);
+	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
+	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);
+	Z[0 * m] = add(v0, v1); Z[1 * m] = sub(v0, v1); Z[2 * m] = add(v2, v3); Z[3 * m] = sub(v2, v3);
+	Ze[0 * m] = adde(v0e, v1e); Ze[1 * m] = sube(v0e, v1e); Ze[2 * m] = adde(v2e, v3e); Ze[3 * m] = sube(v2e, v3e);
 }
 
-inline void Forward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
+inline void forward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)
 {
@@ -314,16 +181,16 @@ inline void Forward_4i(const size_t ml, __local RNS * restrict const Z, __local 
 	__global const RNS_We * restrict const we_j = &we[j];
 	const RNS_We w1e = we_j[0], w2e = we_j[j], w3e = we_j[j + 1];
 	__global const RNS * const z2mg = &z[2 * mg];
-	const RNS u0 = z[0], u2 = MulW(z2mg[0], w1), u1 = z[mg], u3 = MulW(z2mg[mg], w1);
+	const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);
 	__global const RNSe * const z2mge = &ze[2 * mg];
-	const RNSe u0e = ze[0], u2e = MulWe(z2mge[0], w1e), u1e = ze[mg], u3e = MulWe(z2mge[mg], w1e);
-	const RNS v0 = Add(u0, u2), v2 = Sub(u0, u2), v1 = MulW(Add(u1, u3), w2), v3 = MulW(Sub(u1, u3), w3);
-	const RNSe v0e = Adde(u0e, u2e), v2e = Sube(u0e, u2e), v1e = MulWe(Adde(u1e, u3e), w2e), v3e = MulWe(Sube(u1e, u3e), w3e);
-	Z[0 * ml] = Add(v0, v1); Z[1 * ml] = Sub(v0, v1); Z[2 * ml] = Add(v2, v3); Z[3 * ml] = Sub(v2, v3);
-	Ze[0 * ml] = Adde(v0e, v1e); Ze[1 * ml] = Sube(v0e, v1e); Ze[2 * ml] = Adde(v2e, v3e); Ze[3 * ml] = Sube(v2e, v3e);
+	const RNSe u0e = ze[0], u2e = mulWe(z2mge[0], w1e), u1e = ze[mg], u3e = mulWe(z2mge[mg], w1e);
+	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
+	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);
+	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);
+	Ze[0 * ml] = adde(v0e, v1e); Ze[1 * ml] = sube(v0e, v1e); Ze[2 * ml] = adde(v2e, v3e); Ze[3 * ml] = sube(v2e, v3e);
 }
 
-inline void Forward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,
+inline void forward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,
 	const size_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)
 {
@@ -332,17 +199,17 @@ inline void Forward_4o(const size_t mg, __global RNS * restrict const z, __globa
 	__global const RNS_We * restrict const we_j = &we[j];
 	const RNS_We w1e = we_j[0], w2e = we_j[j], w3e = we_j[j + 1];
 	barrier(CLK_LOCAL_MEM_FENCE);
-	const RNS u0 = Z[0 * ml], u2 = MulW(Z[2 * ml], w1), u1 = Z[1 * ml], u3 = MulW(Z[3 * ml], w1);
-	const RNSe u0e = Ze[0 * ml], u2e = MulWe(Ze[2 * ml], w1e), u1e = Ze[1 * ml], u3e = MulWe(Ze[3 * ml], w1e);
-	const RNS v0 = Add(u0, u2), v2 = Sub(u0, u2), v1 = MulW(Add(u1, u3), w2), v3 = MulW(Sub(u1, u3), w3);
-	const RNSe v0e = Adde(u0e, u2e), v2e = Sube(u0e, u2e), v1e = MulWe(Adde(u1e, u3e), w2e), v3e = MulWe(Sube(u1e, u3e), w3e);
+	const RNS u0 = Z[0 * ml], u2 = mulW(Z[2 * ml], w1), u1 = Z[1 * ml], u3 = mulW(Z[3 * ml], w1);
+	const RNSe u0e = Ze[0 * ml], u2e = mulWe(Ze[2 * ml], w1e), u1e = Ze[1 * ml], u3e = mulWe(Ze[3 * ml], w1e);
+	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
+	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);
 	__global RNS * const z2mg = &z[2 * mg];
-	z[0] = Add(v0, v1); z[mg] = Sub(v0, v1); z2mg[0] = Add(v2, v3); z2mg[mg] = Sub(v2, v3);
+	z[0] = add(v0, v1); z[mg] = sub(v0, v1); z2mg[0] = add(v2, v3); z2mg[mg] = sub(v2, v3);
 	__global RNSe * const z2mge = &ze[2 * mg];
-	ze[0] = Adde(v0e, v1e); ze[mg] = Sube(v0e, v1e); z2mge[0] = Adde(v2e, v3e); z2mge[mg] = Sube(v2e, v3e);
+	ze[0] = adde(v0e, v1e); ze[mg] = sube(v0e, v1e); z2mge[0] = adde(v2e, v3e); z2mge[mg] = sube(v2e, v3e);
 }
 
-inline void Backward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
+inline void backward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)
 {
 	__global const RNS_W * restrict const wi_j = &wi[j];
@@ -352,13 +219,13 @@ inline void Backward_4(const size_t m, __local RNS * restrict const Z, __local R
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const RNS u0 = Z[0 * m], u1 = Z[1 * m], u2 = Z[2 * m], u3 = Z[3 * m];
 	const RNSe u0e = Ze[0 * m], u1e = Ze[1 * m], u2e = Ze[2 * m], u3e = Ze[3 * m];
-	const RNS v0 = Add(u0, u1), v1 = MulW(Sub(u0, u1), wi2), v2 = Add(u2, u3), v3 = MulW(Sub(u2, u3), wi3);
-	const RNSe v0e = Adde(u0e, u1e), v1e = MulWe(Sube(u0e, u1e), wi2e), v2e = Adde(u2e, u3e), v3e = MulWe(Sube(u2e, u3e), wi3e);
-	Z[0 * m] = Add(v0, v2); Z[2 * m] = MulW(Sub(v0, v2), wi1); Z[1 * m] = Add(v1, v3); Z[3 * m] = MulW(Sub(v1, v3), wi1);
-	Ze[0 * m] = Adde(v0e, v2e); Ze[2 * m] = MulWe(Sube(v0e, v2e), wi1e); Ze[1 * m] = Adde(v1e, v3e); Ze[3 * m] = MulWe(Sube(v1e, v3e), wi1e);
+	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);
+	const RNSe v0e = adde(u0e, u1e), v1e = mulWe(sube(u0e, u1e), wi2e), v2e = adde(u2e, u3e), v3e = mulWe(sube(u2e, u3e), wi3e);
+	Z[0 * m] = add(v0, v2); Z[2 * m] = mulW(sub(v0, v2), wi1); Z[1 * m] = add(v1, v3); Z[3 * m] = mulW(sub(v1, v3), wi1);
+	Ze[0 * m] = adde(v0e, v2e); Ze[2 * m] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * m] = adde(v1e, v3e); Ze[3 * m] = mulWe(sube(v1e, v3e), wi1e);
 }
 
-inline void Backward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
+inline void backward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,
 	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)
 {
@@ -370,13 +237,13 @@ inline void Backward_4i(const size_t ml, __local RNS * restrict const Z, __local
 	const RNS u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];
 	__global const RNSe * const z2mge = &ze[2 * mg];
 	const RNSe u0e = ze[0], u1e = ze[mg], u2e = z2mge[0], u3e = z2mge[mg];
-	const RNS v0 = Add(u0, u1), v1 = MulW(Sub(u0, u1), wi2), v2 = Add(u2, u3), v3 = MulW(Sub(u2, u3), wi3);
-	const RNSe v0e = Adde(u0e, u1e), v1e = MulWe(Sube(u0e, u1e), wi2e), v2e = Adde(u2e, u3e), v3e = MulWe(Sube(u2e, u3e), wi3e);
-	Z[0 * ml] = Add(v0, v2); Z[2 * ml] = MulW(Sub(v0, v2), wi1); Z[1 * ml] = Add(v1, v3); Z[3 * ml] = MulW(Sub(v1, v3), wi1);
-	Ze[0 * ml] = Adde(v0e, v2e); Ze[2 * ml] = MulWe(Sube(v0e, v2e), wi1e); Ze[1 * ml] = Adde(v1e, v3e); Ze[3 * ml] = MulWe(Sube(v1e, v3e), wi1e);
+	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);
+	const RNSe v0e = adde(u0e, u1e), v1e = mulWe(sube(u0e, u1e), wi2e), v2e = adde(u2e, u3e), v3e = mulWe(sube(u2e, u3e), wi3e);
+	Z[0 * ml] = add(v0, v2); Z[2 * ml] = mulW(sub(v0, v2), wi1); Z[1 * ml] = add(v1, v3); Z[3 * ml] = mulW(sub(v1, v3), wi1);
+	Ze[0 * ml] = adde(v0e, v2e); Ze[2 * ml] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * ml] = adde(v1e, v3e); Ze[3 * ml] = mulWe(sube(v1e, v3e), wi1e);
 }
 
-inline void Backward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,
+inline void backward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,
 	const size_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,
 	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)
 {
@@ -387,42 +254,42 @@ inline void Backward_4o(const size_t mg, __global RNS * restrict const z, __glob
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const RNS u0 = Z[0 * ml], u1 = Z[1 * ml], u2 = Z[2 * ml], u3 = Z[3 * ml];
 	const RNSe u0e = Ze[0 * ml], u1e = Ze[1 * ml], u2e = Ze[2 * ml], u3e = Ze[3 * ml];
-	const RNS v0 = Add(u0, u1), v1 = MulW(Sub(u0, u1), wi2), v2 = Add(u2, u3), v3 = MulW(Sub(u2, u3), wi3);
-	const RNSe v0e = Adde(u0e, u1e), v1e = MulWe(Sube(u0e, u1e), wi2e), v2e = Adde(u2e, u3e), v3e = MulWe(Sube(u2e, u3e), wi3e);
+	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);
+	const RNSe v0e = adde(u0e, u1e), v1e = mulWe(sube(u0e, u1e), wi2e), v2e = adde(u2e, u3e), v3e = mulWe(sube(u2e, u3e), wi3e);
 	__global RNS * const z2mg = &z[2 * mg];
-	z[0] = Add(v0, v2); z2mg[0] = MulW(Sub(v0, v2), wi1); z[mg] = Add(v1, v3); z2mg[mg] = MulW(Sub(v1, v3), wi1);
+	z[0] = add(v0, v2); z2mg[0] = mulW(sub(v0, v2), wi1); z[mg] = add(v1, v3); z2mg[mg] = mulW(sub(v1, v3), wi1);
 	__global RNSe * const z2mge = &ze[2 * mg];
-	ze[0] = Adde(v0e, v2e); z2mge[0] = MulWe(Sube(v0e, v2e), wi1e); ze[mg] = Adde(v1e, v3e); z2mge[mg] = MulWe(Sube(v1e, v3e), wi1e);
+	ze[0] = adde(v0e, v2e); z2mge[0] = mulWe(sube(v0e, v2e), wi1e); ze[mg] = adde(v1e, v3e); z2mge[mg] = mulWe(sube(v1e, v3e), wi1e);
 }
 
-inline void Square_22_e(__local RNS * restrict const Z, __local RNSe * restrict const Ze, const RNS_W w0, const RNS_We w0e)
+inline void square_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze, const RNS_W w0, const RNS_We w0e)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const RNS u0 = Z[0], u1 = Z[1], u2 = Z[2], u3 = Z[3];
 	const RNSe u0e = Ze[0], u1e = Ze[1], u2e = Ze[2], u3e = Ze[3];
-	Z[0] = Add(Sqr(u0), Sqr(MulW(u1, w0))); Ze[0] = Adde(Sqre(u0e), Sqre(MulWe(u1e, w0e)));
-	Z[1] = Mul(Add(u0, u0), u1); Ze[1] = Mule(Adde(u0e, u0e), u1e);
-	Z[2] = Sub(Sqr(u2), Sqr(MulW(u3, w0))); Ze[2] = Sube(Sqre(u2e), Sqre(MulWe(u3e, w0e)));
-	Z[3] = Mul(Add(u2, u2), u3); Ze[3] = Mule(Adde(u2e, u2e), u3e);
+	Z[0] = add(sqr(u0), sqr(mulW(u1, w0))); Ze[0] = adde(sqre(u0e), sqre(mulWe(u1e, w0e)));
+	Z[1] = mul(add(u0, u0), u1); Ze[1] = mule(adde(u0e, u0e), u1e);
+	Z[2] = sub(sqr(u2), sqr(mulW(u3, w0))); Ze[2] = sube(sqre(u2e), sqre(mulWe(u3e, w0e)));
+	Z[3] = mul(add(u2, u2), u3); Ze[3] = mule(adde(u2e, u2e), u3e);
 }
 
-inline void Square_4_e(__local RNS * restrict const Z, __local RNSe * restrict const Ze,
+inline void square_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	const RNS_W w1, const RNS_W w1i, const RNS_W w0,  const RNS_We w1e, const RNS_We w1ie, const RNS_We w0e)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
-	const RNS u0 = Z[0], u2 = MulW(Z[2], w1), u1 = Z[1], u3 = MulW(Z[3], w1);
-	const RNSe u0e = Ze[0], u2e = MulWe(Ze[2], w1e), u1e = Ze[1], u3e = MulWe(Ze[3], w1e);
-	const RNS v0 = Add(u0, u2), v2 = Sub(u0, u2), v1 = Add(u1, u3), v3 = Sub(u1, u3);
-	const RNSe v0e = Adde(u0e, u2e), v2e = Sube(u0e, u2e), v1e = Adde(u1e, u3e), v3e = Sube(u1e, u3e);
-	const RNS s0 = Add(Sqr(v0), Sqr(MulW(v1, w0))), s1 = Mul(Add(v0, v0), v1);
-	const RNSe s0e = Adde(Sqre(v0e), Sqre(MulWe(v1e, w0e))), s1e = Mule(Adde(v0e, v0e), v1e);
-	const RNS s2 = Sub(Sqr(v2), Sqr(MulW(v3, w0))), s3 = Mul(Add(v2, v2), v3);
-	const RNSe s2e = Sube(Sqre(v2e), Sqre(MulWe(v3e, w0e))), s3e = Mule(Adde(v2e, v2e), v3e);
-	Z[0] = Add(s0, s2); Z[2] = MulW(Sub(s0, s2), w1i); Z[1] = Add(s1, s3); Z[3] = MulW(Sub(s1, s3), w1i);
-	Ze[0] = Adde(s0e, s2e); Ze[2] = MulWe(Sube(s0e, s2e), w1ie); Ze[1] = Adde(s1e, s3e); Ze[3] = MulWe(Sube(s1e, s3e), w1ie);
+	const RNS u0 = Z[0], u2 = mulW(Z[2], w1), u1 = Z[1], u3 = mulW(Z[3], w1);
+	const RNSe u0e = Ze[0], u2e = mulWe(Ze[2], w1e), u1e = Ze[1], u3e = mulWe(Ze[3], w1e);
+	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = add(u1, u3), v3 = sub(u1, u3);
+	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = adde(u1e, u3e), v3e = sube(u1e, u3e);
+	const RNS s0 = add(sqr(v0), sqr(mulW(v1, w0))), s1 = mul(add(v0, v0), v1);
+	const RNSe s0e = adde(sqre(v0e), sqre(mulWe(v1e, w0e))), s1e = mule(adde(v0e, v0e), v1e);
+	const RNS s2 = sub(sqr(v2), sqr(mulW(v3, w0))), s3 = mul(add(v2, v2), v3);
+	const RNSe s2e = sube(sqre(v2e), sqre(mulWe(v3e, w0e))), s3e = mule(adde(v2e, v2e), v3e);
+	Z[0] = add(s0, s2); Z[2] = mulW(sub(s0, s2), w1i); Z[1] = add(s1, s3); Z[3] = mulW(sub(s1, s3), w1i);
+	Ze[0] = adde(s0e, s2e); Ze[2] = mulWe(sube(s0e, s2e), w1ie); Ze[1] = adde(s1e, s3e); Ze[3] = mulWe(sube(s1e, s3e), w1ie);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// --- transform ---
 
 #define BLK32	8
 #define BLK64	4
@@ -433,7 +300,7 @@ inline void Square_4_e(__local RNS * restrict const Z, __local RNSe * restrict c
 #define CHUNK256	4
 #define CHUNK1024	2
 
-// ---------------------------------------------
+// -----------------
 
 #define DECLARE_VAR(B_N, CHUNK_N) \
 	__local RNS Z[4 * B_N * CHUNK_N]; \
@@ -470,120 +337,126 @@ inline void Square_4_e(__local RNS * restrict const Z, __local RNSe * restrict c
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_FORWARD(); \
 	\
-	Forward_4i(B_N * CHUNK_N, &Z[i], &Ze[i], B_N << lm, zi, zie, w, we, sj / B_N);
+	forward_4i(B_N * CHUNK_N, &Z[i], &Ze[i], B_N << lm, zi, zie, w, we, sj / B_N);
 
 #define FORWARD_O(CHUNK_N) \
-	Forward_4o((size_t)1 << lm, zo, zoe, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], w, we, sj / 1);
+	forward_4o((size_t)1 << lm, zo, zoe, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], w, we, sj / 1);
 
 #define BACKWARD_I(B_N, CHUNK_N) \
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_BACKWARD(); \
 	\
-	Backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (size_t)1 << lm, zi, zie, wi, wie, sj / 1); \
+	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (size_t)1 << lm, zi, zie, wi, wie, sj / 1); \
 
 #define BACKWARD_O(B_N, CHUNK_N) \
-	Backward_4o(B_N << lm, zo, zoe, B_N * CHUNK_N, &Z[i], &Ze[i], wi, wie, sj / B_N);
+	backward_4o(B_N << lm, zo, zoe, B_N * CHUNK_N, &Z[i], &Ze[i], wi, wie, sj / B_N);
 
-// ---------------------------------------------
+// -----------------
 
 #define B_64	(64 / 4)
 
 __kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
-void Forward64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void forward64(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	 __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	FORWARD_I(B_64, CHUNK64);
 
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], w, we, sj / 4);
+	forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], w, we, sj / 4);
 
 	FORWARD_O(CHUNK64);
 }
 
 __kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
-void Backward64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void backward64(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	BACKWARD_I(B_64, CHUNK64);
 
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Backward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], wi, wie, sj / 4);
+	backward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], wi, wie, sj / 4);
 
 	BACKWARD_O(B_64, CHUNK64);
 }
 
-// ---------------------------------------------
+// -----------------
 
 #define B_256	(256 / 4)
 
 __kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
-void Forward256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void forward256(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	FORWARD_I(B_256, CHUNK256);
 
 	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	Forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], w, we, sj / 16);
+	forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], w, we, sj / 16);
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], w, we, sj / 4);
+	forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], w, we, sj / 4);
 
 	FORWARD_O(CHUNK256);
 }
 
 __kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
-void Backward256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void backward256(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	BACKWARD_I(B_256, CHUNK256);
 
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Backward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], wi, wie, sj / 4);
+	backward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], wi, wie, sj / 4);
 	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	Backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], wi, wie, sj / 16);
+	backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], wi, wie, sj / 16);
 
 	BACKWARD_O(B_256, CHUNK256);
 }
 
-// ---------------------------------------------
+// -----------------
 
 #define B_1024	(1024 / 4)
 
 __kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
-void Forward1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void forward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	FORWARD_I(B_1024, CHUNK1024);
 
 	const size_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
-	Forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], w, we, sj / 64);
+	forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], w, we, sj / 64);
 	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	Forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], w, we, sj / 16);
+	forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], w, we, sj / 16);
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], w, we, sj / 4);
+	forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], w, we, sj / 4);
 
 	FORWARD_O(CHUNK1024);
 }
 
 __kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
-void Backward1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
+void backward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
 	const unsigned int lm, const unsigned int s)
 {
 	BACKWARD_I(B_1024, CHUNK1024);
 
 	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	Backward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], wi, wie, sj / 4);
+	backward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], wi, wie, sj / 4);
 	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	Backward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], wi, wie, sj / 16);
+	backward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], wi, wie, sj / 16);
 	const size_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);
-	Backward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], wi, wie, sj / 64);
+	backward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], wi, wie, sj / 64);
 
 	BACKWARD_O(B_1024, CHUNK1024);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// -----------------
 
 __kernel __attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
-void Square32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[32 * BLK32];
 	__local RNSe Ze[32 * BLK32];
@@ -609,17 +482,17 @@ void Square32(__global RNS * restrict const z, __global RNSe * restrict const ze
 	__local RNS * const Z4 = &Z32[4 * i8];
 	__local RNSe * const Z4e = &Z32e[4 * i8];
 
-	Forward_4i(8, Zi8, Zi8e, 8, zk, zke, w, we, j / 8);
-	Forward_4(2, Zi2, Zi2e, w, we, j / 2);
-	Square_22_e(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
+	forward_4i(8, Zi8, Zi8e, 8, zk, zke, w, we, j / 8);
+	forward_4(2, Zi2, Zi2e, w, we, j / 2);
+	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
-	Backward_4o(8, zk, zke, 8, Zi8, Zi8e, wi, wie, j / 8);
+	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
+	backward_4o(8, zk, zke, 8, Zi8, Zi8e, wi, wie, j / 8);
 }
 
 __kernel __attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
-void Square64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[64 * BLK64];
 	__local RNSe Ze[64 * BLK64];
@@ -645,17 +518,17 @@ void Square64(__global RNS * restrict const z, __global RNSe * restrict const ze
 	__local RNS * const Z4 = &Z64[4 * i16];
 	__local RNSe * const Z4e = &Z64e[4 * i16];
 
-	Forward_4i(16, Zi16, Zi16e, 16, zk, zke, w, we, j / 16);
-	Forward_4(4, Zi4, Zi4e, w, we, j / 4);
+	forward_4i(16, Zi16, Zi16e, 16, zk, zke, w, we, j / 16);
+	forward_4(4, Zi4, Zi4e, w, we, j / 4);
 	__global const RNS_W * const wi = &w[4 * n_4];
 	__global const RNS_We * const wie = &we[4 * n_4];
-	Square_4_e(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
-	Backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
-	Backward_4o(16, zk, zke, 16, Zi16, Zi16e, wi, wie, j / 16);
+	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
+	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
+	backward_4o(16, zk, zke, 16, Zi16, Zi16e, wi, wie, j / 16);
 }
 
 __kernel __attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
-void Square128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[128 * BLK128];
 	__local RNSe Ze[128 * BLK128];
@@ -684,19 +557,19 @@ void Square128(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS * const Z4 = &Z128[4 * i32];
 	__local RNSe * const Z4e = &Z128e[4 * i32];
 
-	Forward_4i(32, Zi32, Zi32e, 32, zk, zke, w, we, j / 32);
-	Forward_4(8, Zi8, Zi8e, w, we, j / 8);
-	Forward_4(2, Zi2, Zi2e, w, we, j / 2);
-	Square_22_e(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
+	forward_4i(32, Zi32, Zi32e, 32, zk, zke, w, we, j / 32);
+	forward_4(8, Zi8, Zi8e, w, we, j / 8);
+	forward_4(2, Zi2, Zi2e, w, we, j / 2);
+	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
-	Backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
-	Backward_4o(32, zk, zke, 32, Zi32, Zi32e, wi, wie, j / 32);
+	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
+	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
+	backward_4o(32, zk, zke, 32, Zi32, Zi32e, wi, wie, j / 32);
 }
 
 __kernel __attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
-void Square256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[256 * BLK256];
 	__local RNSe Ze[256 * BLK256];
@@ -725,19 +598,19 @@ void Square256(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS * const Z4 = &Z256[4 * i64];
 	__local RNSe * const Z4e = &Z256e[4 * i64];
 
-	Forward_4i(64, Zi64, Zi64e, 64, zk, zke, w, we, j / 64);
-	Forward_4(16, Zi16, Zi16e, w, we, j / 16);
-	Forward_4(4, Zi4, Zi4e, w, we, j / 4);
+	forward_4i(64, Zi64, Zi64e, 64, zk, zke, w, we, j / 64);
+	forward_4(16, Zi16, Zi16e, w, we, j / 16);
+	forward_4(4, Zi4, Zi4e, w, we, j / 4);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Square_4_e(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
-	Backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
-	Backward_4(16, Zi16, Zi16e, wi, wie, j / 16);
-	Backward_4o(64, zk, zke, 64, Zi64, Zi64e, wi, wie, j / 64);
+	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
+	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
+	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);
+	backward_4o(64, zk, zke, 64, Zi64, Zi64e, wi, wie, j / 64);
 }
 
 __kernel __attribute__((reqd_work_group_size(512 / 4, 1, 1)))
-void Square512(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square512(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[512];
 	__local RNSe Ze[512];
@@ -762,21 +635,21 @@ void Square512(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS * const Z4 = &Z[4 * i128];
 	__local RNSe * const Z4e = &Ze[4 * i128];
 
-	Forward_4i(128, Zi128, Zi128e, 128, zk, zke, w, we, j / 128);
-	Forward_4(32, Zi32, Zi32e, w, we, j / 32);
-	Forward_4(8, Zi8, Zi8e, w, we, j / 8);
-	Forward_4(2, Zi2, Zi2e, w, we, j / 2);
-	Square_22_e(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
+	forward_4i(128, Zi128, Zi128e, 128, zk, zke, w, we, j / 128);
+	forward_4(32, Zi32, Zi32e, w, we, j / 32);
+	forward_4(8, Zi8, Zi8e, w, we, j / 8);
+	forward_4(2, Zi2, Zi2e, w, we, j / 2);
+	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
-	Backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
-	Backward_4(32, Zi32, Zi32e, wi, wie, j / 32);
-	Backward_4o(128, zk, zke, 128, Zi128, Zi128e, wi, wie, j / 128);
+	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
+	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
+	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);
+	backward_4o(128, zk, zke, 128, Zi128, Zi128e, wi, wie, j / 128);
 }
 
 __kernel __attribute__((reqd_work_group_size(1024 / 4, 1, 1)))
-void Square1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[1024];
 	__local RNSe Ze[1024];
@@ -801,21 +674,21 @@ void Square1024(__global RNS * restrict const z, __global RNSe * restrict const 
 	__local RNS * const Z4 = &Z[4 * i256];
 	__local RNSe * const Z4e = &Ze[4 * i256];
 
-	Forward_4i(256, Zi256, Zi256e, 256, zk, zke, w, we, j / 256);
-	Forward_4(64, Zi64, Zi64e, w, we, j / 64);
-	Forward_4(16, Zi16, Zi16e, w, we, j / 16);
-	Forward_4(4, Zi4, Zi4e, w, we, j / 4);
+	forward_4i(256, Zi256, Zi256e, 256, zk, zke, w, we, j / 256);
+	forward_4(64, Zi64, Zi64e, w, we, j / 64);
+	forward_4(16, Zi16, Zi16e, w, we, j / 16);
+	forward_4(4, Zi4, Zi4e, w, we, j / 4);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Square_4_e(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
-	Backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
-	Backward_4(16, Zi16, Zi16e, wi, wie, j / 16);
-	Backward_4(64, Zi64, Zi64e, wi, wie, j / 64);
-	Backward_4o(256, zk, zke, 256, Zi256, Zi256e, wi, wie, j / 256);
+	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);
+	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);
+	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);
+	backward_4(64, Zi64, Zi64e, wi, wie, j / 64);
+	backward_4o(256, zk, zke, 256, Zi256, Zi256e, wi, wie, j / 256);
 }
 
 __kernel // __attribute__((reqd_work_group_size(2048 / 4, 1, 1)))
-void Square2048(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
+void square2048(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
 	__local RNS Z[2048];
 	__local RNSe Ze[2048];
@@ -843,87 +716,109 @@ void Square2048(__global RNS * restrict const z, __global RNSe * restrict const 
 	__local RNS * const Z4 = &Z[4 * i512];
 	__local RNSe * const Z4e = &Ze[4 * i512];
 
-	Forward_4i(512, Zi512, Zi512e, 512, zk, zke, w, we, j / 512);
-	Forward_4(128, Zi128, Zi128e, w, we, j / 128);
-	Forward_4(32, Zi32, Zi32e, w, we, j / 32);
-	Forward_4(8, Zi8, Zi8e, w, we, j / 8);
-	Forward_4(2, Zi2, Zi2e, w, we, j / 2);
-	Square_22_e(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
+	forward_4i(512, Zi512, Zi512e, 512, zk, zke, w, we, j / 512);
+	forward_4(128, Zi128, Zi128e, w, we, j / 128);
+	forward_4(32, Zi32, Zi32e, w, we, j / 32);
+	forward_4(8, Zi8, Zi8e, w, we, j / 8);
+	forward_4(2, Zi2, Zi2e, w, we, j / 2);
+	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
-	Backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
-	Backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
-	Backward_4(32, Zi32, Zi32e, wi, wie, j / 32);
-	Backward_4(128, Zi128, Zi128e, wi, wie, j / 128);
-	Backward_4o(512, zk, zke, 512, Zi512, Zi512e, wi, wie, j / 512);
+	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);
+	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);
+	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);
+	backward_4(128, Zi128, Zi128e, wi, wie, j / 128);
+	backward_4o(512, zk, zke, 512, Zi512, Zi512e, wi, wie, j / 512);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// -----------------
 
-/*
-Barrett's reduction.
+inline uint barrett(const ulong a, const uint b, const uint b_inv, const int b_s, uint * a_p)
+{
+	// n = 31, alpha = 2^{n-2} = 2^29, s = r - 2, t = n + 1 = 32 => h = 1.
+	// b < 2^31, alpha = 2^29 => a < 2^29 b
+	// 2^{r-1} < b <= 2^r then a < 2^{r + 29} = 2^{s + 31} and (a >> s) < 2^31
+	// b_inv = [2^{s + 32} / b]
+	// b_inv < 2^{s + 32} / b < 2^{s + 32} / 2^{r-1} = 2^{s + 32} / 2^{s + 1} < 2^31
+	// Let h be the number of iterations in Barrett's reduction, we have h = [a / b] - [[a / 2^s] b_inv / 2^32].
+	// h = ([a/b] - a/b) + a/2^{s + 32} (2^{s + 32}/b - b_inv) + b_inv/2^32 (a/2^s - [a/2^s]) + ([a/2^s] b_inv / 2^32 - [[a/2^s] b_inv / 2^32])
+	// Then -1 + 0 + 0 + 0 < h < 0 + 1/2 (2^{s + 32}/b - b_inv) + b_inv/2^32 + 1,
+	// 0 <= h < 1 + 1/2 + 1/2 => h = 1.
 
-Let h be the number of iterations in the 'while loop': h = [x/b] - [x [2^64/b] / 2^64].
+	const uint d = mul_hi((uint)(a >> b_s), b_inv), r = (uint)a - d * b;
+	const bool o = (r >= b);
+	*a_p = o ? d + 1 : d;
+	return o ? r - b : r;
+}
 
-We have h = ([x/b] - x/b) + x/2^64 (2^64/b - [2^64/b]) + (x [2^64/b] / 2^64 - [x [2^64/b] / 2^64]).
-Then -1 + 0 + 0 < h < 0 + x/2^64 + 1,
-0 <= h < 1 + x/2^64.
+inline int reduce64(long * f, const uint b, const uint b_inv, const int b_s)
+{
+	// 1- t < 2^63 => t_h < 2^34. We must have t_h < 2^29 b => b > 32
+	// 2- t < 2^22 b^2 => t_h < b^2 / 2^7. If 2 <= b < 32 then t_h < 32^2 / 2^7 = 2^8 < 2^29 b
+	const ulong t = abs(*f);
+	const ulong t_h = t >> 29;
+	const uint t_l = (uint)t & ((1u << 29) - 1);
 
-*/
+	uint d_h, r_h = barrett(t_h, b, b_inv, b_s, &d_h);
+	uint d_l, r_l = barrett(((ulong)r_h << 29) | t_l, b, b_inv, b_s, &d_l);
+	const ulong d = ((ulong)d_h << 29) | d_l;
+
+	const bool s = (*f < 0);
+	*f = s ? -(long)d : (long)d;
+	return s ? -(int)r_l : (int)r_l;
+}
+
+inline int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)
+{
+	const uint96 t = int96_abs(*f);
+	const ulong t_h = ((ulong)t.s1 << (64 - 29)) | (t.s0 >> 29);
+	const uint t_l = (uint)t.s0 & ((1u << 29) - 1);
+
+	uint d_h, r_h = barrett(t_h, b, b_inv, b_s, &d_h);
+	uint d_l, r_l = barrett(((ulong)r_h << 29) | t_l, b, b_inv, b_s, &d_l);
+	const ulong d = ((ulong)d_h << 29) | d_l;
+
+	const bool s = int96_is_neg(*f);
+	*f = int96_set_si(s ? -(long)d : (long)d);
+	return s ? -(int)r_l : (int)r_l;
+}
 
 __kernel
-void BaseMod0(__global RNS * restrict const z, __global RNSe * restrict const ze,
-	__global long * restrict const c, __global unsigned int * restrict const bErr,
-	const int base, const long recBase, const unsigned int ln, const unsigned int blk, const int g)
+void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,
+	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)
 {
 	const size_t idx = get_global_id(0);
+	const unsigned int blk = abs(sblk);
 	__global RNS * restrict const zi = &z[blk * idx];
 	__global RNSe * restrict const zie = &ze[blk * idx];
 
 	prefetch(zi, (size_t)blk);
 	prefetch(zie, (size_t)blk);
 
-	const RNS norm = (RNS)(P1 - ((P1 - 1) >> (ln - 1)), P2 - ((P2 - 1) >> (ln - 1)));
-	const RNSe norme = (RNSe)(P3 - ((P3 - 1) >> (ln - 1)));
-	const long maxProd_32 = (long)max(mul_hi(base, base + 1), 1) << ln;
-
-	int96 f; f.lo = 0; f.hi = 0;
-	bool err = false;
+	int96 f = int96_set_si(0);
 
 	size_t j = 0;
 	do
 	{
-		const int96 l = GetLong_e(Mul(zi[j], norm), Mule(zie[j], norme));
-		f = Add96(f, Mul96_96_u32(l, g));
+		const RNS zj = zi[j];
+		int96 l = garner3(mul_P1(zj.s0, norm1), mul_P2(zj.s1, norm2), mul_P3(zie[j], norm3));
+		if (sblk < 0) l = int96_add(l, l);
+		f = int96_add(f, l);
 
-		// const int r = reduce96(&f, base, recBase, b_s);
+		const int r = reduce96(&f, b, b_inv, b_s);
 
-		const long d1 = MulHi64_96_u64(f, recBase);
-		const int96 r = Sub96(f, Mul96_64_u32(d1, base));
-		const long r64 = (long)r.lo;
+		zi[j] = toRNS(r); zie[j] = toRNSe(r);
 
-		const long d2 = mul_hi(r64, recBase);
-		const long r2 = r64 - d2 * base;
-		const int ri = (int)r2;
-		zi[j] = ToRNS(ri);
-		zie[j] = ToRNSe(ri);
-
-		const long l_32 = ((long)l.hi << 32) | (l.lo >> 32);
-		err |= (l_32 > maxProd_32) | (l_32 < -maxProd_32) | ((r.hi != 0) && (r.hi != -1)) | ((r.hi == 0) && (r64 < 0)) | ((r.hi == -1) && (r64 >= 0)) | (ri != r2);
-
-		const long d = d1 + d2;
-		f.lo = d; f.hi = (d < 0) ? -1 : 0;
 		++j;
 	} while (j != blk);
 
 	const size_t i = (idx + 1) & (get_global_size(0) - 1);
-	if (err) bErr[idx] = 1;
-	c[i] = (i == 0) ? -(long)f.lo : (long)f.lo;
+	c[i] = (i == 0) ? -(long)f.s0 : (long)f.s0;
 }
 
 __kernel
-void BaseMod1(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, 
-	const int base, const long recBase, const unsigned int blk)
+void normalize3b(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, 
+	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)
 {
 	const size_t idx = get_global_id(0);
 	__global RNS * restrict const zi = &z[blk * idx];
@@ -934,17 +829,14 @@ void BaseMod1(__global RNS * restrict const z, __global RNSe * restrict const ze
 	size_t j = 0;
 	do
 	{
-		f += GetInt(zi[j]);
-
-		const long d = mul_hi(f, recBase);
-		const long r = f - d * base;
-		zi[j] = ToRNS((int)r);
-		zie[j] = ToRNSe((int)r);
-		if (d == 0) return;
-		f = d;
+		f += geti_P1(zi[j].s0);
+		const int r = reduce64(&f, b, b_inv, b_s);
+		zi[j] = toRNS(r); zie[j] = toRNSe(r);
+		if (f == 0) return;
 		++j;
 	} while (j != blk - 1);
 
-	zi[blk - 1] = Add(zi[blk - 1], ToRNS((int)f));
-	zie[blk - 1] = Adde(zie[blk - 1], ToRNSe((int)f));
+	const int r = (int)f;
+	zi[blk - 1] = add(zi[blk - 1], toRNS(r));
+	zie[blk - 1] = adde(zie[blk - 1], toRNSe(r));
 }

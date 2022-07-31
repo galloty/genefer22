@@ -78,4 +78,4 @@
 #define CL_USE_DEPRECATED_OPENCL_1_0_APIS
 #endif
 
-#endif  /* __CL_VERSION_H */
+#endif /* __CL_VERSION_H */

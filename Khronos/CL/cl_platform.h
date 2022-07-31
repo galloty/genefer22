@@ -1406,4 +1406,4 @@ typedef union
     #pragma warning( pop )
 #endif
 
-#endif  /* __CL_PLATFORM_H  */
+#endif /* __CL_PLATFORM_H  */

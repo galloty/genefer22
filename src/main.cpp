@@ -11,14 +11,16 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <vector>
 
-#include "genefer.h"
-#include "pio.h"
-
 #if defined (_WIN32)
 #include <Windows.h>
 #else
 #include <signal.h>
 #endif
+
+#if defined (GPU)
+#include "ocl.h"
+#endif
+#include "genefer.h"
 
 class application
 {
@@ -152,6 +154,10 @@ public:
 #endif
 		pio::getInstance().setBoinc(bBoinc);
 
+#if defined(GPU)
+		cl_platform_id boinc_platform_id = 0;
+		cl_device_id boinc_device_id = 0;
+#endif
 		if (bBoinc)
 		{
 			const int retval = boinc_init();
@@ -160,6 +166,17 @@ public:
 				std::ostringstream ss; ss << "boinc_init returned " << retval;
 				throw std::runtime_error(ss.str());
 			}
+#if defined(BOINC) && defined(GPU)
+			if (!boinc_is_standalone())
+			{
+				const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
+				if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
+				{
+					std::ostringstream ss; ss << std::endl << "error: boinc_get_opencl_ids() failed err = " << err;
+					throw std::runtime_error(ss.str());
+				}
+			}
+#endif
 		}
 
 		// if -v or -V then print header to stderr and exit
@@ -178,6 +195,10 @@ public:
 		if (args.empty())
 		{
 			pio::print(usage());
+#if defined (GPU)
+			platform pfm;
+			if (pfm.displayDevices() == 0) throw std::runtime_error("No OpenCL device");
+#endif
 			// return;
 		}
 
@@ -233,6 +254,9 @@ public:
 
 		genefer & g = genefer::getInstance();
 		g.setBoinc(bBoinc);
+#if defined(GPU)
+		g.setBoincParam(boinc_platform_id, boinc_device_id);
+#endif
 
 		if ((b != 0) && (n != 0))
 		{

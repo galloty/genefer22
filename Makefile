@@ -14,7 +14,7 @@ OBJS_CPU = main.o transform_sse2.o transform_sse4.o transform_avx.o transform_fm
 OBJS_GPU = maing.o transform_ocl.o
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/timer.h $(SRC_DIR)/pio.h  $(SRC_DIR)/boinc.h
 DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/fp16_80.h
-DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h
+DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/ocl.h
 
 EXEC_CPU = $(BIN_DIR)/genefer22.exe
 EXEC_GPU = $(BIN_DIR)/genefer22g.exe
@@ -30,7 +30,7 @@ main.o : $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
 
 maing.o : $(SRC_DIR)/main.cpp $(DEPS_MAIN)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_sse2.o : $(SRC_DIR)/transform_sse2.cpp $(DEPS_TRANSFORM_CPU)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -mtune=core2 -c $< -o $@

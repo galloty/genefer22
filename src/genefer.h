@@ -14,8 +14,14 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 
 #include <gmp.h>
+#if !defined(GPU)
 #include <omp.h>
+#endif
 
+#include "pio.h"
+#if defined(GPU)
+#include "ocl.h"
+#endif
 #include "transform.h"
 #include "timer.h"
 
@@ -40,11 +46,22 @@ public:
 public:
 	void quit() { _quit = true; }
 	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
+#if defined(GPU)
+	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)
+	{
+		_boinc_platform_id = platform_id;
+		_boinc_device_id = device_id;
+	}
+#endif
 
 protected:
 	volatile bool _quit = false;
 private:
 	bool _isBoinc = false;
+#if defined(GPU)
+	cl_platform_id _boinc_platform_id = 0;
+	cl_device_id _boinc_device_id = 0;
+#endif
 	transform * _transform = nullptr;
 
 private:
@@ -52,7 +69,7 @@ private:
 	transform * createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 	{
 		deleteTransform();
-		_transform = transform::create_gpu(b, n, device, num_regs);
+		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id);
 		std::cout << "Using device " << device << "." << std::endl;
 		return _transform;
 	}
@@ -70,7 +87,7 @@ private:
 		}
 
 		std::string ttype;
-		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
+		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
 		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
 		return _transform;
 	}

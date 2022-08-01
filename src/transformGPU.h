@@ -11,8 +11,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 #include <fstream>
 
-#include "transform.h"
 #include "ocl.h"
+#include "transform.h"
 
 #include "ocl/kernel.h"
 
@@ -130,6 +130,462 @@ typedef RNSe	RNS_We;
 #define CHUNK256	4
 #define CHUNK1024	2
 
+class engine : public device
+{
+private:
+	const size_t _n;
+	const int _ln;
+	cl_mem _z = nullptr, _ze = nullptr, _w = nullptr, _we = nullptr, _c = nullptr;
+	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
+	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
+	cl_kernel _normalize3a = nullptr, _normalize3b = nullptr;
+	splitter * pSplit = nullptr;
+	size_t n3aLocalWS = 32, n3bLocalWS = 32, baseModBlk = 16, splitIndex = 0;
+
+public:
+	engine(const platform & platform, const size_t d, const int ln) : device(platform, d), _n(size_t(1) << ln), _ln(ln) {}
+	virtual ~engine() {}
+
+///////////////////////////////
+
+public:
+	void allocMemory()
+	{
+#if defined (ocl_debug)
+		std::ostringstream ss; ss << "Alloc gpu memory." << std::endl;
+		pio::display(ss.str());
+#endif
+		const size_t n = _n;
+		if (n != 0)
+		{
+			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
+			_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
+			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_W) * 2 * n);
+			_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_We) * 2 * n);
+			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long) * n / 4);
+		}
+	}
+
+	void releaseMemory()
+	{
+#if defined (ocl_debug)
+		std::ostringstream ss; ss << "Free gpu memory." << std::endl;
+		pio::display(ss.str());
+#endif
+		if (_n != 0)
+		{
+			_releaseBuffer(_z); _releaseBuffer(_ze);
+			_releaseBuffer(_w); _releaseBuffer(_we);
+			_releaseBuffer(_c);
+		}
+	}
+
+///////////////////////////////
+
+private:
+	cl_kernel createTransformKernel(const char * const kernelName)
+	{
+		cl_kernel kernel = _createKernel(kernelName);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_ze);
+		_setKernelArg(kernel, 2, sizeof(cl_mem), &_w);
+		_setKernelArg(kernel, 3, sizeof(cl_mem), &_we);
+		return kernel;
+	}
+
+	cl_kernel createNormalizeKernel(const char * const kernelName, const cl_uint b, const cl_uint b_inv, const cl_int b_s)
+	{
+		cl_kernel kernel = _createKernel(kernelName);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_ze);
+		_setKernelArg(kernel, 2, sizeof(cl_mem), &_c);
+		_setKernelArg(kernel, 3, sizeof(cl_uint), &b);
+		_setKernelArg(kernel, 4, sizeof(cl_uint), &b_inv);
+		_setKernelArg(kernel, 5, sizeof(cl_int), &b_s);
+		return kernel;
+	}
+
+public:
+	void createKernels(const uint32_t b)
+	{
+#if defined (ocl_debug)
+		std::ostringstream ss; ss << "Create ocl kernels." << std::endl;
+		pio::display(ss.str());
+#endif
+		_forward64 = createTransformKernel("forward64");
+		_backward64 = createTransformKernel("backward64");
+		_forward256 = createTransformKernel("forward256");
+		_backward256 = createTransformKernel("backward256");
+		_forward1024 = createTransformKernel("forward1024");
+		_backward1024 = createTransformKernel("backward1024");
+
+		_square32 = createTransformKernel("square32");
+		_square64 = createTransformKernel("square64");
+		_square128 = createTransformKernel("square128");
+		_square256 = createTransformKernel("square256");
+		_square512 = createTransformKernel("square512");
+		_square1024 = createTransformKernel("square1024");
+		_square2048 = createTransformKernel("square2048");
+
+		const cl_int b_s = cl_int(31 - __builtin_clz(b) - 1);
+		const cl_uint b_inv = cl_uint((uint64_t(1) << (b_s + 32)) / b);
+		_normalize3a = createNormalizeKernel("normalize3a", cl_uint(b), b_inv, b_s);
+		_normalize3b = createNormalizeKernel("normalize3b", cl_uint(b), b_inv, b_s);
+	}
+
+	void releaseKernels()
+	{
+#if defined (ocl_debug)
+		std::ostringstream ss; ss << "Release ocl kernels." << std::endl;
+		pio::display(ss.str());
+#endif
+		_releaseKernel(_forward64); _releaseKernel(_backward64);
+		_releaseKernel(_forward256); _releaseKernel(_backward256);
+		_releaseKernel(_forward1024); _releaseKernel(_backward1024);
+		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
+		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
+		_releaseKernel(_normalize3a); _releaseKernel(_normalize3b);
+	}
+
+///////////////////////////////
+
+	void readMemory_z(RNS * const zPtr, RNSe  * const zPtre)
+	{
+		const size_t n = _n;
+		_readBuffer(_z, zPtr, sizeof(RNS) * n);
+		_readBuffer(_ze, zPtre, sizeof(RNSe) * n);
+	}
+
+	void writeMemory_z(const RNS * const zPtr, const RNSe * const zPtre)
+	{
+		const size_t n = _n;
+		_writeBuffer(_z, zPtr, sizeof(RNS) * n);
+		_writeBuffer(_ze, zPtre, sizeof(RNSe) * n);
+	}
+
+	void writeMemory_w(const RNS_W * const wPtr, const RNS_We * const wPtre)
+	{
+		const size_t n = _n;
+		_writeBuffer(_w, wPtr, sizeof(RNS_W) * 2 * n);
+		_writeBuffer(_we, wPtre, sizeof(RNS_We) * 2 * n);
+	}
+
+///////////////////////////////
+
+private:
+	void forward64(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_forward64, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_forward64, 5, sizeof(cl_uint), &is);
+		_executeKernel(_forward64, n_4, 64 / 4 * CHUNK64);
+	}
+
+	void backward64(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_backward64, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_backward64, 5, sizeof(cl_uint), &is);
+		_executeKernel(_backward64, n_4, 64 / 4 * CHUNK64);
+	}
+
+	void forward256(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_forward256, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_forward256, 5, sizeof(cl_uint), &is);
+		_executeKernel(_forward256, n_4, 256 / 4 * CHUNK256);
+	}
+
+	void backward256(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_backward256, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_backward256, 5, sizeof(cl_uint), &is);
+		_executeKernel(_backward256, n_4, 256 / 4 * CHUNK256);
+	}
+
+	void forward1024(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_forward1024, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_forward1024, 5, sizeof(cl_uint), &is);
+		_executeKernel(_forward1024, n_4, 1024 / 4 * CHUNK1024);
+	}
+
+	void backward1024(const int lm)
+	{
+		const size_t n_4 = _n / 4;
+		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(_backward1024, 4, sizeof(cl_uint), &ilm);
+		_setKernelArg(_backward1024, 5, sizeof(cl_uint), &is);
+		_executeKernel(_backward1024, n_4, 1024 / 4 * CHUNK1024);
+	}
+
+	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, (size_t)(32 / 4 * BLK32))); }
+	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, (size_t)(64 / 4 * BLK64))); }
+	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, (size_t)(128 / 4 * BLK128))); }
+	void square256() { const size_t n_4 = _n / 4; _executeKernel(_square256, n_4, std::min(n_4, (size_t)(256 / 4 * BLK256))); }
+	void square512() { const size_t n_4 = _n / 4; _executeKernel(_square512, n_4, 512 / 4); }
+	void square1024() { const size_t n_4 = _n / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
+	void square2048() { const size_t n_4 = _n / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
+
+	void baseMod(const bool dup)
+	{
+		const cl_uint blk = cl_uint(baseModBlk);
+		const cl_int sblk = dup ? -cl_int(blk) : cl_int(blk);
+		const size_t size = _n / baseModBlk;
+
+		_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
+		_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &blk);
+		_executeKernel(_normalize3a, size, std::min(size, n3aLocalWS));
+		_executeKernel(_normalize3b, size, std::min(size, n3bLocalWS));
+	}
+public:
+	void square()
+	{
+		const splitter * const pSplit = this->pSplit;
+
+		const size_t sIndex = splitIndex;
+		const size_t s = pSplit->getPartSize(sIndex);
+
+		int lm = _ln;
+
+		for (size_t i = 0; i < s - 1; ++i)
+		{
+			const unsigned int k = pSplit->getPart(sIndex, i);
+			if (k == 10)
+			{
+				lm -= 10;
+				forward1024(lm);
+			}
+			else if (k == 8)
+			{
+				lm -= 8;
+				forward256(lm);
+			}
+			else // if (k == 6)
+			{
+				lm -= 6;
+				forward64(lm);
+			}
+		}
+
+		// lm = split.GetPart(sIndex, s - 1);
+		if (lm == 11) square2048();
+		else if (lm == 10) square1024();
+		else if (lm == 9) square512();
+		else if (lm == 8) square256();
+		else if (lm == 7) square128();
+		else if (lm == 6) square64();
+		else if (lm == 5) square32();
+
+		for (size_t i = 0; i < s - 1; ++i)
+		{
+			const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
+			if (k == 10)
+			{
+				backward1024(lm);
+				lm += 10;
+			}
+			else if (k == 8)
+			{
+				backward256(lm);
+				lm += 8;
+			}
+			else // if (k == 6)
+			{
+				backward64(lm);
+				lm += 6;
+			}
+		}
+	}
+
+private:
+	void squareTune(const size_t count, const size_t sIndex, const RNS * const Z, RNSe * const Ze)
+	{
+		const splitter * const pSplit = this->pSplit;
+
+		for (size_t j = 0; j != count; ++j)
+		{
+			writeMemory_z(Z, Ze);
+
+			const size_t s = pSplit->getPartSize(sIndex);
+
+			int lm = _ln;
+
+			for (size_t i = 0; i < s - 1; ++i)
+			{
+				const unsigned int k = pSplit->getPart(sIndex, i);
+				if (k == 10)
+				{
+					lm -= 10;
+					forward1024(lm);
+				}
+				else if (k == 8)
+				{
+					lm -= 8;
+					forward256(lm);
+				}
+				else // if (k == 6)
+				{
+					lm -= 6;
+					forward64(lm);
+				}
+			}
+
+			// lm = split.GetPart(sIndex, s - 1);
+			if (lm == 11) square2048();
+			else if (lm == 10) square1024();
+			else if (lm == 9) square512();
+			else if (lm == 8) square256();
+			else if (lm == 7) square128();
+			else if (lm == 6) square64();
+			else if (lm == 5) square32();
+
+			for (size_t i = 0; i < s - 1; ++i)
+			{
+				const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
+				if (k == 10)
+				{
+					backward1024(lm);
+					lm += 10;
+				}
+				else if (k == 8)
+				{
+					backward256(lm);
+					lm += 8;
+				}
+				else // if (k == 6)
+				{
+					backward64(lm);
+					lm += 6;
+				}
+			}
+		}
+	}
+
+	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocWS, const size_t n3bLocWS, const RNS * const Z, const RNSe * const Ze)
+	{
+		const cl_uint cblk = cl_uint(blk);
+		const cl_int sblk = cl_int(blk);
+		const size_t size = _n / blk;
+
+		for (size_t i = 0; i != count; ++i)
+		{
+			writeMemory_z(Z, Ze);
+
+			_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
+			_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &blk);
+			_executeKernel(_normalize3a, size, std::min(size, n3aLocWS));
+			_executeKernel(_normalize3b, size, std::min(size, n3bLocWS));
+		}
+	}
+
+public:
+	void tune(const uint32_t base)
+	{
+		const size_t n = _n;
+
+		RNS * const Z = new RNS[n];
+		RNSe * const Ze = new RNSe[n];
+		const double maxSqr = n * (base * double(base));
+		for (size_t i = 0; i != n; ++i)
+		{
+			const int v = int(maxSqr * cos(double(i)));
+			Z[i] = RNS(v); Ze[i] = RNSe(v);
+		}
+
+		setProfiling(true);
+
+		resetProfiles();
+		baseModTune(1, 16, 0, 0, Z, Ze);
+		const cl_ulong time = getProfileTime();
+		if (time == 0) { delete[] Z; delete[] Ze; return; }
+		const size_t count = std::min(std::max(size_t(1000000000ull / time), size_t(2)), size_t(100));
+
+		cl_ulong minT = cl_ulong(-1);
+
+		size_t bMin = 4;
+		while (bMin < log(n * double(base + 2)) / log(double(base))) bMin *= 2;
+
+		for (size_t b = bMin; b <= 64; b *= 2)
+		{
+			// Check convergence
+			if (log(maxSqr) >= base * log(double(b))) continue;
+
+			resetProfiles();
+			baseModTune(count, b, 0, 0, Z, Ze);
+			cl_ulong minT_b = getProfileTime();
+#if defined (ocl_debug)
+			std::ostringstream ss; ss << "b = " << b << ", sa = 0, sb = 0, count = " << count << ", t = " << minT_b << "." << std::endl;
+			pio::display(ss.str());
+#endif
+			//printf("b = %d, s = %d: count = %d, t0 = %d, t1 = %d.\n", (int)b, (int)0, (int)count, (int)minT0, (int)minT1);
+
+			size_t minsa = 0, minsb = 0;
+
+			for (size_t sa = 1; sa <= 256; sa *= 2)
+			{
+				for (size_t sb = 1; sb <= 256; sb *= 2)
+				{
+					resetProfiles();
+					baseModTune(count, b, sa, sb, Z, Ze);
+					const cl_ulong t = getProfileTime();
+#if defined (ocl_debug)
+					std::ostringstream ss; ss << "b = " << b << ", sa = " << sa << ", sb = " << sb << ", count = " << count << ", t = " << t << "." << std::endl;
+					pio::display(ss.str());
+#endif
+					//printf("b = %d, s = %d: count = %d, t0 = %d, t1 = %d.\n", (int)b, (int)s, (int)count, (int)t0, (int)t1);
+
+					if (t < minT_b)
+					{
+						minT_b = t;
+						minsa = sa;
+						minsb = sb;
+					}
+				}
+			}
+
+			if (minT_b < minT)
+			{
+				minT = minT_b;
+				n3aLocalWS = minsa;
+				n3bLocalWS = minsb;
+				baseModBlk = b;
+			}
+		}
+
+		const size_t ns = pSplit->getSize();
+		if (ns > 1)
+		{
+			cl_ulong minT = cl_ulong(-1);
+			for (size_t i = 0; i < ns; ++i)
+			{
+				resetProfiles();
+				squareTune(2, i, Z, Ze);
+				const cl_ulong t = getProfileTime();
+
+				if (t < minT)
+				{
+					minT = t;
+					splitIndex = i;
+				}
+			}
+		}
+
+		delete[] Z;
+		delete[] Ze;
+	}
+};
+
+
+
 class Program_i31a : public HostProgram
 {
 private:
@@ -140,7 +596,7 @@ private:
 	cl_mem z, ze, w, we, c, bErr;
 	size_t n3aLocalWS, n3bLocalWS, baseModBlk, splitIndex;
 	cl_uint * const ePtr;
-	Splitter * pSplit;
+	splitter * pSplit;
 
 private:
 	cl_int SetArgs(cl_kernel kernel)
@@ -213,8 +669,8 @@ public:
 		cl_int err = BuildProgram(src.str().c_str());
 		if (err != CL_SUCCESS) return;
 
-		pSplit = new Splitter(lgSize, CHUNK256, CHUNK1024, sizeof(RNS) + sizeof(RNSe), 11, GetLocalMemSize(), GetMaxWorkGroupSize());
-		if (pSplit->GetSize() == 0) return;
+		pSplit = new splitter(lgSize, CHUNK256, CHUNK1024, sizeof(RNS) + sizeof(RNSe), 11, GetLocalMemSize(), GetMaxWorkGroupSize());
+		if (pSplit->getSize() == 0) return;
 
 		forward64 = CreateKernel("forward64"); if (forward64 == nullptr) return;
 		backward64 = CreateKernel("backward64"); if (backward64 == nullptr) return;
@@ -522,16 +978,16 @@ private:
 public:
 	void Square()
 	{
-		const Splitter * const pSplit = this->pSplit;
+		const splitter * const pSplit = this->pSplit;
 
 		const size_t sIndex = splitIndex;
-		const size_t s = pSplit->GetPartSize(sIndex);
+		const size_t s = pSplit->getPartSize(sIndex);
 
 		unsigned int lm = ln;
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->GetPart(sIndex, i);
+			const unsigned int k = pSplit->getPart(sIndex, i);
 			if (k == 10)
 			{
 				lm -= 10;
@@ -560,7 +1016,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->GetPart(sIndex, s - 2 - i);
+			const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
 			if (k == 10)
 			{
 				Backward1024(lm);
@@ -582,7 +1038,7 @@ public:
 private:
 	void SquareTune(const size_t count, const size_t sIndex, const RNS * const Z, RNSe * const Ze, cl_ulong & t)
 	{
-		const Splitter * const pSplit = this->pSplit;
+		const splitter * const pSplit = this->pSplit;
 
 		t = 0;
 
@@ -590,13 +1046,13 @@ private:
 		{
 			WriteZBuffer(Z, Ze);
 
-			const size_t s = pSplit->GetPartSize(sIndex);
+			const size_t s = pSplit->getPartSize(sIndex);
 
 			unsigned int lm = ln;
 
 			for (size_t i = 0; i < s - 1; ++i)
 			{
-				const unsigned int k = pSplit->GetPart(sIndex, i);
+				const unsigned int k = pSplit->getPart(sIndex, i);
 				if (k == 10)
 				{
 					lm -= 10;
@@ -634,7 +1090,7 @@ private:
 
 			for (size_t i = 0; i < s - 1; ++i)
 			{
-				const unsigned int k = pSplit->GetPart(sIndex, s - 2 - i);
+				const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
 				if (k == 10)
 				{
 #ifndef CHECK1024
@@ -764,7 +1220,7 @@ public:
 			}
 		}
 
-		const size_t ns = pSplit->GetSize();
+		const size_t ns = pSplit->getSize();
 		if (ns > 1)
 		{
 			minT = (cl_ulong)(-1);
@@ -801,7 +1257,8 @@ private:
 	}
 
 public:
-	transformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs) : transform(1 << n, b),
+	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
+				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id) : transform(1 << n, b, isBoinc),
 		z(new RNS[(1 << n) * num_regs]), ze(new RNSe[(1 << n) * num_regs]), pProgram(new Program_i31a(1 << n, n, b))
 	{
 		const size_t size = getSize();

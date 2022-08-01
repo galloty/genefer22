@@ -32,9 +32,6 @@ public:
 
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 
-	virtual void setError(const double error) = 0;
-	virtual double getError() const = 0;
-
 	virtual size_t getMemSize() const = 0;
 
 private:

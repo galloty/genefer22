@@ -66,15 +66,14 @@ private:
 
 private:
 #ifdef GPU
-	transform * createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
+	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 	{
 		deleteTransform();
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id);
-		std::cout << "Using device " << device << "." << std::endl;
-		return _transform;
+		std::cout << "Using " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
 	}
 #else
-	transform * createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
+	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
 	{
 		deleteTransform();
 
@@ -89,7 +88,6 @@ private:
 		std::string ttype;
 		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
 		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
-		return _transform;
 	}
 #endif
 
@@ -377,10 +375,10 @@ public:
 		const size_t num_regs = 3 + L;
 #ifdef GPU
 		(void)nthreads; (void)impl;
-		transform * const pTransform = createTransformGPU(b, n, device, num_regs);
+		createTransformGPU(b, n, device, num_regs);
 #else
 		(void)device;
-		transform * const pTransform = createTransformCPU(b, n, nthreads, impl, num_regs);
+		createTransformCPU(b, n, nthreads, impl, num_regs);
 #endif
 
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
@@ -415,9 +413,7 @@ public:
 				  << "%, cert: " << percent(certTime, time) << "%, srv: " << percent(serverTime, time) << "%, valid: " << percent(validTime, time) << "%, "
 				  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
 
-		const double err = pTransform->getError();
-
-		std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", err = " << err << ", " << time << " sec." << std::endl;
+		std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", " << time << " sec." << std::endl;
 
 		deleteTransform();
 

@@ -70,12 +70,7 @@ public:
 	Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	Vd abs() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::fabs(r[i]); return vd; }
 	Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::round(r[i]); return vd; }
-
-	Vd & max(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = std::max(r[i], rhs.r[i]); return *this; }
-
-	double max() const { double m = r[0]; for (size_t i = 1; i < N; ++i) m = std::max(m, r[i]); return m; }
 
 	void shift(const double f) { for (size_t i = N - 1; i > 0; --i) r[i] = r[i - 1]; r[0] = f; }
 
@@ -139,12 +134,7 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline Vd abs() const { return Vd(_mm_andnot_pd(_mm_set1_pd(-0.0), r)); }
 	finline Vd round() const { return Vd(round_pd(r)); } 
-
-	finline Vd & max(const Vd & rhs) { r = _mm_max_pd(r, rhs.r); return *this; }
-
-	finline double max() const { return std::max(r[0], r[1]); }
 
 	finline void shift(const double f) { r = _mm_set_pd(r[0], f); }
 
@@ -189,12 +179,7 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline Vd abs() const { return Vd(_mm256_andnot_pd(_mm256_set1_pd(-0.0), r)); }
 	finline Vd round() const { return Vd(_mm256_round_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
-
-	finline Vd & max(const Vd & rhs) { r = _mm256_max_pd(r, rhs.r); return *this; }
-
-	finline double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
 
 	finline void shift(const double f) { r = _mm256_set_pd(r[2], r[1], r[0], f); }
 
@@ -248,12 +233,7 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline Vd abs() const { return Vd(_mm512_abs_pd(r)); }
 	finline Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
-
-	finline Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
-
-	finline double max() const { return _mm512_reduce_max_pd(r); }
 
 	finline void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
 
@@ -323,12 +303,7 @@ public:
 	finline Vcx mulW(const Vcx & rhs) const { return Vcx((re - im * rhs.im) * rhs.re, (im + re * rhs.im) * rhs.re); }
 	finline Vcx mulWconj(const Vcx & rhs) const { return Vcx((re + im * rhs.im) * rhs.re, (im - re * rhs.im) * rhs.re); }
 
-	finline Vcx abs() const { return Vcx(re.abs(), im.abs()); }
 	finline Vcx round() const { return Vcx(re.round(), im.round()); }
-
-	finline Vcx & max(const Vcx & rhs) { re.max(rhs.re); im.max(rhs.im); return *this; }
-
-	finline double max() const { return std::max(re.max(), im.max()); }
 
 	finline void shift(const Vcx & rhs, const bool rotate)
 	{
@@ -586,7 +561,7 @@ public:
 	}
 
 	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
-						 const double sb, const double sb_inv, const double isb, const double fsb, Vc & err)
+						 const double sb, const double sb_inv, const double isb, const double fsb)
 	{
 		Vc f = f_prev;
 		for (size_t i = 0; i < 4; ++i)
@@ -594,7 +569,6 @@ public:
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
 			const Vc o = (z0 + z1 * sb) * t2_n, oi = o.round();
 			const Vc f_i = f + oi * g;
-			err.max(Vc(o - oi).abs());
 			const Vc f_o = Vc(f_i * b_inv).round();
 			const Vc r = f_i - f_o * b;
 			f = f_o;
@@ -664,8 +638,7 @@ private:
 
 	const size_t _num_threads;
 	const double _b, _sb, _isb, _fsb;
-	const double _mem_size;
-	double _error;
+	const size_t _mem_size;
 	char * const _mem;
 
 private:
@@ -1199,15 +1172,13 @@ private:
 		}
 	}
 
-	double pass2_0(const size_t thread_id, const bool dup)
+	void pass2_0(const size_t thread_id, const bool dup)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
 		const double b = _b, sb = _sb, isb = _isb, fsb = _fsb;
 		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb, g = dup ? 2.0 : 1.0;
-
-		Vc err = Vc(0.0);
 
 		const size_t num_threads = _num_threads;
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
@@ -1224,7 +1195,7 @@ private:
 				z8.transpose_in();
 
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
-				f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
+				f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
 
 				if (lh != l_min) z8.transpose_out();
 				z8.store(zj, index(n_io));	// transposed if lh = l_min
@@ -1232,8 +1203,6 @@ private:
 
 			if (lh != l_min) forward_out(zl, w122i);
 		}
-
-		return err.max();
 	}
 
 	void pass2_1(const size_t thread_id)
@@ -1268,7 +1237,7 @@ private:
 public:
 	transformCPU(const uint32_t b, const bool isboinc, const size_t num_threads, const size_t num_regs) : transform(N, b, isboinc),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
-		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize), _error(0), _mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
+		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize), _mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -1380,11 +1349,7 @@ public:
 
 	void squareDup(const bool dup) override
 	{
-		const size_t num_threads = _num_threads;
-
-		double e[num_threads];
-
-		if (num_threads > 1)
+		if (_num_threads > 1)
 		{
 #pragma omp parallel
 			{
@@ -1392,7 +1357,7 @@ public:
 
 				pass1(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, dup);
+				pass2_0(thread_id, dup);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -1400,13 +1365,9 @@ public:
 		else
 		{
 			pass1(0);
-			e[0] = pass2_0(0, dup);
+			pass2_0(0, dup);
 			pass2_1(0);
 		}
-
-		double err = 0;
-		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
-		_error = std::max(_error, err);
 	}
 
 	void initMultiplicand(const size_t src) override
@@ -1431,11 +1392,7 @@ public:
 
 	void mul() override
 	{
-		const size_t num_threads = _num_threads;
-
-		double e[num_threads];
-
-		if (num_threads > 1)
+		if (_num_threads > 1)
 		{
 #pragma omp parallel
 			{
@@ -1443,7 +1400,7 @@ public:
 
 				pass1mul(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, false);
+				pass2_0(thread_id, false);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -1451,13 +1408,9 @@ public:
 		else
 		{
 			pass1mul(0);
-			e[0] = pass2_0(0, false);
+			pass2_0(0, false);
 			pass2_1(0);
 		}
-
-		double err = 0;
-		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
-		_error = std::max(_error, err);
 	}
 
 	void copy(const size_t dst, const size_t src) const override
@@ -1466,9 +1419,6 @@ public:
 		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + dst * zSize];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
 	}
-
-	void setError(const double error) override { _error = error; }
-	double getError() const override { return _error; }
 };
 
 template<size_t VSIZE>

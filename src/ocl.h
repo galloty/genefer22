@@ -8,7 +8,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #define CL_TARGET_OPENCL_VERSION 110
-#if defined (__APPLE__)
+#if defined(__APPLE__)
 	#include <OpenCL/cl.h>
 	#include <OpenCL/cl_ext.h>
 #else
@@ -189,7 +189,7 @@ private:
 public:
 	platform()
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Create ocl platform." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -238,7 +238,7 @@ public:
 public:
 	virtual ~platform()
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Delete ocl platform." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -271,11 +271,11 @@ class device : oclObject
 private:
 	const cl_platform_id _platform;
 	const cl_device_id _device;
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 	const size_t _d;
 #endif
 	bool _profile = false;
-#if defined (__APPLE__)
+#if defined(__APPLE__)
 	bool _isSync = true;
 #else
 	bool _isSync = false;
@@ -305,11 +305,11 @@ private:
 
 public:
 	device(const platform & parent, const size_t d) : _platform(parent.getPlatform(d)), _device(parent.getDevice(d))
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		, _d(d)
 #endif
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Create ocl device " << d << "." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -353,7 +353,7 @@ public:
 public:
 	virtual ~device()
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Delete ocl device " << _d << "." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -433,7 +433,7 @@ public:
 public:
 	void loadProgram(const std::string & programSrc)
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Load ocl program." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -444,12 +444,12 @@ public:
 
 		char pgmOptions[1024];
 		strcpy(pgmOptions, "");
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		strcat(pgmOptions, " -cl-nv-verbose");
 #endif
 		const cl_int err = clBuildProgram(_program, 1, &_device, pgmOptions, nullptr, nullptr);
 
-#if !defined (ocl_debug)
+#if !defined(ocl_debug)
 		if (err != CL_SUCCESS)
 #endif		
 		{
@@ -461,7 +461,7 @@ public:
 				buildLog[logSize] = '\0';
 				std::ostringstream ss; ss << buildLog.data() << std::endl;
 				pio::print(ss.str());
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 				std::ofstream fileOut("pgm.log"); 
 				fileOut << buildLog.data() << std::endl;
 				fileOut.close();
@@ -471,7 +471,7 @@ public:
 
 		oclFatal(err);
 
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		size_t binSize; clGetProgramInfo(_program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &binSize, nullptr);
 		std::vector<char> binary(binSize);
 		clGetProgramInfo(_program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
@@ -484,7 +484,7 @@ public:
 public:
 	void clearProgram()
 	{
-#if defined (ocl_debug)
+#if defined(ocl_debug)
 		std::ostringstream ss; ss << "Clear ocl program." << std::endl;
 		pio::display(ss.str());
 #endif
@@ -562,11 +562,11 @@ protected:
 protected:
 	static void _setKernelArg(cl_kernel kernel, const cl_uint arg_index, const size_t arg_size, const void * const arg_value)
 	{
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
+#if !defined(ocl_fast_exec) || defined(ocl_debug)
 		cl_int err =
 #endif
 		clSetKernelArg(kernel, arg_index, arg_size, arg_value);
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
+#if !defined(ocl_fast_exec) || defined(ocl_debug)
 		oclFatal(err);
 #endif
 	}
@@ -576,11 +576,11 @@ protected:
 	{
 		if (!_profile)
 		{
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
+#if !defined(ocl_fast_exec) || defined(ocl_debug)
 			cl_int err =
 #endif
 			clEnqueueNDRangeKernel(_queue, kernel, 1, nullptr, &globalWorkSize, (localWorkSize == 0) ? nullptr : &localWorkSize, 0, nullptr, nullptr);
-#if !defined (ocl_fast_exec) || defined (ocl_debug)
+#if !defined(ocl_fast_exec) || defined(ocl_debug)
 			oclFatal(err);
 #endif
 			if (_isSync)

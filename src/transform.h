@@ -35,7 +35,7 @@ public:
 	virtual size_t getMemSize() const = 0;
 
 private:
-#ifdef GPU
+#if defined(GPU)
 	static transform * create_ocl(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id);
 #else
@@ -53,7 +53,7 @@ public:
 	size_t getSize() const { return _size; }
 	bool isBoinc() const { return _isBoinc; }
 
-#ifdef GPU
+#if defined(GPU)
 	static transform * create_gpu(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device,
 								  const size_t num_regs, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
 	{

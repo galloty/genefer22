@@ -11,13 +11,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <vector>
 
-#if defined (_WIN32)
+#if defined(_WIN32)
 #include <Windows.h>
 #else
 #include <signal.h>
 #endif
 
-#if defined (GPU)
+#if defined(GPU)
 #include "ocl.h"
 #endif
 #include "genefer.h"
@@ -34,7 +34,7 @@ private:
 	}
 
 private:
-#if defined (_WIN32)
+#if defined(_WIN32)
 	static BOOL WINAPI HandlerRoutine(DWORD)
 	{
 		quit(1);
@@ -45,7 +45,7 @@ private:
 public:
 	application()
 	{
-#if defined (_WIN32)	
+#if defined(_WIN32)	
 		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
 #else
 		signal(SIGTERM, quit);
@@ -70,7 +70,7 @@ private:
 #elif defined(_WIN32)
 			"win32";
 #elif defined(__linux__)
-#ifdef __x86_64
+#if defined(__x86_64)
 			"linux64";
 #else
 			"linux32";
@@ -88,7 +88,7 @@ private:
 		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
 #endif
 
-#ifdef GPU
+#if defined(GPU)
 		const char * const ext = "g";
 #else
 		const char * const ext = "";
@@ -115,7 +115,7 @@ private:
 private:
 	static std::string usage()
 	{
-#ifdef GPU
+#if defined(GPU)
 		const char * const ext = "g";
 #else
 		const char * const ext = "";
@@ -128,14 +128,14 @@ private:
 		ss << "  -p                            full test: a proof is generated" << std::endl;
 		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
 		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
-#ifdef GPU
+#if defined(GPU)
 		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
 #else
 		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread per logical core)" << std::endl;
 		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
-#ifdef BOINC
+#if defined(BOINC)
 		ss << "  -boinc                  operate as a BOINC client app" << std::endl;
 #endif
 		ss << std::endl;
@@ -149,7 +149,7 @@ public:
 		for (int i = 1; i < argc; ++i) args.push_back(argv[i]);
 
 		bool bBoinc = false;
-#ifdef BOINC
+#if defined(BOINC)
 		for (const std::string & arg : args) if (arg == "-boinc") bBoinc = true;
 #endif
 		pio::getInstance().setBoinc(bBoinc);
@@ -195,7 +195,7 @@ public:
 		if (args.empty())
 		{
 			pio::print(usage());
-#if defined (GPU)
+#if defined(GPU)
 			platform pfm;
 			if (pfm.displayDevices() == 0) throw std::runtime_error("No OpenCL device");
 #endif

@@ -65,7 +65,7 @@ private:
 	transform * _transform = nullptr;
 
 private:
-#ifdef GPU
+#if defined(GPU)
 	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
 	{
 		deleteTransform();
@@ -373,7 +373,7 @@ public:
 		const size_t L = size_t(1) << depth;
 
 		const size_t num_regs = 3 + L;
-#ifdef GPU
+#if defined(GPU)
 		(void)nthreads; (void)impl;
 		createTransformGPU(b, n, device, num_regs);
 #else

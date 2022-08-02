@@ -11,7 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <iomanip>
 
-#if defined (_WIN32)	// use Performance Counter
+#if defined(_WIN32)	// use Performance Counter
 #include <Windows.h>
 #else					// otherwise use gettimeofday() instead
 #include <sys/time.h>
@@ -19,7 +19,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 struct timer
 {
-#if defined (_WIN32)
+#if defined(_WIN32)
 	typedef LARGE_INTEGER time;
 #else
 	typedef timeval time;
@@ -27,7 +27,7 @@ struct timer
 
 	static time currentTime()
 	{
-#if defined (_WIN32)
+#if defined(_WIN32)
 		LARGE_INTEGER time; QueryPerformanceCounter(&time);
 #else
 		timeval time; gettimeofday(&time, nullptr);
@@ -37,7 +37,7 @@ struct timer
 
 	static double diffTime(const time & end, const time & start)
 	{
-#if defined (_WIN32)
+#if defined(_WIN32)
 		LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
 		return double(end.QuadPart - start.QuadPart) / double(freq.QuadPart);
 #else

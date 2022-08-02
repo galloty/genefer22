@@ -90,7 +90,7 @@ public:
 
 inline __m128d round_pd(const __m128d rhs)
 {
-#ifdef __SSE4_1__
+#if defined(__SSE4_1__)
 	return _mm_round_pd(rhs, _MM_FROUND_TO_NEAREST_INT);
 #else // SSE2
 	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
@@ -145,7 +145,7 @@ public:
 	}
 };
 
-#ifdef __AVX__
+#if defined(__AVX__)
 template<>
 class Vd<4>
 {
@@ -195,7 +195,7 @@ public:
 };
 #endif
 
-#ifdef __AVX512F__
+#if defined(__AVX512F__)
 template<>
 class Vd<8>
 {

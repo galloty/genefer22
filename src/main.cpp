@@ -204,7 +204,7 @@ public:
 
 		uint32_t b = 0, n = 0;
 		size_t device = 0, nthreads = 1;	// 0;
-		std::string impl;
+		std::string impl = "";
 		// parse args
 		for (size_t i = 0, size = args.size(); i < size; ++i)
 		{
@@ -265,8 +265,13 @@ public:
 		else
 		{
 			static const size_t count = 20 - 10 + 1;
-			static constexpr uint32_t bp[count] = { 399998298, 399998572, 399987078, 399992284, 250063168,
-													200295018, 167811262, 112719374, 15417192, 4896418, 1059094 };
+#if defined(GPU)
+			static constexpr uint32_t bp[count] = { 1999992578, 1999997802, 1999999266, 1999941378, 699995450,
+													302257864, 167811262, 113521888, 15859176, 4896418, 1059094 };
+#else
+			static constexpr uint32_t bp[count] = { 900000066, 700005270, 500002286, 400065560, 280055314,
+													200295018, 167811262, 113521888, 15859176, 4896418, 1059094 };
+#endif
 
 			// 10: 5, 11: 5, 12: 5, 13: 6, 14: 6
 

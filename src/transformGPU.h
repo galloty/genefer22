@@ -295,12 +295,12 @@ public:
 		_fwd1024p = createTransformKernel("fwd1024p", false);
 		_fwd2048p = createTransformKernel("fwd2048p", false);
 
-		// _mul32 = createMulKernel("mul32");
-		// _mul64 = createMulKernel("mul64");
-		// _mul128 = createMulKernel("mul128");
-		// _mul256 = createMulKernel("mul256");
-		// _mul512 = createMulKernel("mul512");
-		// _mul1024 = createMulKernel("mul1024");
+		_mul32 = createMulKernel("mul32");
+		_mul64 = createMulKernel("mul64");
+		_mul128 = createMulKernel("mul128");
+		_mul256 = createMulKernel("mul256");
+		_mul512 = createMulKernel("mul512");
+		_mul1024 = createMulKernel("mul1024");
 		_mul2048 = createMulKernel("mul2048");
 
 		_pSplit = new splitter(_ln, CHUNK256, CHUNK1024, sizeof(RNS) + sizeof(RNSe), 11, getLocalMemSize(), getMaxWorkGroupSize());

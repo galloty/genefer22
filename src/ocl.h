@@ -475,7 +475,7 @@ public:
 		size_t binSize; clGetProgramInfo(_program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &binSize, nullptr);
 		std::vector<char> binary(binSize);
 		clGetProgramInfo(_program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
-		std::ofstream fileOut("pgm.txt", std::ios::binary);
+		std::ofstream fileOut("pgm.bin", std::ios::binary);
 		fileOut.write(binary.data(), binSize);
 		fileOut.close();
 #endif	

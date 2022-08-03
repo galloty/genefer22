@@ -567,11 +567,12 @@ public:
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
-			const Vc o = (z0 + z1 * sb) * t2_n, oi = o.round();
-			const Vc f_i = f + oi * g;
-			const Vc f_o = Vc(f_i * b_inv).round();
-			const Vc r = f_i - f_o * b;
-			f = f_o;
+			const Vc o = Vc((z0 + z1 * sb) * t2_n).round();
+			const Vc o_b = Vc(o * b_inv).round();
+			const Vc f_i = f + (o - o_b * b) * g;
+			const Vc f_b = Vc(f_i * b_inv).round();
+			f = f_b + o_b * g;
+			const Vc r = f_i - f_b * b;
 			const Vc irh = Vc(r * sb_inv).round();
 			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
 		}

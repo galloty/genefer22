@@ -34,7 +34,7 @@ private:
 	struct partition
 	{
 		size_t size;
-		unsigned int p[8];
+		uint32_t p[8];
 	};
 
 	const bool b256, b1024;
@@ -64,7 +64,7 @@ private:
 		if ((5 <= m) && (m <= mMax))
 		{
 			for (size_t k = 0; k < i; ++k) part[size].p[k] = p.p[k];
-			part[size].p[i] = (unsigned int)m;
+			part[size].p[i] = uint32_t(m);
 			part[size].size = i + 1;
 			size++;
 		}
@@ -78,7 +78,7 @@ public:
 		const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
 		b256(maxWorkGroupSize >= (256 / 4) * chunk256),
 		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize / sizeofRNS >= 1024 * chunk1024)),
-		mMax(std::min(mSquareMax, std::min(log_2((size_t)(localMemSize / sizeofRNS)), log_2(maxWorkGroupSize * 4))))
+		mMax(std::min(mSquareMax, std::min(log_2(size_t(localMemSize / sizeofRNS)), log_2(maxWorkGroupSize * 4))))
 	{
 		size = 0;
 		partition p;
@@ -87,7 +87,7 @@ public:
 
 	size_t getSize() const { return size; }
 	size_t getPartSize(const size_t i) const { return part[i].size; }
-	unsigned int getPart(const size_t i, const size_t j) const { return part[i].p[j]; }
+	uint32_t getPart(const size_t i, const size_t j) const { return part[i].p[j]; }
 };
 
 

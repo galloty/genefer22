@@ -17,6 +17,6 @@ This version is compiled with gcc and was tested on Windows and Linux (Ubuntu).
 
 ## TODO
 
-- GPU implementation
+- command line interface
 - save & restore context
 - Boinc interface

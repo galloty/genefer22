@@ -2,7 +2,7 @@
 CC = g++ -m64 -std=c++17
 CFLAGS = -Wall -Wextra -fexceptions -ffinite-math-only -fprefetch-loop-arrays -frename-registers
 FLAGS_CPU = -O3 -fopenmp
-FLAGS_GPU = -g -DGPU
+FLAGS_GPU = -O2 -DGPU
 
 BIN_DIR = bin
 SRC_DIR = src
@@ -12,7 +12,7 @@ OCL_LIB = C:/Windows/System32/OpenCL.dll
 
 OBJS_CPU = main.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
 OBJS_GPU = maing.o transform_ocl.o
-DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/timer.h $(SRC_DIR)/pio.h  $(SRC_DIR)/boinc.h
+DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h  $(SRC_DIR)/boinc.h
 DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/fp16_80.h
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/ocl.h
 
@@ -21,8 +21,8 @@ EXEC_GPU = $(BIN_DIR)/genefer22g.exe
 
 build: $(EXEC_CPU) $(EXEC_GPU)
 
-run: $(EXEC_GPU)
-	./$(EXEC_GPU)
+run: $(EXEC_CPU)
+	./$(EXEC_CPU)
 
 clean:
 

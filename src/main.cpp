@@ -124,7 +124,7 @@ private:
 		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                        the exponent of the GFN (14 <= n <= 22)" << std::endl;
 		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
-		ss << "  -q                            quick test (default)" << std::endl;
+		ss << "  -q                            quick test" << std::endl;
 		ss << "  -p                            full test: a proof is generated" << std::endl;
 		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
 		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
@@ -203,6 +203,7 @@ public:
 		}
 
 		uint32_t b = 0, n = 0;
+		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0, nthreads = 1;	// 0;
 		std::string impl = "";
 		// parse args
@@ -224,6 +225,26 @@ public:
 				n = std::atoi(nstr.c_str());
 				if (n < 15) throw std::runtime_error("n < 15 is not supported");
 				if (n > 22) throw std::runtime_error("n > 22 is not supported");
+			}
+			if (arg.substr(0, 2) == "-q")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c");
+				mode = genefer::EMode::Quick;
+			}
+			if (arg.substr(0, 2) == "-p")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c");
+				mode = genefer::EMode::Proof;
+			}
+			if (arg.substr(0, 2) == "-s")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c");
+				mode = genefer::EMode::Server;
+			}
+			if (arg.substr(0, 2) == "-c")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s");
+				mode = genefer::EMode::Check;
 			}
 			if (arg.substr(0, 2) == "-d")
 			{
@@ -260,7 +281,7 @@ public:
 
 		if ((b != 0) && (n != 0))
 		{
-			g.check(b, n, device, nthreads, impl, 5);
+			g.check(b, n, mode, device, nthreads, impl, 5);
 		}
 		else
 		{
@@ -277,13 +298,13 @@ public:
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i] + 0, 10 + i, device, nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 10 + i, mode, device, nthreads, impl, 5)) break;
 			}
 
 			// size_t i = 4;
 			// for (int d = 5; d <= 8; ++d)
 			// {
-			// 	if (!g.check(bp[i], 10 + i, device, nthreads, impl, d)) break;
+			// 	if (!g.check(bp[i], 10 + i, mode, device, nthreads, impl, d)) break;
 			// }
 		}
 

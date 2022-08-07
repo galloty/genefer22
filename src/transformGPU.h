@@ -56,13 +56,16 @@ public:
 		return r;
 	}
 
-	static Zp norm(const size_t n) { return -Zp(int32_t((p - 1) / n)); }
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
-typedef Zp<4253024257u, 5> Zp1;		// 507 * 2^23 + 1
-typedef Zp<4194304001u, 3> Zp2;		// 125 * 2^25 + 1
-typedef Zp<4076863489u, 7> Zp3;		// 243 * 2^24 + 1
+#define P1		4253024257u		// 507 * 2^23 + 1
+#define P2		4194304001u		// 125 * 2^25 + 1
+#define P3		4076863489u		// 243 * 2^24 + 1
+
+typedef Zp<P1, 5> Zp1;
+typedef Zp<P2, 3> Zp2;
+typedef Zp<P3, 7> Zp3;
 
 class RNS
 {
@@ -115,6 +118,8 @@ public:
 
 typedef RNS		RNS_W;
 typedef RNSe	RNS_We;
+
+// Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
 #define BLK32		8
 #define BLK64		4
@@ -362,8 +367,8 @@ private:
 	void fb(cl_kernel & kernel, const int lm, const size_t localWorkSize)
 	{
 		const size_t n_4 = _n / 4;
-		const cl_uint ilm = cl_uint(lm), is = cl_uint(n_4 >> lm);
-		_setKernelArg(kernel, 4, sizeof(cl_uint), &ilm);
+		const cl_int ilm = cl_int(lm), is = cl_uint(n_4 >> lm);
+		_setKernelArg(kernel, 4, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, 5, sizeof(cl_uint), &is);
 		_executeKernel(kernel, n_4, localWorkSize);
 	}
@@ -375,26 +380,26 @@ private:
 	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024); }
 	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024); }
 
-	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, (size_t)(32 / 4 * BLK32))); }
-	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, (size_t)(64 / 4 * BLK64))); }
-	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, (size_t)(128 / 4 * BLK128))); }
-	void square256() { const size_t n_4 = _n / 4; _executeKernel(_square256, n_4, std::min(n_4, (size_t)(256 / 4 * BLK256))); }
+	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void square256() { const size_t n_4 = _n / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
 	void square512() { const size_t n_4 = _n / 4; _executeKernel(_square512, n_4, 512 / 4); }
 	void square1024() { const size_t n_4 = _n / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
 	void square2048() { const size_t n_4 = _n / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
 
-	void fwd32p() { const size_t n_4 = _n / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, (size_t)(32 / 4 * BLK32))); }
-	void fwd64p() { const size_t n_4 = _n / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, (size_t)(64 / 4 * BLK64))); }
-	void fwd128p() { const size_t n_4 = _n / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, (size_t)(128 / 4 * BLK128))); }
-	void fwd256p() { const size_t n_4 = _n / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, (size_t)(256 / 4 * BLK256))); }
+	void fwd32p() { const size_t n_4 = _n / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void fwd64p() { const size_t n_4 = _n / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void fwd128p() { const size_t n_4 = _n / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void fwd256p() { const size_t n_4 = _n / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
 	void fwd512p() { const size_t n_4 = _n / 4; _executeKernel(_fwd512p, n_4, 512 / 4); }
 	void fwd1024p() { const size_t n_4 = _n / 4; _executeKernel(_fwd1024p, n_4, 1024 / 4); }
 	void fwd2048p() { const size_t n_4 = _n / 4; _executeKernel(_fwd2048p, n_4, 2048 / 4); }
 
-	void mul32() { const size_t n_4 = _n / 4; _executeKernel(_mul32, n_4, std::min(n_4, (size_t)(32 / 4 * BLK32))); }
-	void mul64() { const size_t n_4 = _n / 4; _executeKernel(_mul64, n_4, std::min(n_4, (size_t)(64 / 4 * BLK64))); }
-	void mul128() { const size_t n_4 = _n / 4; _executeKernel(_mul128, n_4, std::min(n_4, (size_t)(128 / 4 * BLK128))); }
-	void mul256() { const size_t n_4 = _n / 4; _executeKernel(_mul256, n_4, std::min(n_4, (size_t)(256 / 4 * BLK256))); }
+	void mul32() { const size_t n_4 = _n / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void mul64() { const size_t n_4 = _n / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void mul128() { const size_t n_4 = _n / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void mul256() { const size_t n_4 = _n / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
 	void mul512() { const size_t n_4 = _n / 4; _executeKernel(_mul512, n_4, 512 / 4); }
 	void mul1024() { const size_t n_4 = _n / 4; _executeKernel(_mul1024, n_4, 1024 / 4); }
 	void mul2048() { const size_t n_4 = _n / 4; _executeKernel(_mul2048, n_4, 2048 / 4); }
@@ -438,7 +443,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->getPart(sIndex, i);
+			const uint32_t k = pSplit->getPart(sIndex, i);
 			if (k == 10)
 			{
 				lm -= 10;
@@ -467,7 +472,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
+			const uint32_t k = pSplit->getPart(sIndex, s - 2 - i);
 			if (k == 10)
 			{
 				backward1024(lm);
@@ -501,7 +506,7 @@ private:
 
 			for (size_t i = 0; i < s - 1; ++i)
 			{
-				const unsigned int k = pSplit->getPart(sIndex, i);
+				const uint32_t k = pSplit->getPart(sIndex, i);
 				if (k == 10)
 				{
 					lm -= 10;
@@ -530,7 +535,7 @@ private:
 
 			for (size_t i = 0; i < s - 1; ++i)
 			{
-				const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
+				const uint32_t k = pSplit->getPart(sIndex, s - 2 - i);
 				if (k == 10)
 				{
 					backward1024(lm);
@@ -562,7 +567,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->getPart(sIndex, i);
+			const uint32_t k = pSplit->getPart(sIndex, i);
 			if (k == 10)
 			{
 				lm -= 10;
@@ -601,7 +606,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->getPart(sIndex, i);
+			const uint32_t k = pSplit->getPart(sIndex, i);
 			if (k == 10)
 			{
 				lm -= 10;
@@ -630,7 +635,7 @@ public:
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
-			const unsigned int k = pSplit->getPart(sIndex, s - 2 - i);
+			const uint32_t k = pSplit->getPart(sIndex, s - 2 - i);
 			if (k == 10)
 			{
 				backward1024(lm);
@@ -655,8 +660,10 @@ public:
 		const cl_uint blk = cl_uint(_baseModBlk);
 		const cl_int sblk = dup ? -cl_int(blk) : cl_int(blk);
 		const size_t size = _n / blk;
+		const cl_int ln = cl_int(_ln);
 
 		_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
+		_setKernelArg(_normalize3a, 7, sizeof(cl_int), &ln);
 		_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize3a, size, std::min(size, _n3aLocalWS));
 		_executeKernel(_normalize3b, size, std::min(size, _n3bLocalWS));
@@ -668,12 +675,14 @@ private:
 		const cl_uint cblk = cl_uint(blk);
 		const cl_int sblk = cl_int(blk);
 		const size_t size = _n / blk;
+		const cl_int ln = cl_int(_ln);
 
 		for (size_t i = 0; i != count; ++i)
 		{
 			writeMemory_z(Z, Ze);
 
 			_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
+			_setKernelArg(_normalize3a, 7, sizeof(cl_int), &ln);
 			_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &cblk);
 			_executeKernel(_normalize3a, size, std::min(size, n3aLocalWS));
 			_executeKernel(_normalize3b, size, std::min(size, n3bLocalWS));
@@ -822,10 +831,37 @@ public:
 		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n);
 
 		std::stringstream src;
-		src << "#define\tnorm1\t" << Zp1::norm(size / 2).get() << "u" << std::endl;
-		src << "#define\tnorm2\t" << Zp2::norm(size / 2).get() << "u" << std::endl;
-		src << "#define\tnorm3\t" << Zp3::norm(size / 2).get() << "u" << std::endl;
- 		src << std::endl;
+
+		src << "#define\tP1\t" << P1 << "u" << std::endl;
+		src << "#define\tP2\t" << P2 << "u" << std::endl;
+		src << "#define\tP3\t" << P3 << "u" << std::endl;
+		src << "#define\tP1_INV\t" << uint64_t(-1) / P1 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tP2_INV\t" << uint64_t(-1) / P2 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tInvP2_P1\t1822724754u" << std::endl;		// 1 / P2 mod P1
+		src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
+		src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
+		src << "#define\tP1P2\t(P1 * (ulong)P2)" << std::endl;
+		src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
+		src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
+		src << "#define\tP1P2P3h\t3942432002u" << std::endl;
+		src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
+		src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
+
+		src << "#define\tP1\t" << P1 << "u" << std::endl;
+		src << "#define\tP1\t" << P1 << "u" << std::endl;
+		src << "#define\tP1\t" << P1 << "u" << std::endl;
+		src << "#define\tP1\t" << P1 << "u" << std::endl;
+
+		src << "#define\tBLK32\t" << BLK32 << std::endl;
+		src << "#define\tBLK64\t" << BLK64 << std::endl;
+		src << "#define\tBLK128\t" << BLK128 << std::endl;
+		src << "#define\tBLK256\t" << BLK256 << std::endl << std::endl;
+
+		src << "#define\tCHUNK64\t" << CHUNK64 << std::endl;
+		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
+		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
+
 		if (!engine::readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_pEngine->loadProgram(src.str());
@@ -839,28 +875,28 @@ public:
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
-			const RNS prRoot_m = RNS::prRoot_n((unsigned int)m);
-			const RNSe prRoot_me = RNSe::prRoot_n((unsigned int)m);
+			const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+			const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
 			for (size_t i = 0; i < s; ++i)
 			{
 				const size_t e = bitRev(i, 2 * s) + 1;
-				const RNS wrsi = prRoot_m.pow((unsigned int)e);
+				const RNS wrsi = prRoot_m.pow(uint32_t(e));
 				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
-				const RNSe wrsie = prRoot_me.pow((unsigned int)e);
+				const RNSe wrsie = prRoot_me.pow(uint32_t(e));
 				wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
 			}
 		}
 
 		const size_t m = 4 * size / 2;
-		const RNS prRoot_m = RNS::prRoot_n((unsigned int)m);
-		const RNSe prRoot_me = RNSe::prRoot_n((unsigned int)m);
+		const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+		const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
 		for (size_t i = 0; i != size / 4; ++i)
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-			wr[size / 2 + i] = prRoot_m.pow((unsigned int)e);
-			wri[size / 2 + i] = prRoot_m.pow((unsigned int)(m - e));
-			wre[size / 2 + i] = prRoot_me.pow((unsigned int)e);
-			wrie[size / 2 + i] = prRoot_me.pow((unsigned int)(m - e));
+			wr[size / 2 + i] = prRoot_m.pow(uint32_t(e));
+			wri[size / 2 + i] = prRoot_m.pow(uint32_t(m - e));
+			wre[size / 2 + i] = prRoot_me.pow(uint32_t(e));
+			wrie[size / 2 + i] = prRoot_me.pow(uint32_t(m - e));
 		}
 
 		_pEngine->writeMemory_w(wr, wre);

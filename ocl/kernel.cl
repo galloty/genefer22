@@ -65,22 +65,6 @@ inline uint96 uint96_mul_64_32(const ulong x, const uint y)
 
 // --- mod arith ---
 
-#define P1			4253024257u		// 507 * 2^23 + 1
-#define P2			4194304001u		// 125 * 2^25 + 1
-#define P3			4076863489u		// 243 * 2^24 + 1
-#define P1_INV		42356678u		// (2^64 - 1) / P1 - 2^32
-#define P2_INV		103079214u		// (2^64 - 1) / P2 - 2^32
-#define P3_INV		229771911u		// (2^64 - 1) / P3 - 2^32
-#define InvP2_P1	1822724754u		// 1 / P2 mod P1
-#define InvP3_P1	607574918u		// 1 / P3 mod P1
-#define InvP3_P2	2995931465u		// 1 / P3 mod P2
-#define	P1P2		(P1 * (ulong)P2)
-#define	P2P3		(P2 * (ulong)P3)
-#define P1P2P3l		15383592652180029441ul
-#define P1P2P3h		3942432002u
-#define P1P2P3_2l	7691796326090014720ul
-#define P1P2P3_2h	1971216001u
-
 inline uint _addMod(const uint lhs, const uint rhs, const uint p)
 {
 	const uint c = (lhs >= p - rhs) ? p : 0;
@@ -360,18 +344,6 @@ inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const 
 
 // --- transform ---
 
-// Warning: DECLARE_VAR_32/64/128/256 must be modified if BLKxx = 1 or != 1.
-#define BLK32	8
-#define BLK64	4
-#define BLK128	2
-#define BLK256	1
-
-#define CHUNK64		8
-#define CHUNK256	4
-#define CHUNK1024	2
-
-// -----------------
-
 #define DECLARE_VAR(B_N, CHUNK_N) \
 	__local RNS Z[4 * B_N * CHUNK_N]; \
 	__local RNSe Ze[4 * B_N * CHUNK_N]; \
@@ -428,7 +400,7 @@ inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const 
 __kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
 void forward64(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	 __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	FORWARD_I(B_64, CHUNK64);
 
@@ -441,7 +413,7 @@ void forward64(__global RNS * restrict const z, __global RNSe * restrict const z
 __kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
 void backward64(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	BACKWARD_I(B_64, CHUNK64);
 
@@ -458,7 +430,7 @@ void backward64(__global RNS * restrict const z, __global RNSe * restrict const 
 __kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
 void forward256(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	FORWARD_I(B_256, CHUNK256);
 
@@ -473,7 +445,7 @@ void forward256(__global RNS * restrict const z, __global RNSe * restrict const 
 __kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
 void backward256(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	BACKWARD_I(B_256, CHUNK256);
 
@@ -492,7 +464,7 @@ void backward256(__global RNS * restrict const z, __global RNSe * restrict const
 __kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
 void forward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	FORWARD_I(B_1024, CHUNK1024);
 
@@ -509,7 +481,7 @@ void forward1024(__global RNS * restrict const z, __global RNSe * restrict const
 __kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
 void backward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,
-	const unsigned int lm, const unsigned int s)
+	const int lm, const unsigned int s)
 {
 	BACKWARD_I(B_1024, CHUNK1024);
 
@@ -1080,7 +1052,7 @@ inline int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)
 
 __kernel
 void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,
-	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)
+	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)
 {
 	const size_t idx = get_global_id(0);
 	const unsigned int blk = abs(sblk);
@@ -1089,6 +1061,8 @@ void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const
 
 	prefetch(zi, (size_t)blk);
 	prefetch(zie, (size_t)blk);
+
+	const uint norm1 = P1 - ((P1 - 1) >> (ln - 1)), norm2 = P2 - ((P2 - 1) >> (ln - 1)), norm3 = P3 - ((P3 - 1) >> (ln - 1));
 
 	int96 f = int96_set_si(0);
 

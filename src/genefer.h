@@ -109,9 +109,23 @@ private:
 		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
 		seconds -= minutes * 60; minutes -= hours * 60;
 
-		std::stringstream ss;
+		std::ostringstream ss;
 		ss << std::setfill('0') << std::setw(2) <<  hours << ':' << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
 		return ss.str();
+	}
+
+	static int printProgress(const char * const mode, const double elapsedTime, const int i0, const int i, int & id,
+							 const std::chrono::high_resolution_clock::time_point & t, std::chrono::high_resolution_clock::time_point & td,
+							 const double percent_start = 0, const double percent_end = 100)
+	{
+		const double mulTime = elapsedTime / (id - i), estimatedTime = mulTime * i;
+		const double percent = (i0 - i) * (percent_end - percent_start) / i0 + percent_start;
+		const int dcount = std::max(int(0.2 / mulTime), 2);
+		std::ostringstream ss; ss << "\33[2K" << mode << ": " << std::setprecision(3) << percent << "% done, "
+								  << formatTime(estimatedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
+		pio::display(ss.str());
+		td = t; id = i;
+		return dcount;
 	}
 
 	void power(const size_t reg, const uint32_t e) const
@@ -158,14 +172,14 @@ private:
 
 		pTransform->set(1);
 		pTransform->copy(1, 0);	// d(t)
-		int i0 = int(mpz_sizeinbase(exponent, 2) - 1);
+		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1);
 		auto td = std::chrono::high_resolution_clock::now();
-		int id = i0;
+		int id = i0, dcount = 100;
 		for (int i = i0; i >= 0; --i)
 		{
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
-			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// error
-			// if (i == 0) pTransform->add1();	// error
+			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
+			// if (i == 0) pTransform->add1();	// => invalid
 			if (i % B_GL == 0)
 			{
 				if (i / B_GL != 0)
@@ -181,18 +195,11 @@ private:
 				const size_t reg = 3 + i / B_PL;	// ckpt[i]
 				pTransform->copy(reg, 0);
 			}
-			// if (i % 64 == 0)
+			if (i % dcount == 0)
 			{
 				const auto t = std::chrono::high_resolution_clock::now();
 				const double elapsedTime = (t - td).count() * 1e-9;
-				if (elapsedTime >= 1)
-				{
-					const double mulTime = elapsedTime / (id - i), estimatedTime = mulTime * i;
-					std::ostringstream ss; ss << std::setprecision(3) << " " << (id - i) << ", " << (i0 - i) * 100.0 / i0 << "% done, "
-						<< formatTime(estimatedTime) << " remaining, " <<  mulTime * 1e3 << " ms/bit.        \r";
-					pio::display(ss.str());
-					td = t; id = i;
-				}
+				if (elapsedTime >= 1) dcount = printProgress("Test", elapsedTime, i0, i, id, t, td);
 			}
 			if (_quit) return false;
 		}
@@ -203,6 +210,7 @@ private:
 
 	// Gerbicz-Li error checking
 	// in: reg_0 is 2^exponent and reg_1 is d(t)
+	// out: return valid/invalid
 	bool GL(const mpz_t & exponent, const int B_GL, double & validTime)
 	{
 		transform * const pTransform = _transform;
@@ -213,10 +221,21 @@ private:
 		pTransform->copy(2, 0);	// d(t + 1) = d(t) * result
 
 		pTransform->copy(0, 1);
-		for (int i = B_GL - 1; i >= 0; --i)
 		{
-			pTransform->squareDup(false);
-			if (_quit) return false;
+			const int i0 = B_GL - 1;
+			auto td = std::chrono::high_resolution_clock::now();
+			int id = i0, dcount = 100;
+			for (int i = i0; i >= 0; --i)
+			{
+				pTransform->squareDup(false);
+				if (i % dcount == 0)
+				{
+					const auto t = std::chrono::high_resolution_clock::now();
+					const double elapsedTime = (t - td).count() * 1e-9;
+					if (elapsedTime >= 1) dcount = printProgress("Valid", elapsedTime, i0, i, id, t, td, 0, 50);
+				}
+				if (_quit) return false;
+			}
 		}
 		pTransform->copy(1, 0);	// d(t)^{2^B}
 
@@ -232,10 +251,21 @@ private:
 
 		// 2^res
 		pTransform->set(1);
-		for (int i = int(mpz_sizeinbase(res, 2) - 1); i >= 0; --i)
 		{
-			pTransform->squareDup(mpz_tstbit(res, i) != 0);
-			if (_quit) return false;
+			const int i0 = int(mpz_sizeinbase(res, 2) - 1);
+			auto td = std::chrono::high_resolution_clock::now();
+			int id = i0, dcount = 100;
+			for (int i = i0; i >= 0; --i)
+			{
+				pTransform->squareDup(mpz_tstbit(res, i) != 0);
+				if (i % dcount == 0)
+				{
+					const auto t = std::chrono::high_resolution_clock::now();
+					const double elapsedTime = (t - td).count() * 1e-9;
+					if (elapsedTime >= 1) dcount = printProgress("Valid", elapsedTime, i0, i, id, t, td, 50, 100);
+				}
+				if (_quit) return false;
+			}
 		}
 		mpz_clear(res);
 
@@ -257,11 +287,14 @@ private:
 		return success;
 	}
 
-	bool quick(const mpz_t & exponent, double & testTime, double & validTime)
+	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp)
 	{
 		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
 
 		if (!prp(exponent, B_GL, 0, testTime)) return false;
+		gint res; _transform->getInt(res);
+		isPrp = res.isOne();
+		res.clear();
 		if (!GL(exponent, B_GL, validTime)) return false;
 		return true;
 	}
@@ -448,48 +481,65 @@ public:
 		createTransformCPU(b, n, nthreads, impl, num_regs);
 #endif
 
+		bool success = true;
+
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
 
 		if (mode == EMode::Quick)
 		{
 			double testTime = 0, validTime = 0;
-			const bool success = quick(exponent, testTime, validTime);
+			bool isPrp = false;
+			success = quick(exponent, testTime, validTime, isPrp);
+			std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
+			if (success)
+			{
+				ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
+			}
+			else if (!_quit)
+			{
+				ss << ": validation failed!";
+			}
+			else
+			{
+				ss << ": terminated.";
+			}
+			ss << std::endl; pio::print(ss.str());
 		}
 
-		const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
+		// const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
 
-		std::cout << "depth = " << depth << ", L_PL = " << (size_t(1) << depth) << ", B_PL = " << B << ", ";
+		// std::cout << "depth = " << depth << ", L_PL = " << (size_t(1) << depth) << ", B_PL = " << B << ", ";
 
-		gint mu[depth + 1];
+		// gint mu[depth + 1];
 
-		double testTime = 0, validTime = 0, proofTime = 0; const bool success = test(exponent, depth, mu, testTime, validTime, proofTime);
+		// double testTime = 0, validTime = 0, proofTime = 0; const bool success = test(exponent, depth, mu, testTime, validTime, proofTime);
 		// if (!success) return false;
 
-		gint v2; mpz_t p2; mpz_init(p2);
-		double serverTime = 0; const uint64_t hv1srv = server(depth, exponent, mu, v2, p2, serverTime);
+		// gint v2; mpz_t p2; mpz_init(p2);
+		// double serverTime = 0; const uint64_t hv1srv = server(depth, exponent, mu, v2, p2, serverTime);
 		// if (hv1srv == 0) return false;
 
-		const bool isPrp = mu[0].isOne();
+		// const bool isPrp = mu[0].isOne();
 
-		for (int i = 0; i <= depth; ++i) mu[i].clear();
+		// for (int i = 0; i <= depth; ++i) mu[i].clear();
 		mpz_clear(exponent);
 
-		double checkTime = 0; const uint64_t hv1val = check(B, v2, p2, checkTime);
+		// double checkTime = 0; const uint64_t hv1val = check(B, v2, p2, checkTime);
 		// if (hv1val == 0) return false;
 
-		v2.clear();
-		mpz_clear(p2);
+		// v2.clear();
+		// mpz_clear(p2);
 
-		const double time = testTime + checkTime + proofTime + serverTime + checkTime;
+		// const double time = testTime + checkTime + proofTime + serverTime + checkTime;
 
-		std::cout << "test: " << percent(testTime, time) << "%, check: " << (success ? "ok" : "FAILED") << " " << percent(validTime, time)
-				  << "%, proof: " << percent(proofTime, time) << "%, srv: " << percent(serverTime, time) << "%, check: " << percent(checkTime, time) << "%, "
-				  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
+		// std::cout << "test: " << percent(testTime, time) << "%, check: " << (success ? "ok" : "FAILED") << " " << percent(validTime, time)
+		// 		  << "%, proof: " << percent(proofTime, time) << "%, srv: " << percent(serverTime, time) << "%, check: " << percent(checkTime, time) << "%, "
+		// 		  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
 
-		std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", " << time << " sec." << std::endl;
+		// std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", " << time << " sec." << std::endl;
 
 		deleteTransform();
 
-		return true;
+		return success;
 	}
 };

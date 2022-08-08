@@ -210,7 +210,7 @@ public:
 					char deviceName[1024]; oclFatal(clGetDeviceInfo(devices[d], CL_DEVICE_NAME, 1024, deviceName, nullptr));
 					char deviceVendor[1024]; oclFatal(clGetDeviceInfo(devices[d], CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
 
-					std::stringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
+					std::ostringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
 					deviceDesc device;
 					device.platform_id = platforms[p];
 					device.device_id = devices[d];
@@ -227,7 +227,7 @@ public:
 		char deviceName[1024]; oclFatal(clGetDeviceInfo(device_id, CL_DEVICE_NAME, 1024, deviceName, nullptr));
 		char deviceVendor[1024]; oclFatal(clGetDeviceInfo(device_id, CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
 
-		std::stringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
+		std::ostringstream ss; ss << "device '" << deviceName << "', vendor '" << deviceVendor << "', platform '" << platformName << "'";
 		deviceDesc device;
 		device.platform_id = platform_id;
 		device.device_id = device_id;

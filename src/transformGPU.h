@@ -151,7 +151,7 @@ public:
 ///////////////////////////////
 
 public:
-	static bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::stringstream & src)
+	static bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::ostringstream & src)
 	{
 		// if (_isBoinc) return false;
 
@@ -708,7 +708,7 @@ public:
 		resetProfiles();
 		baseModTune(1, 16, 0, 0, Z, Ze);
 		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z; delete[] Ze; return; }
+		if (time == 0) { delete[] Z; delete[] Ze; setProfiling(false); return; }
 		const size_t count = std::min(std::max(size_t(100 * getTimerResolution() / time), size_t(2)), size_t(100));
 
 		cl_ulong minT = cl_ulong(-1);
@@ -728,7 +728,6 @@ public:
 			// std::ostringstream ss; ss << "b = " << b << ", sa = 0, sb = 0, count = " << count << ", t = " << minT_b << "." << std::endl;
 			// pio::display(ss.str());
 #endif
-
 			size_t minsa = 0, minsb = 0;
 
 			for (size_t sa = 1; sa <= 256; sa *= 2)
@@ -742,7 +741,6 @@ public:
 					// std::ostringstream ss; ss << "b = " << b << ", sa = " << sa << ", sb = " << sb << ", count = " << count << ", t = " << t << "." << std::endl;
 					// pio::display(ss.str());
 #endif
-
 					if (t < minT_b)
 					{
 						minT_b = t;
@@ -825,12 +823,12 @@ public:
 	{
 		const size_t size = getSize();
 
-		const bool is_boinc_platform = isBoinc() && (boinc_device_id != 0) && (boinc_platform_id != 0);
+		const bool is_boinc_platform = bBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
 		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n);
 
-		std::stringstream src;
+		std::ostringstream src;
 
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;

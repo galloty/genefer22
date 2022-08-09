@@ -203,7 +203,7 @@ public:
 		}
 
 		uint32_t b = 0, n = 0;
-		genefer::EMode mode = genefer::EMode::Quick;
+		genefer::EMode mode = genefer::EMode::Proof;
 		size_t device = 0, nthreads = 1;	// 0;
 		std::string impl = "";
 		// parse args

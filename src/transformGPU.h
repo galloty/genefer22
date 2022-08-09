@@ -925,7 +925,7 @@ protected:
 		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = z[i].r1().getInt();
 	}
 
-	void setZi(int32_t * const zi) override
+	void setZi(const int32_t * const zi) override
 	{
 		RNS * const z = _z;
 		RNSe * const ze = _ze;

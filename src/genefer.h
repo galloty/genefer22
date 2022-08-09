@@ -21,6 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #endif
 
 #include "pio.h"
+#include "file.h"
 #if defined(GPU)
 #include "ocl.h"
 #endif
@@ -74,7 +75,8 @@ private:
 	{
 		deleteTransform();
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id);
-		std::cout << "Using " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		std::ostringstream ss; ss << "Using " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		pio::print(ss.str());
 	}
 #else
 	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
@@ -91,7 +93,8 @@ private:
 
 		std::string ttype;
 		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
-		std::cout << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		pio::print(ss.str());
 	}
 #endif
 
@@ -102,6 +105,12 @@ private:
 			delete _transform;
 			_transform = nullptr;
 		}
+	}
+
+	static std::string proofFilename(const uint32_t b, const uint32_t n)
+	{
+		std::ostringstream ss; ss << "g" << n << "_" << b << ".proof";
+		return ss.str();
 	}
 
 	static std::string formatTime(const double time)
@@ -118,6 +127,7 @@ private:
 							 const std::chrono::high_resolution_clock::time_point & t, std::chrono::high_resolution_clock::time_point & td,
 							 const double percent_start = 0, const double percent_end = 100)
 	{
+		if (id == i) return 1;
 		const double mulTime = elapsedTime / (id - i), estimatedTime = mulTime * i;
 		const double percent = (i0 - i) * (percent_end - percent_start) / i0 + percent_start;
 		const int dcount = std::max(int(0.2 / mulTime), 2);
@@ -273,13 +283,12 @@ private:
 		pTransform->mul(1);
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
-		gint v1; pTransform->getInt(v1);
-		const uint64_t h1 = v1.gethash64();
-		v1.clear();
+		gint v(pTransform->getSize(), pTransform->getB());
+		pTransform->getInt(v);
+		const uint64_t h1 = v.gethash64();
 		pTransform->copy(0, 2);
-		gint v2; pTransform->getInt(v2);
-		const uint64_t h2 = v2.gethash64();
-		v2.clear();
+		pTransform->getInt(v);
+		const uint64_t h2 = v.gethash64();
 
 		const bool success = (h1 == h2);
 
@@ -287,41 +296,34 @@ private:
 		return success;
 	}
 
-	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp)
+	// (Pietrzak-Li proof generation
+	// in: reg_{3 + i}, i in [0; 2^L[, // ckpt[i]
+	// out: proof file
+	bool PL(const uint32_t b, const uint32_t n, const int depth, double & proofTime)
 	{
-		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
-
-		if (!prp(exponent, B_GL, 0, testTime)) return false;
-		gint res; _transform->getInt(res);
-		isPrp = res.isOne();
-		res.clear();
-		if (!GL(exponent, B_GL, validTime)) return false;
-		return true;
-	}
-
-	bool test(const mpz_t & exponent, const int depth, gint * const mu, double & testTime, double & validTime, double & proofTime)
-	{
-		const size_t esize = mpz_sizeinbase(exponent, 2);
-		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
-
-		if (!prp(exponent, B_GL, B_PL, testTime)) return false;
-		if (!GL(exponent, B_GL, validTime)) return false;
-
 		transform * const pTransform = _transform;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
+		const std::string filename = proofFilename(b, n);
+		file cFile(filename.c_str(), "wb");
+	
 		// generate mu_k
+		gint mu_k(pTransform->getSize(), pTransform->getB());
 
 		// mu[0] = ckpt[0]
 		pTransform->copy(0, 3);
-		pTransform->getInt(mu[0]);
+		pTransform->getInt(mu_k);
+		mu_k.write(cFile);
 
 		const size_t L = size_t(1) << depth;
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
-		mpz_set_ui(w[0], mu[0].gethash32());
+		mpz_set_ui(w[0], mu_k.gethash32());
 
-		for (int k = 1; k <= depth; ++k)
+		const int l0 = (1 << depth) - depth - 1;
+		auto td = std::chrono::high_resolution_clock::now();
+		int ld = l0;
+		for (int k = 1, l = l0; k <= depth; ++k)
 		{
 			const size_t i = size_t(1) << (depth - k);
 
@@ -335,14 +337,22 @@ private:
 				power(3 + i + 2 * j, w[j]);
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
+				--l;
+				if (_quit) return false;
 			}
-			pTransform->getInt(mu[k]);
+
+			pTransform->getInt(mu_k);
+			mu_k.write(cFile);
 
 			if (i > 1)
 			{
-				const uint32_t q = mu[k].gethash32();
+				const uint32_t q = mu_k.gethash32();
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
 			}
+
+			const auto t = std::chrono::high_resolution_clock::now();
+			const double elapsedTime = (t - td).count() * 1e-9;
+			if (elapsedTime >= 1) printProgress("Proof", elapsedTime, l0, l, ld, t, td, 0, 100);
 
 			if (_quit) return false;
 		}
@@ -351,7 +361,30 @@ private:
 		delete[] w;
 
 		proofTime = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		return true;
+	}
 
+	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp)
+	{
+		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
+
+		if (!prp(exponent, B_GL, 0, testTime)) return false;
+		{
+			gint res(_transform->getSize(), _transform->getB()); _transform->getInt(res);
+			isPrp = res.isOne();
+		}
+		if (!GL(exponent, B_GL, validTime)) return false;
+		return true;
+	}
+
+	bool proof(const uint32_t b, const uint32_t n, const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime)
+	{
+		const size_t esize = mpz_sizeinbase(exponent, 2);
+		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
+
+		if (!prp(exponent, B_GL, B_PL, testTime)) return false;
+		if (!GL(exponent, B_GL, validTime)) return false;
+		if (!PL(b, n, depth, proofTime)) return false;
 		return true;
 	}
 
@@ -405,9 +438,8 @@ private:
 
 		// h1 = hash64(v1);
 		pTransform->copy(0, 1);
-		gint v1; pTransform->getInt(v1);
-		const uint64_t h1 = v1.gethash64();
-		v1.clear();
+		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
+		const uint64_t h1 = v.gethash64();
 
 		mpz_set_ui(p2, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
@@ -452,9 +484,8 @@ private:
 		pTransform->mul(2);
 
 		// h1 = hash64(v1')
-		gint v1; pTransform->getInt(v1);
-		const uint64_t h1 = v1.gethash64();
-		v1.clear();
+		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
+		const uint64_t h1 = v.gethash64();
 
 		dt = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
 		return h1;
@@ -491,20 +522,27 @@ public:
 			bool isPrp = false;
 			success = quick(exponent, testTime, validTime, isPrp);
 			std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
+			if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
+			else if (!_quit) ss << ": validation failed!";
+			else ss << ": terminated.";
+			ss << std::endl; pio::print(ss.str());
 			if (success)
 			{
-				ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1 is " << (isPrp ? "a probable prime" : "composite") << "." << std::endl;
+				pio::result(ss.str());
 			}
-			else if (!_quit)
-			{
-				ss << ": validation failed!";
-			}
-			else
-			{
-				ss << ": terminated.";
-			}
+		}
+		else if (mode == EMode::Proof)
+		{
+			double testTime = 0, validTime = 0, proofTime = 0;
+			success = proof(b, n, exponent, depth, testTime, validTime, proofTime);
+			std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
+			if (success) ss << "proof file is generated, time = " << formatTime(testTime + validTime + proofTime) << ".";
+			else if (!_quit) ss << "validation failed!";
+			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
 		}
+
 
 		// const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
 

@@ -22,7 +22,7 @@ private:
 
 protected:
 	virtual void getZi(int32_t * const zi) const = 0;
-	virtual void setZi(int32_t * const zi) = 0;
+	virtual void setZi(const int32_t * const zi) = 0;
 
 public:
 	virtual void set(const int32_t a) = 0;					// r_0 = a
@@ -51,6 +51,7 @@ public:
 	virtual ~transform() {}
 
 	size_t getSize() const { return _size; }
+	uint32_t getB() const { return _b; }
 	bool isBoinc() const { return _isBoinc; }
 
 #if defined(GPU)
@@ -111,14 +112,16 @@ public:
 
 	void getInt(gint & g) const
 	{
-		g.init(_size, _b);
-		getZi(g.d());
+		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("getInt");
+		g.reset();
+		getZi(g.data());
 	}
 
 	void setInt(const gint & g)
 	{
+		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("setInt");
 		g.balance();
-		setZi(g.d());
+		setZi(g.data());
 	}
 
 	void add1()

@@ -1300,7 +1300,7 @@ protected:
 		_mm_free((void *)z_copy);
 	}
 
-	void setZi(int32_t * const zi) override
+	void setZi(const int32_t * const zi) override
 	{
 		Vc * const z = (Vc *)&_mem[zOffset];
 		const Vd<VSIZE> isb = Vd<VSIZE>::broadcast(_isb), fsb = Vd<VSIZE>::broadcast(_fsb), sb_inv = Vd<VSIZE>::broadcast(1.0 / _sb);

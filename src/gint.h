@@ -11,33 +11,43 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdlib>
 #include <algorithm>
 
+#include "file.h"
+
 class gint
 {
 private:
-	size_t _size;
-	int32_t _base;
-	int32_t * _d;
+	const size_t _size;
+	const uint32_t _base;
+	int32_t * const _d;
 
 	enum class EState { Unknown, Balanced, Unbalanced };
 	mutable EState _state;
 
 public:
-	gint() : _size(0), _base(0), _d(nullptr), _state(EState::Unknown) {}
-	virtual ~gint() { clear(); }
+	gint(const size_t size, const uint32_t base) : _size(size), _base(base), _d(new int32_t[size]), _state(EState::Unknown) {}
+	virtual ~gint() { delete[] _d; }
 
-	void init(const size_t size, const int32_t base)
+	size_t getSize() const { return _size; }
+	uint32_t getBase() const { return _base; }
+	int32_t * data() const { return _d; }
+
+	void reset() { _state = EState::Unknown; }
+
+	void read(file & cFile)
 	{
-		_size = size;
-		_base = base;
-		_d = new int32_t[size];
+		size_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
+		uint32_t base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
+		if ((size != _size) || (base != _base)) throw std::runtime_error("bad file");
+		reset();
+		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(int32_t));
 	}
 
-	void clear()
+	void write(file & cFile) const
 	{
-		if (_d != nullptr) { delete[] _d; _d = nullptr; }
+		cFile.write(reinterpret_cast<const char *>(&_size), sizeof(_size));
+		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
+		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
 	}
-
-	int32_t * d() const { return _d; }
 
 	void unbalance() const
 	{
@@ -45,7 +55,7 @@ public:
 		_state = EState::Unbalanced;
 
 		const size_t size = _size;
-		const int32_t base = _base;
+		const int32_t base = int32_t(_base);
 		int32_t * const d = _d;
 
 		int64_t f = 0;
@@ -101,7 +111,7 @@ public:
 		_state = EState::Balanced;
 
 		const size_t size = _size;
-		const int32_t base = _base;
+		const int32_t base = int32_t(_base);
 		int32_t * const d = _d;
 
 		int64_t f = 0;
@@ -137,7 +147,7 @@ public:
 	bool isOne() const
 	{
 		unbalance();
-		int32_t * const d = _d;
+		const int32_t * const d = _d;
 		bool bOne = (d[0] == 1);
 		if (bOne) for (size_t k = 1, size = _size; k < size; ++k) bOne &= (d[k] == 0);
 		return bOne;
@@ -146,7 +156,7 @@ public:
 	uint64_t gethash64() const
 	{
 		unbalance();
-		int32_t * const d = _d;
+		const int32_t * const d = _d;
 		uint64_t hash = 0;
 		for (size_t i = 0, size = _size; i < size; ++i)
 		{

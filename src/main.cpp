@@ -203,7 +203,7 @@ public:
 		}
 
 		uint32_t b = 0, n = 0;
-		genefer::EMode mode = genefer::EMode::Proof;
+		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0, nthreads = 1;	// 0;
 		std::string impl = "";
 		// parse args
@@ -279,7 +279,7 @@ public:
 		g.setBoincParam(boinc_platform_id, boinc_device_id);
 #endif
 
-		if ((b != 0) && (n != 0))
+		if ((b != 0) && (n != 0) && (mode != genefer::EMode::None))
 		{
 			g.check(b, n, mode, device, nthreads, impl, 5);
 		}
@@ -294,18 +294,16 @@ public:
 													200295018, 167811262, 113521888, 15859176, 4896418, 1059094 };
 #endif
 
-			// 10: 5, 11: 5, 12: 5, 13: 6, 14: 6
+			// depth: 10: 5, 11: 5, 12: 5, 13: 6, 14: 6
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				if (!g.check(bp[i] + 0, 10 + i, mode, device, nthreads, impl, 5)) break;
-			}
+				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, 5)) break;
 
-			// size_t i = 4;
-			// for (int d = 5; d <= 8; ++d)
-			// {
-			// 	if (!g.check(bp[i], 10 + i, mode, device, nthreads, impl, d)) break;
-			// }
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, 5)) break;
+			}
 		}
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);

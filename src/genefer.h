@@ -113,6 +113,18 @@ private:
 		return ss.str();
 	}
 
+	static std::string certFilename(const uint32_t b, const uint32_t n)
+	{
+		std::ostringstream ss; ss << "g" << n << "_" << b << ".cert";
+		return ss.str();
+	}
+
+	static std::string uint64toString(const uint64_t u64)
+	{
+		std::stringstream ss; ss << std::uppercase << std::hex << std::setfill('0') << std::setw(16) << u64;
+		return ss.str();
+	}
+
 	static std::string formatTime(const double time)
 	{
 		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
@@ -227,9 +239,11 @@ private:
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
+		// d(t + 1) = d(t) * result
 		pTransform->mul(1);
-		pTransform->copy(2, 0);	// d(t + 1) = d(t) * result
+		pTransform->copy(2, 0);
 
+		// d(t)^{2^B}
 		pTransform->copy(0, 1);
 		{
 			const int i0 = B_GL - 1;
@@ -247,7 +261,7 @@ private:
 				if (_quit) return false;
 			}
 		}
-		pTransform->copy(1, 0);	// d(t)^{2^B}
+		pTransform->copy(1, 0);
 
 		mpz_t res; mpz_init_set_ui(res, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
@@ -305,8 +319,7 @@ private:
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
-		const std::string filename = proofFilename(b, n);
-		file cFile(filename.c_str(), "wb");
+		file proofFile(proofFilename(b, n).c_str(), "wb");
 	
 		// generate mu_k
 		gint mu_k(pTransform->getSize(), pTransform->getB());
@@ -314,7 +327,7 @@ private:
 		// mu[0] = ckpt[0]
 		pTransform->copy(0, 3);
 		pTransform->getInt(mu_k);
-		mu_k.write(cFile);
+		mu_k.write(proofFile);
 
 		const size_t L = size_t(1) << depth;
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
@@ -342,7 +355,7 @@ private:
 			}
 
 			pTransform->getInt(mu_k);
-			mu_k.write(cFile);
+			mu_k.write(proofFile);
 
 			if (i > 1)
 			{
@@ -388,21 +401,26 @@ private:
 		return true;
 	}
 
-	uint64_t server(const int depth, const mpz_t & exponent, const gint * const mu, gint & v2, mpz_t & p2, double & dt)
+	bool server(const uint32_t b, const uint32_t n, const mpz_t & exponent, const int depth, double & time, uint64_t & skey)
 	{
 		transform * const pTransform = _transform;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
-		const size_t L = size_t(1) << depth;
-		const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
+		const size_t L = size_t(1) << depth, esize = mpz_sizeinbase(exponent, 2);
+		const int B = B_PietrzakLi(esize, depth);
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
 
+		gint g(pTransform->getSize(), pTransform->getB());
+
+		file proofFile(proofFilename(b, n).c_str(), "rb");
+
 		// v1 = mu[0]^w[0], v1: reg = 1
-		const uint32_t q = mu[0].gethash32();
+		g.read(proofFile);
+		const uint32_t q = g.gethash32();
 		mpz_set_ui(w[0], q);
-		pTransform->setInt(mu[0]);
+		pTransform->setInt(g);
 		power(0, q);
 		pTransform->copy(1, 0);
 
@@ -413,8 +431,9 @@ private:
 		for (int k = 1; k <= depth; ++k)
 		{
 			// mu[k]: reg = 3
-			const uint32_t q = mu[k].gethash32();
-			pTransform->setInt(mu[k]);
+			g.read(proofFile);
+			const uint32_t q = g.gethash32();
+			pTransform->setInt(g);
 			pTransform->copy(3, 0);
 
 			// v1 = v1 * mu^q
@@ -430,18 +449,15 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
 
-			if (_quit) return 0;
+			if (_quit) return false;
 		}
 
-		pTransform->copy(0, 2);
-		pTransform->getInt(v2);
-
-		// h1 = hash64(v1);
+		// skey = hash64(v1);
 		pTransform->copy(0, 1);
 		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
-		const uint64_t h1 = v.gethash64();
+		skey = v.gethash64();
 
-		mpz_set_ui(p2, 0);
+		mpz_t p2; mpz_init_set_ui(p2, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
 		for (size_t i = 0; i < L; i++)
 		{
@@ -454,41 +470,80 @@ private:
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		dt = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
-		return h1;
+		// v2
+		pTransform->copy(0, 2);
+		pTransform->getInt(g);
+
+		file certFile(certFilename(b, n).c_str(), "wb");
+		certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
+		g.write(certFile);
+		certFile.write(p2);
+
+		mpz_clear(p2);
+
+		time = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		return true;
 	}
 
-	uint64_t check(const size_t B, const gint & v2, const mpz_t & p2, double & dt)
+	bool check(const uint32_t b, const uint32_t n, double & time, uint64_t & ckey)
 	{
 		transform * const pTransform = _transform;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
+		file certFile(certFilename(b, n).c_str(), "rb");
+		int B = 0; certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
+		gint v2(pTransform->getSize(), pTransform->getB()); v2.read(certFile);
+		mpz_t p2; mpz_init(p2); certFile.read(p2);
+
 		// v2 = v2^{2^B}
 		pTransform->setInt(v2);
-		for (size_t i = 0; i < B; ++i)
 		{
-			pTransform->squareDup(false);
-			if (_quit) return 0;
+			const int i0 = B - 1;
+			auto td = std::chrono::high_resolution_clock::now();
+			int id = i0, dcount = 100;
+			for (int i = i0; i >= 0; --i)
+			{
+				pTransform->squareDup(false);
+				if (i % dcount == 0)
+				{
+					const auto t = std::chrono::high_resolution_clock::now();
+					const double elapsedTime = (t - td).count() * 1e-9;
+					if (elapsedTime >= 1) dcount = printProgress("Check", elapsedTime, i0, i, id, t, td, 0, 50);
+				}
+				if (_quit) return false;
+			}
 		}
 		pTransform->copy(2, 0);
 
 		// v1' = v2 * 2^p2
 		pTransform->set(1);
-		for (size_t j = 0, p2size = mpz_sizeinbase(p2, 2); j < p2size; ++j)
 		{
-			const size_t i = p2size - 1 - j;
-			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
-			if (_quit) return 0;
+			const int i0 = int(mpz_sizeinbase(p2, 2) - 1);
+			auto td = std::chrono::high_resolution_clock::now();
+			int id = i0, dcount = 100;
+			for (int i = i0; i >= 0; --i)
+			{
+				pTransform->squareDup(mpz_tstbit(p2, i) != 0);
+				if (i % dcount == 0)
+				{
+					const auto t = std::chrono::high_resolution_clock::now();
+					const double elapsedTime = (t - td).count() * 1e-9;
+					if (elapsedTime >= 1) dcount = printProgress("Check", elapsedTime, i0, i, id, t, td, 50, 100);
+				}
+				if (_quit) return false;
+			}
 		}
 		pTransform->mul(2);
 
-		// h1 = hash64(v1')
-		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
-		const uint64_t h1 = v.gethash64();
+		mpz_clear(p2);
 
-		dt = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
-		return h1;
+		// ckey = hash64(v1')
+		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
+		ckey = v.gethash64();
+
+		time = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		return true;
 	}
 
 private:
@@ -514,67 +569,72 @@ public:
 
 		bool success = true;
 
-		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
-
-		if (mode == EMode::Quick)
+		if (mode == EMode::Check)
 		{
-			double testTime = 0, validTime = 0;
-			bool isPrp = false;
-			success = quick(exponent, testTime, validTime, isPrp);
-			std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
-			if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
-			else if (!_quit) ss << ": validation failed!";
-			else ss << ": terminated.";
-			ss << std::endl; pio::print(ss.str());
-			if (success)
-			{
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1 is " << (isPrp ? "a probable prime" : "composite") << "." << std::endl;
-				pio::result(ss.str());
-			}
-		}
-		else if (mode == EMode::Proof)
-		{
-			double testTime = 0, validTime = 0, proofTime = 0;
-			success = proof(b, n, exponent, depth, testTime, validTime, proofTime);
-			std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
-			if (success) ss << "proof file is generated, time = " << formatTime(testTime + validTime + proofTime) << ".";
-			else if (!_quit) ss << "validation failed!";
+			double time = 0;
+			uint64_t ckey = 0;
+			success = check(b, n, time, ckey);
+			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
+			if (success) ss << "checked, time = " << formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
+			else if (!_quit) ss << "check failed!";
 			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
 		}
+		else
+		{
+			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
 
+			if (mode == EMode::Quick)
+			{
+				double testTime = 0, validTime = 0;
+				bool isPrp = false;
+				success = quick(exponent, testTime, validTime, isPrp);
+				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
+				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
+				else if (!_quit) ss << ": validation failed!";
+				else ss << ": terminated.";
+				ss << std::endl; pio::print(ss.str());
+				if (success)
+				{
+					std::ostringstream ss; ss << b << "^{2^" << n << "} + 1 is " << (isPrp ? "a probable prime" : "composite") << "." << std::endl;
+					pio::result(ss.str());
+				}
+			}
+			else if (mode == EMode::Proof)
+			{
+				double testTime = 0, validTime = 0, proofTime = 0;
+				success = proof(b, n, exponent, depth, testTime, validTime, proofTime);
+				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
+				if (success) ss << "proof file is generated, time = " << formatTime(testTime + validTime + proofTime) << ".";
+				else if (!_quit) ss << "validation failed!";
+				else ss << "terminated.";
+				ss << std::endl; pio::print(ss.str());
+			}
+			else if (mode == EMode::Server)
+			{
+				double time = 0;
+				uint64_t skey = 0;
+				success = server(b, n, exponent, depth, time, skey);
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
+				if (success) ss << "certificate file is generated, time = " << formatTime(time) << ", skey = " << uint64toString(skey) << ".";
+				else if (!_quit) ss << "generation failed!";
+				else ss << "terminated.";
+				ss << std::endl; pio::print(ss.str());
+			}
+			else if (mode == EMode::Check)	// no exponent!
+			{
+				double time = 0;
+				uint64_t ckey = 0;
+				success = check(b, n, time, ckey);
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
+				if (success) ss << "checked, time = " << formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
+				else if (!_quit) ss << "check failed!";
+				else ss << "terminated.";
+				ss << std::endl; pio::print(ss.str());
+			}
 
-		// const size_t esize = mpz_sizeinbase(exponent, 2), B = ((esize - 1) >> depth) + 1;
-
-		// std::cout << "depth = " << depth << ", L_PL = " << (size_t(1) << depth) << ", B_PL = " << B << ", ";
-
-		// gint mu[depth + 1];
-
-		// double testTime = 0, validTime = 0, proofTime = 0; const bool success = test(exponent, depth, mu, testTime, validTime, proofTime);
-		// if (!success) return false;
-
-		// gint v2; mpz_t p2; mpz_init(p2);
-		// double serverTime = 0; const uint64_t hv1srv = server(depth, exponent, mu, v2, p2, serverTime);
-		// if (hv1srv == 0) return false;
-
-		// const bool isPrp = mu[0].isOne();
-
-		// for (int i = 0; i <= depth; ++i) mu[i].clear();
-		mpz_clear(exponent);
-
-		// double checkTime = 0; const uint64_t hv1val = check(B, v2, p2, checkTime);
-		// if (hv1val == 0) return false;
-
-		// v2.clear();
-		// mpz_clear(p2);
-
-		// const double time = testTime + checkTime + proofTime + serverTime + checkTime;
-
-		// std::cout << "test: " << percent(testTime, time) << "%, check: " << (success ? "ok" : "FAILED") << " " << percent(validTime, time)
-		// 		  << "%, proof: " << percent(proofTime, time) << "%, srv: " << percent(serverTime, time) << "%, check: " << percent(checkTime, time) << "%, "
-		// 		  << "proof " << ((hv1srv == hv1val) ? "ok" : "FAILED") << ": " << std::hex << hv1srv << std::dec << std::endl;
-
-		// std::cout << b << "^{2^" << n << "} + 1 is " << (isPrp ? "prime" : "composite") << ", " << time << " sec." << std::endl;
+			mpz_clear(exponent);
+		}
 
 		deleteTransform();
 

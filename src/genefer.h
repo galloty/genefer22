@@ -68,6 +68,8 @@ private:
 	cl_device_id _boinc_device_id = 0;
 #endif
 	transform * _transform = nullptr;
+	gint * _gi = nullptr;
+	std::string _rootFilename;
 
 private:
 #if defined(GPU)
@@ -107,15 +109,11 @@ private:
 		}
 	}
 
-	static std::string proofFilename(const uint32_t b, const uint32_t n)
+	std::string proofFilename() const { return _rootFilename + ".proof"; }
+	std::string certFilename() const { return _rootFilename + ".cert"; }
+	std::string ckptFilename(const size_t i) const
 	{
-		std::ostringstream ss; ss << "g" << n << "_" << b << ".proof";
-		return ss.str();
-	}
-
-	static std::string certFilename(const uint32_t b, const uint32_t n)
-	{
-		std::ostringstream ss; ss << "g" << n << "_" << b << ".cert";
+		std::ostringstream ss; ss << _rootFilename << "_" << i << ".ckpt";
 		return ss.str();
 	}
 
@@ -189,6 +187,7 @@ private:
 	bool prp(const mpz_t & exponent, const int B_GL, const int B_PL, double & testTime)
 	{
 		transform * const pTransform = _transform;
+		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -214,8 +213,9 @@ private:
 			}
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
-				const size_t reg = 3 + i / B_PL;	// ckpt[i]
-				pTransform->copy(reg, 0);
+				pTransform->getInt(gi);
+				file ckptFile(ckptFilename(i / B_PL), "wb");
+				gi.write(ckptFile);
 			}
 			if (i % dcount == 0)
 			{
@@ -236,6 +236,7 @@ private:
 	bool GL(const mpz_t & exponent, const int B_GL, double & validTime)
 	{
 		transform * const pTransform = _transform;
+		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -297,12 +298,11 @@ private:
 		pTransform->mul(1);
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
-		gint v(pTransform->getSize(), pTransform->getB());
-		pTransform->getInt(v);
-		const uint64_t h1 = v.gethash64();
+		pTransform->getInt(gi);
+		const uint64_t h1 = gi.gethash64();
 		pTransform->copy(0, 2);
-		pTransform->getInt(v);
-		const uint64_t h2 = v.gethash64();
+		pTransform->getInt(gi);
+		const uint64_t h2 = gi.gethash64();
 
 		const bool success = (h1 == h2);
 
@@ -313,25 +313,25 @@ private:
 	// (Pietrzak-Li proof generation
 	// in: reg_{3 + i}, i in [0; 2^L[, // ckpt[i]
 	// out: proof file
-	bool PL(const uint32_t b, const uint32_t n, const int depth, double & proofTime)
+	bool PL(const int depth, double & proofTime)
 	{
 		transform * const pTransform = _transform;
+		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
-		file proofFile(proofFilename(b, n).c_str(), "wb");
-	
-		// generate mu_k
-		gint mu_k(pTransform->getSize(), pTransform->getB());
+		file proofFile(proofFilename(), "wb");
 
 		// mu[0] = ckpt[0]
-		pTransform->copy(0, 3);
-		pTransform->getInt(mu_k);
-		mu_k.write(proofFile);
+		{
+			file ckptFile(ckptFilename(0), "rb");
+			gi.read(ckptFile);
+		}
+		gi.write(proofFile);
 
 		const size_t L = size_t(1) << depth;
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
-		mpz_set_ui(w[0], mu_k.gethash32());
+		mpz_set_ui(w[0], gi.gethash32());
 
 		const int l0 = (1 << depth) - depth - 1;
 		auto td = std::chrono::high_resolution_clock::now();
@@ -341,25 +341,35 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 
 			// mu[k] = ckpt[i]^w[0]
-			power(3 + i, w[0]);
+			{
+				file ckptFile(ckptFilename(i), "rb");
+				gi.read(ckptFile);
+				pTransform->setInt(gi);
+			}
+			power(0, w[0]);
 			pTransform->copy(1, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
 			{
 				// mu[k] *= ckpt[i + 2 * j]^w[j]
-				power(3 + i + 2 * j, w[j]);
+				{
+					file ckptFile(ckptFilename(i + 2 * j), "rb");
+					gi.read(ckptFile);
+					pTransform->setInt(gi);
+				}
+				power(0, w[j]);
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
 				--l;
 				if (_quit) return false;
 			}
 
-			pTransform->getInt(mu_k);
-			mu_k.write(proofFile);
+			pTransform->getInt(gi);
+			gi.write(proofFile);
 
 			if (i > 1)
 			{
-				const uint32_t q = mu_k.gethash32();
+				const uint32_t q = gi.gethash32();
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
 			}
 
@@ -373,6 +383,8 @@ private:
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
 
+		for (size_t i = 0; i < L; ++i) std::remove(ckptFilename(i).c_str());
+
 		proofTime = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
 		return true;
 	}
@@ -383,27 +395,29 @@ private:
 
 		if (!prp(exponent, B_GL, 0, testTime)) return false;
 		{
-			gint res(_transform->getSize(), _transform->getB()); _transform->getInt(res);
-			isPrp = res.isOne();
+			gint & gi = *_gi;
+			_transform->getInt(gi);
+			isPrp = gi.isOne();
 		}
 		if (!GL(exponent, B_GL, validTime)) return false;
 		return true;
 	}
 
-	bool proof(const uint32_t b, const uint32_t n, const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime)
+	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
 		if (!prp(exponent, B_GL, B_PL, testTime)) return false;
 		if (!GL(exponent, B_GL, validTime)) return false;
-		if (!PL(b, n, depth, proofTime)) return false;
+		if (!PL(depth, proofTime)) return false;
 		return true;
 	}
 
-	bool server(const uint32_t b, const uint32_t n, const mpz_t & exponent, const int depth, double & time, uint64_t & skey)
+	bool server(const mpz_t & exponent, const int depth, double & time, uint64_t & skey)
 	{
 		transform * const pTransform = _transform;
+		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -412,15 +426,13 @@ private:
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
 
-		gint g(pTransform->getSize(), pTransform->getB());
-
-		file proofFile(proofFilename(b, n).c_str(), "rb");
+		file proofFile(proofFilename(), "rb");
 
 		// v1 = mu[0]^w[0], v1: reg = 1
-		g.read(proofFile);
-		const uint32_t q = g.gethash32();
+		gi.read(proofFile);
+		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
-		pTransform->setInt(g);
+		pTransform->setInt(gi);
 		power(0, q);
 		pTransform->copy(1, 0);
 
@@ -431,9 +443,9 @@ private:
 		for (int k = 1; k <= depth; ++k)
 		{
 			// mu[k]: reg = 3
-			g.read(proofFile);
-			const uint32_t q = g.gethash32();
-			pTransform->setInt(g);
+			gi.read(proofFile);
+			const uint32_t q = gi.gethash32();
+			pTransform->setInt(gi);
 			pTransform->copy(3, 0);
 
 			// v1 = v1 * mu^q
@@ -454,8 +466,8 @@ private:
 
 		// skey = hash64(v1);
 		pTransform->copy(0, 1);
-		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
-		skey = v.gethash64();
+		pTransform->getInt(gi);
+		skey = gi.gethash64();
 
 		mpz_t p2; mpz_init_set_ui(p2, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
@@ -472,11 +484,11 @@ private:
 
 		// v2
 		pTransform->copy(0, 2);
-		pTransform->getInt(g);
+		pTransform->getInt(gi);
 
-		file certFile(certFilename(b, n).c_str(), "wb");
+		file certFile(certFilename(), "wb");
 		certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
-		g.write(certFile);
+		gi.write(certFile);
 		certFile.write(p2);
 
 		mpz_clear(p2);
@@ -485,19 +497,24 @@ private:
 		return true;
 	}
 
-	bool check(const uint32_t b, const uint32_t n, double & time, uint64_t & ckey)
+	bool check(double & time, uint64_t & ckey)
 	{
 		transform * const pTransform = _transform;
+		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
-		file certFile(certFilename(b, n).c_str(), "rb");
-		int B = 0; certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
-		gint v2(pTransform->getSize(), pTransform->getB()); v2.read(certFile);
-		mpz_t p2; mpz_init(p2); certFile.read(p2);
+		int B = 0;
+		mpz_t p2; mpz_init(p2);
+		{
+			file certFile(certFilename(), "rb");
+			certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
+			gi.read(certFile);
+			certFile.read(p2);
+		}
 
 		// v2 = v2^{2^B}
-		pTransform->setInt(v2);
+		pTransform->setInt(gi);
 		{
 			const int i0 = B - 1;
 			auto td = std::chrono::high_resolution_clock::now();
@@ -514,7 +531,7 @@ private:
 				if (_quit) return false;
 			}
 		}
-		pTransform->copy(2, 0);
+		pTransform->copy(1, 0);
 
 		// v1' = v2 * 2^p2
 		pTransform->set(1);
@@ -534,30 +551,29 @@ private:
 				if (_quit) return false;
 			}
 		}
-		pTransform->mul(2);
+		pTransform->mul(1);
 
 		mpz_clear(p2);
 
 		// ckey = hash64(v1')
-		gint v(pTransform->getSize(), pTransform->getB()); pTransform->getInt(v);
-		ckey = v.gethash64();
+		pTransform->getInt(gi);
+		ckey = gi.gethash64();
 
 		time = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
 		return true;
 	}
-
-private:
-	static double percent(const double num, const double den) { return std::rint(num * 1000 / den) / 10; }
 
 public:
 	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
 		size_t num_regs;
 		if (mode == EMode::Quick) num_regs = 3;
-		if (mode == EMode::Proof) num_regs = 3 + (size_t(1) << depth);
-		if (mode == EMode::Server) num_regs = 4;
-		if (mode == EMode::Check) num_regs = 3;
-		if (mode == EMode::None) num_regs = 3 + (size_t(1) << depth);
+		else if (mode == EMode::Proof) num_regs = 3;
+		else if (mode == EMode::Server) num_regs = 4;
+		else if (mode == EMode::Check) num_regs = 2;
+		else return false;
+
+		std::cout << "num_regs = " << num_regs << std::endl;
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
@@ -567,13 +583,20 @@ public:
 		createTransformCPU(b, n, nthreads, impl, num_regs);
 #endif
 
-		bool success = true;
+		_gi = new gint(1 << n, b);
+
+		{
+			std::ostringstream ss; ss << "g" << n << "_" << b;
+			_rootFilename = ss.str();
+		}
+
+		bool success = false;
 
 		if (mode == EMode::Check)
 		{
 			double time = 0;
 			uint64_t ckey = 0;
-			success = check(b, n, time, ckey);
+			success = check(time, ckey);
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 			if (success) ss << "checked, time = " << formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
 			else if (!_quit) ss << "check failed!";
@@ -603,7 +626,7 @@ public:
 			else if (mode == EMode::Proof)
 			{
 				double testTime = 0, validTime = 0, proofTime = 0;
-				success = proof(b, n, exponent, depth, testTime, validTime, proofTime);
+				success = proof(exponent, depth, testTime, validTime, proofTime);
 				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
 				if (success) ss << "proof file is generated, time = " << formatTime(testTime + validTime + proofTime) << ".";
 				else if (!_quit) ss << "validation failed!";
@@ -614,21 +637,10 @@ public:
 			{
 				double time = 0;
 				uint64_t skey = 0;
-				success = server(b, n, exponent, depth, time, skey);
+				success = server(exponent, depth, time, skey);
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 				if (success) ss << "certificate file is generated, time = " << formatTime(time) << ", skey = " << uint64toString(skey) << ".";
 				else if (!_quit) ss << "generation failed!";
-				else ss << "terminated.";
-				ss << std::endl; pio::print(ss.str());
-			}
-			else if (mode == EMode::Check)	// no exponent!
-			{
-				double time = 0;
-				uint64_t ckey = 0;
-				success = check(b, n, time, ckey);
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-				if (success) ss << "checked, time = " << formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
-				else if (!_quit) ss << "check failed!";
 				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
 			}
@@ -636,6 +648,7 @@ public:
 			mpz_clear(exponent);
 		}
 
+		delete _gi; _gi = nullptr;
 		deleteTransform();
 
 		return success;

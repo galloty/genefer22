@@ -77,8 +77,6 @@ private:
 	{
 		deleteTransform();
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id);
-		std::ostringstream ss; ss << "Using " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
-		pio::print(ss.str());
 	}
 #else
 	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
@@ -95,7 +93,7 @@ private:
 
 		std::string ttype;
 		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
-		std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s), " << _transform->getMemSize() / (1 << 20) << " MB." << std::endl;
+		std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
 		pio::print(ss.str());
 	}
 #endif
@@ -321,6 +319,7 @@ private:
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
 		file proofFile(proofFilename(), "wb");
+		proofFile.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
 
 		// mu[0] = ckpt[0]
 		{
@@ -336,6 +335,7 @@ private:
 		const int l0 = (1 << depth) - depth - 1;
 		auto td = std::chrono::high_resolution_clock::now();
 		int ld = l0;
+// size_t s = 0;	// complexity
 		for (int k = 1, l = l0; k <= depth; ++k)
 		{
 			const size_t i = size_t(1) << (depth - k);
@@ -347,6 +347,7 @@ private:
 				pTransform->setInt(gi);
 			}
 			power(0, w[0]);
+// s += mpz_sizeinbase(w[0], 2);
 			pTransform->copy(1, 0);
 
 			for (size_t j = i; j < L / 2; j += i)
@@ -358,12 +359,13 @@ private:
 					pTransform->setInt(gi);
 				}
 				power(0, w[j]);
+// s += mpz_sizeinbase(w[j], 2);
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
 				--l;
 				if (_quit) return false;
 			}
-
+// std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			pTransform->getInt(gi);
 			gi.write(proofFile);
 
@@ -414,22 +416,24 @@ private:
 		return true;
 	}
 
-	bool server(const mpz_t & exponent, const int depth, double & time, uint64_t & skey)
+	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & skey)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
 		const auto t0 = std::chrono::high_resolution_clock::now();
 
+		file proofFile(proofFilename(), "rb");
+		int depth = 0; proofFile.read(reinterpret_cast<char *>(&depth), sizeof(depth));
+
 		const size_t L = size_t(1) << depth, esize = mpz_sizeinbase(exponent, 2);
 		const int B = B_PietrzakLi(esize, depth);
 
 		mpz_t * const w = new mpz_t[L]; for (size_t i = 0; i < L; ++i) mpz_init(w[i]);
 
-		file proofFile(proofFilename(), "rb");
-
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proofFile);
+		isPrp = gi.isOne();
 		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
 		pTransform->setInt(gi);
@@ -573,8 +577,6 @@ public:
 		else if (mode == EMode::Check) num_regs = 2;
 		else return false;
 
-		std::cout << "num_regs = " << num_regs << std::endl;
-
 #if defined(GPU)
 		(void)nthreads; (void)impl;
 		createTransformGPU(b, n, device, num_regs);
@@ -637,11 +639,12 @@ public:
 			{
 				double time = 0;
 				uint64_t skey = 0;
-				success = server(exponent, depth, time, skey);
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-				if (success) ss << "certificate file is generated, time = " << formatTime(time) << ", skey = " << uint64toString(skey) << ".";
-				else if (!_quit) ss << "generation failed!";
-				else ss << "terminated.";
+				bool isPrp = false;
+				success = server(exponent, time, isPrp, skey);
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
+				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(time) << ", skey = " << uint64toString(skey) << ".";
+				else if (!_quit) ss << ": generation failed!";
+				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
 			}
 

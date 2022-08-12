@@ -300,9 +300,9 @@ public:
 			{
 				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, 5)) break;
 
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, 5)) break;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, 5)) break;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, 5)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, 7)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, 7)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, 7)) break;
 			}
 		}
 

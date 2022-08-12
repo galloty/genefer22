@@ -17,6 +17,5 @@ This version is compiled with gcc and was tested on Windows and Linux (Ubuntu).
 
 ## TODO
 
-- command line interface
 - save & restore context
 - Boinc interface

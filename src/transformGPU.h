@@ -805,6 +805,7 @@ class transformGPU : public transform
 {
 private:
 	const size_t _mem_size;
+	const size_t _num_regs;
 	RNS * const _z;
 	RNSe * const _ze;
 	engine * _pEngine = nullptr;
@@ -819,7 +820,8 @@ private:
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool bBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id) : transform(1 << n, b, bBoinc),
-		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
+		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _num_regs(num_regs),
+		_z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
 	{
 		const size_t size = getSize();
 
@@ -935,6 +937,30 @@ protected:
 	}
 
 public:
+	void readContext(file & cFile, const size_t num_regs) override
+	{
+		RNS * const z = _z;
+		RNSe * const ze = _ze;
+
+		const size_t size = getSize();
+		cFile.read(reinterpret_cast<char *>(z), sizeof(RNS) * size * num_regs);
+		cFile.read(reinterpret_cast<char *>(ze), sizeof(RNSe) * size * num_regs);
+
+		_pEngine->writeMemory_z(z, ze);
+	}
+
+	void saveContext(file & cFile, const size_t num_regs) const override
+	{
+		RNS * const z = _z;
+		RNSe * const ze = _ze;
+
+		_pEngine->readMemory_z(z, ze);
+
+		const size_t size = getSize();
+		cFile.write(reinterpret_cast<const char *>(z), sizeof(RNS) * size * num_regs);
+		cFile.write(reinterpret_cast<const char *>(ze), sizeof(RNSe) * size * num_regs);
+	}
+
 	void set(const int32_t a) override
 	{
 		RNS * const z = _z;

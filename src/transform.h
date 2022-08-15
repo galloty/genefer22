@@ -12,6 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 
 #include "gint.h"
+#include "file.h"
 
 class transform
 {
@@ -33,6 +34,9 @@ public:
 	virtual void copy(const size_t dst, const size_t src) const = 0;	// r_dst = r_src
 
 	virtual size_t getMemSize() const = 0;
+
+	virtual void readContext(file & cFile, const size_t num_regs) = 0;
+	virtual void saveContext(file & cFile, const size_t num_regs) const = 0;
 
 private:
 #if defined(GPU)

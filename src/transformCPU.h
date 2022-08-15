@@ -1238,7 +1238,8 @@ private:
 public:
 	transformCPU(const uint32_t b, const bool isboinc, const size_t num_threads, const size_t num_regs) : transform(N, b, isboinc),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
-		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize), _mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
+		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize),
+		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -1335,6 +1336,28 @@ protected:
 	}
 
 public:
+	void readContext(file & cFile, const size_t num_regs) override
+	{
+		Vc * const z = (Vc *)&_mem[zOffset];
+		cFile.read(reinterpret_cast<char *>(z), zSize);
+		if (num_regs > 1)
+		{
+			Vc * const zp = (Vc *)&_mem[zpOffset];
+			cFile.read(reinterpret_cast<char *>(zp), (num_regs - 1) * zSize);
+		}
+	}
+
+	void saveContext(file & cFile, const size_t num_regs) const override
+	{
+		const Vc * const z = (Vc *)&_mem[zOffset];
+		cFile.write(reinterpret_cast<const char *>(z), zSize);
+		if (num_regs > 1)
+		{
+			const Vc * const zp = (Vc *)&_mem[zpOffset];
+			cFile.write(reinterpret_cast<const char *>(zp), (num_regs - 1) * zSize);
+		}
+	}
+
 	void set(const int32_t a) override
 	{
 		Vc * const z = (Vc *)&_mem[zOffset];

@@ -13,7 +13,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
-#include <chrono>
 
 #include <gmp.h>
 #if !defined(GPU)
@@ -22,6 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "pio.h"
 #include "file.h"
+#include "timer.h"
 #if defined(GPU)
 #include "ocl.h"
 #endif
@@ -107,6 +107,7 @@ private:
 		}
 	}
 
+	std::string contextFilename() const { return _rootFilename + ".ctx"; }
 	std::string proofFilename() const { return _rootFilename + ".proof"; }
 	std::string certFilename() const { return _rootFilename + ".cert"; }
 	std::string ckptFilename(const size_t i) const
@@ -121,29 +122,46 @@ private:
 		return ss.str();
 	}
 
-	static std::string formatTime(const double time)
-	{
-		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
-		seconds -= minutes * 60; minutes -= hours * 60;
-
-		std::ostringstream ss;
-		ss << std::setfill('0') << std::setw(2) <<  hours << ':' << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
-		return ss.str();
-	}
-
-	static int printProgress(const char * const mode, const double elapsedTime, const int i0, const int i, int & id,
-							 const std::chrono::high_resolution_clock::time_point & t, std::chrono::high_resolution_clock::time_point & td,
+	static int printProgress(const char * const mode, const double elapsedTime, const int i0, const int i,
 							 const double percent_start = 0, const double percent_end = 100)
 	{
-		if (id == i) return 1;
-		const double mulTime = elapsedTime / (id - i), estimatedTime = mulTime * i;
+		if (i0 == i) return 1;
+		const double mulTime = elapsedTime / (i0 - i), estimatedTime = mulTime * i;
 		const double percent = (i0 - i) * (percent_end - percent_start) / i0 + percent_start;
 		const int dcount = std::max(int(0.2 / mulTime), 2);
 		std::ostringstream ss; ss << "\33[2K" << mode << ": " << std::setprecision(3) << percent << "% done, "
-								  << formatTime(estimatedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
+								  << timer::formatTime(estimatedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
 		pio::display(ss.str());
-		td = t; id = i;
 		return dcount;
+	}
+
+	bool readContext(const int where, int & i, double & elapsedTime)
+	{
+		file contextFile(contextFilename());
+		if (!contextFile.exists()) return false;
+		int version = 0;
+		contextFile.read(reinterpret_cast<char *>(&version), sizeof(version));
+		if (version != 1) return false;
+		int rwhere = 0;
+		contextFile.read(reinterpret_cast<char *>(&rwhere), sizeof(rwhere));
+		if (rwhere != where) return false;
+		contextFile.read(reinterpret_cast<char *>(&i), sizeof(i));
+		contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime));
+		const size_t num_regs = (where == 0) ? 2 : 1;
+		_transform->readContext(contextFile, num_regs);
+		return true;
+	}
+
+	void saveContext(const int where, const int i, const double elapsedTime) const
+	{
+		file contextFile(contextFilename(), "wb");
+		int version = 1;
+		contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version));
+		contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where));
+		contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i));
+		contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime));
+		const size_t num_regs = (where == 0) ? 2 : 1;
+		_transform->saveContext(contextFile, num_regs);
 	}
 
 	void power(const size_t reg, const uint32_t e) const
@@ -187,14 +205,28 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
-		const auto t0 = std::chrono::high_resolution_clock::now();
+		int ri = 0; double restoredTime = 0;
+		const bool found = readContext(0, ri, restoredTime);
 
-		pTransform->set(1);
-		pTransform->copy(1, 0);	// d(t)
+		watch chrono(found ? restoredTime : 0);
+		if (!found)
+		{
+			pTransform->set(1);
+			pTransform->copy(1, 0);	// d(t)
+		}
+		else
+		{
+			if (ri == 0)
+			{
+				testTime = 0;
+				return true;
+			}
+			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
+			pio::print(ss.str());
+		}
 		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1);
-		auto td = std::chrono::high_resolution_clock::now();
-		int id = i0, dcount = 100;
-		for (int i = i0; i >= 0; --i)
+		int dcount = 100;
+		for (int i = found ? ri - 1 : i0; i >= 0; --i)
 		{
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
@@ -217,14 +249,25 @@ private:
 			}
 			if (i % dcount == 0)
 			{
-				const auto t = std::chrono::high_resolution_clock::now();
-				const double elapsedTime = (t - td).count() * 1e-9;
-				if (elapsedTime >= 1) dcount = printProgress("Test", elapsedTime, i0, i, id, t, td);
+				chrono.get();
+				if (chrono.getDisplayTime() >= 1) { dcount = printProgress("Test", chrono.getElapsedTime(), i0, i); chrono.resetDisplayTime(); }
+				if (chrono.getRecordTime() > 600)
+				{
+					saveContext(0, i, chrono.getElapsedTime());
+					chrono.resetRecordTime();
+				}
 			}
-			if (_quit) return false;
+			if (_quit)
+			{
+				chrono.get();
+				saveContext(0, i, chrono.getElapsedTime());
+				return false;
+			}
 		}
 
-		testTime = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		chrono.get();
+		testTime = chrono.getElapsedTime();
+		saveContext(0, 0, testTime);
 		return true;
 	}
 
@@ -236,7 +279,7 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
-		const auto t0 = std::chrono::high_resolution_clock::now();
+		watch chrono;
 
 		// d(t + 1) = d(t) * result
 		pTransform->mul(1);
@@ -246,16 +289,14 @@ private:
 		pTransform->copy(0, 1);
 		{
 			const int i0 = B_GL - 1;
-			auto td = std::chrono::high_resolution_clock::now();
-			int id = i0, dcount = 100;
+			int dcount = 100;
 			for (int i = i0; i >= 0; --i)
 			{
 				pTransform->squareDup(false);
 				if (i % dcount == 0)
 				{
-					const auto t = std::chrono::high_resolution_clock::now();
-					const double elapsedTime = (t - td).count() * 1e-9;
-					if (elapsedTime >= 1) dcount = printProgress("Valid", elapsedTime, i0, i, id, t, td, 0, 50);
+					chrono.get();
+					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Valid", chrono.getElapsedTime(), i0, i, 0, 50);
 				}
 				if (_quit) return false;
 			}
@@ -276,16 +317,14 @@ private:
 		pTransform->set(1);
 		{
 			const int i0 = int(mpz_sizeinbase(res, 2) - 1);
-			auto td = std::chrono::high_resolution_clock::now();
-			int id = i0, dcount = 100;
+			int dcount = 100;
 			for (int i = i0; i >= 0; --i)
 			{
 				pTransform->squareDup(mpz_tstbit(res, i) != 0);
 				if (i % dcount == 0)
 				{
-					const auto t = std::chrono::high_resolution_clock::now();
-					const double elapsedTime = (t - td).count() * 1e-9;
-					if (elapsedTime >= 1) dcount = printProgress("Valid", elapsedTime, i0, i, id, t, td, 50, 100);
+					chrono.get();
+					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Valid", chrono.getElapsedTime(), i0, i, 50, 100);
 				}
 				if (_quit) return false;
 			}
@@ -304,7 +343,7 @@ private:
 
 		const bool success = (h1 == h2);
 
-		validTime = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		chrono.get(); validTime = chrono.getElapsedTime();
 		return success;
 	}
 
@@ -316,7 +355,7 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
-		const auto t0 = std::chrono::high_resolution_clock::now();
+		watch chrono;
 
 		file proofFile(proofFilename(), "wb");
 		proofFile.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
@@ -333,8 +372,6 @@ private:
 		mpz_set_ui(w[0], gi.gethash32());
 
 		const int l0 = (1 << depth) - depth - 1;
-		auto td = std::chrono::high_resolution_clock::now();
-		int ld = l0;
 // size_t s = 0;	// complexity
 		for (int k = 1, l = l0; k <= depth; ++k)
 		{
@@ -375,9 +412,8 @@ private:
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
 			}
 
-			const auto t = std::chrono::high_resolution_clock::now();
-			const double elapsedTime = (t - td).count() * 1e-9;
-			if (elapsedTime >= 1) printProgress("Proof", elapsedTime, l0, l, ld, t, td, 0, 100);
+			chrono.get();
+			if (chrono.getDisplayTime() >= 1) printProgress("Proof", chrono.getElapsedTime(), l0, l);
 
 			if (_quit) return false;
 		}
@@ -387,7 +423,7 @@ private:
 
 		for (size_t i = 0; i < L; ++i) std::remove(ckptFilename(i).c_str());
 
-		proofTime = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		chrono.get(); proofTime = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -421,7 +457,7 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
-		const auto t0 = std::chrono::high_resolution_clock::now();
+		watch chrono;
 
 		file proofFile(proofFilename(), "rb");
 		int depth = 0; proofFile.read(reinterpret_cast<char *>(&depth), sizeof(depth));
@@ -497,7 +533,7 @@ private:
 
 		mpz_clear(p2);
 
-		time = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		chrono.get(); time = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -506,7 +542,10 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
-		const auto t0 = std::chrono::high_resolution_clock::now();
+		int ri = 0; double restoredTime = 0;
+		const bool found = readContext(1, ri, restoredTime);
+
+		watch chrono(found ? restoredTime : 0);
 
 		int B = 0;
 		mpz_t p2; mpz_init(p2);
@@ -521,16 +560,14 @@ private:
 		pTransform->setInt(gi);
 		{
 			const int i0 = B - 1;
-			auto td = std::chrono::high_resolution_clock::now();
-			int id = i0, dcount = 100;
+			int dcount = 100;
 			for (int i = i0; i >= 0; --i)
 			{
 				pTransform->squareDup(false);
 				if (i % dcount == 0)
 				{
-					const auto t = std::chrono::high_resolution_clock::now();
-					const double elapsedTime = (t - td).count() * 1e-9;
-					if (elapsedTime >= 1) dcount = printProgress("Check", elapsedTime, i0, i, id, t, td, 0, 50);
+					chrono.get();
+					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i, 0, 50);
 				}
 				if (_quit) return false;
 			}
@@ -541,16 +578,14 @@ private:
 		pTransform->set(1);
 		{
 			const int i0 = int(mpz_sizeinbase(p2, 2) - 1);
-			auto td = std::chrono::high_resolution_clock::now();
-			int id = i0, dcount = 100;
+			int dcount = 100;
 			for (int i = i0; i >= 0; --i)
 			{
 				pTransform->squareDup(mpz_tstbit(p2, i) != 0);
 				if (i % dcount == 0)
 				{
-					const auto t = std::chrono::high_resolution_clock::now();
-					const double elapsedTime = (t - td).count() * 1e-9;
-					if (elapsedTime >= 1) dcount = printProgress("Check", elapsedTime, i0, i, id, t, td, 50, 100);
+					chrono.get();
+					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i, 50, 100);
 				}
 				if (_quit) return false;
 			}
@@ -563,7 +598,7 @@ private:
 		pTransform->getInt(gi);
 		ckey = gi.gethash64();
 
-		time = (std::chrono::high_resolution_clock::now() - t0).count() * 1e-9;
+		chrono.get(); time = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -600,7 +635,7 @@ public:
 			uint64_t ckey = 0;
 			success = check(time, ckey);
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-			if (success) ss << "checked, time = " << formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
+			if (success) ss << "checked, time = " << timer::formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
 			else if (!_quit) ss << "check failed!";
 			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
@@ -615,7 +650,7 @@ public:
 				bool isPrp = false;
 				success = quick(exponent, testTime, validTime, isPrp);
 				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
-				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(testTime + validTime) << ".";
+				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(testTime + validTime) << ".";
 				else if (!_quit) ss << ": validation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -630,7 +665,7 @@ public:
 				double testTime = 0, validTime = 0, proofTime = 0;
 				success = proof(exponent, depth, testTime, validTime, proofTime);
 				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
-				if (success) ss << "proof file is generated, time = " << formatTime(testTime + validTime + proofTime) << ".";
+				if (success) ss << "proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
 				else if (!_quit) ss << "validation failed!";
 				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -642,7 +677,7 @@ public:
 				bool isPrp = false;
 				success = server(exponent, time, isPrp, skey);
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
-				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << formatTime(time) << ", skey = " << uint64toString(skey) << ".";
+				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(time) << ", skey = " << uint64toString(skey) << ".";
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

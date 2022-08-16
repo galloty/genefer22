@@ -294,8 +294,6 @@ public:
 													200295018, 167811262, 113521888, 15859176, 4896418, 1059094 };
 #endif
 
-			// depth: 10: 5, 11: 5, 12: 5, 13: 6, 14: 6
-
 			for (size_t i = 0; i < count; ++i)
 			{
 				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, 5)) break;

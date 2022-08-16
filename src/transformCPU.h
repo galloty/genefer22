@@ -634,6 +634,7 @@ private:
 	static const size_t zOffset = wsOffset + wsSize;
 	static const size_t fcOffset = zOffset + zSize;
 	static const size_t zpOffset = fcOffset + fcSize;
+	static const size_t zrOffset = zpOffset + zSize;
 
 	const fp16_80 _sqrt_b;
 
@@ -1342,8 +1343,8 @@ public:
 		cFile.read(reinterpret_cast<char *>(z), zSize);
 		if (num_regs > 1)
 		{
-			Vc * const zp = (Vc *)&_mem[zpOffset];
-			cFile.read(reinterpret_cast<char *>(zp), (num_regs - 1) * zSize);
+			Vc * const zr = (Vc *)&_mem[zrOffset];
+			cFile.read(reinterpret_cast<char *>(zr), (num_regs - 1) * zSize);
 		}
 	}
 
@@ -1353,8 +1354,8 @@ public:
 		cFile.write(reinterpret_cast<const char *>(z), zSize);
 		if (num_regs > 1)
 		{
-			const Vc * const zp = (Vc *)&_mem[zpOffset];
-			cFile.write(reinterpret_cast<const char *>(zp), (num_regs - 1) * zSize);
+			const Vc * const zr = (Vc *)&_mem[zrOffset];
+			cFile.write(reinterpret_cast<const char *>(zr), (num_regs - 1) * zSize);
 		}
 	}
 
@@ -1396,7 +1397,7 @@ public:
 
 	void initMultiplicand(const size_t src) override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + src * zSize];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zrOffset + (src - 1) * zSize];
 		Vc * const zp = (Vc *)&_mem[zpOffset];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
 
@@ -1439,8 +1440,8 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zpOffset + src * zSize];
-		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zpOffset + dst * zSize];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zrOffset + (src - 1) * zSize];
+		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zrOffset + (dst - 1) * zSize];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
 	}
 };

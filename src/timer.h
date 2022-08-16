@@ -7,11 +7,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <sstream>
 #include <iomanip>
-
-#include <chrono>
 
 struct timer
 {
@@ -19,7 +18,7 @@ struct timer
 
 	static time currentTime()
 	{
-		return  std::chrono::high_resolution_clock::now();
+		return std::chrono::high_resolution_clock::now();
 	}
 
 	static double diffTime(const time & end, const time & start)

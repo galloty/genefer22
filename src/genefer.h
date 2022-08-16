@@ -141,13 +141,16 @@ private:
 		if (!contextFile.exists()) return false;
 		int version = 0;
 		contextFile.read(reinterpret_cast<char *>(&version), sizeof(version));
+#if defined(GPU)
+		version = -version;
+#endif
 		if (version != 1) return false;
 		int rwhere = 0;
 		contextFile.read(reinterpret_cast<char *>(&rwhere), sizeof(rwhere));
 		if (rwhere != where) return false;
 		contextFile.read(reinterpret_cast<char *>(&i), sizeof(i));
 		contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime));
-		const size_t num_regs = (where == 0) ? 2 : 1;
+		const size_t num_regs = 2;
 		_transform->readContext(contextFile, num_regs);
 		return true;
 	}
@@ -156,11 +159,14 @@ private:
 	{
 		file contextFile(contextFilename(), "wb");
 		int version = 1;
+#if defined(GPU)
+		version = -version;
+#endif
 		contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version));
 		contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where));
 		contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i));
 		contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime));
-		const size_t num_regs = (where == 0) ? 2 : 1;
+		const size_t num_regs = 2;
 		_transform->saveContext(contextFile, num_regs);
 	}
 
@@ -216,18 +222,32 @@ private:
 		}
 		else
 		{
-			if (ri == 0)
+			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
+			pio::print(ss.str());
+			if (ri == -1)
 			{
 				testTime = 0;
 				return true;
 			}
-			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
-			pio::print(ss.str());
 		}
 		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1);
 		int dcount = 100;
-		for (int i = found ? ri - 1 : i0; i >= 0; --i)
+		for (int i = found ? ri : i0; i >= 0; --i)
 		{
+			if (_quit)
+			{
+				chrono.get();
+				saveContext(0, i, chrono.getElapsedTime());
+				return false;
+			}
+
+			if (i % dcount == 0)
+			{
+				chrono.get();
+				if (chrono.getDisplayTime() >= 1) { dcount = printProgress("Test", chrono.getElapsedTime(), i0, i); chrono.resetDisplayTime(); }
+				if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+			}
+
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
 			// if (i == 0) pTransform->add1();	// => invalid
@@ -247,27 +267,11 @@ private:
 				file ckptFile(ckptFilename(i / B_PL), "wb");
 				gi.write(ckptFile);
 			}
-			if (i % dcount == 0)
-			{
-				chrono.get();
-				if (chrono.getDisplayTime() >= 1) { dcount = printProgress("Test", chrono.getElapsedTime(), i0, i); chrono.resetDisplayTime(); }
-				if (chrono.getRecordTime() > 600)
-				{
-					saveContext(0, i, chrono.getElapsedTime());
-					chrono.resetRecordTime();
-				}
-			}
-			if (_quit)
-			{
-				chrono.get();
-				saveContext(0, i, chrono.getElapsedTime());
-				return false;
-			}
 		}
 
 		chrono.get();
 		testTime = chrono.getElapsedTime();
-		saveContext(0, 0, testTime);
+		saveContext(0, -1, testTime);
 		return true;
 	}
 
@@ -421,8 +425,6 @@ private:
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		for (size_t i = 0; i < L; ++i) std::remove(ckptFilename(i).c_str());
-
 		chrono.get(); proofTime = chrono.getElapsedTime();
 		return true;
 	}
@@ -544,6 +546,11 @@ private:
 
 		int ri = 0; double restoredTime = 0;
 		const bool found = readContext(1, ri, restoredTime);
+		if (found)
+		{
+			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
+			pio::print(ss.str());
+		}
 
 		watch chrono(found ? restoredTime : 0);
 
@@ -555,44 +562,60 @@ private:
 			gi.read(certFile);
 			certFile.read(p2);
 		}
+		const int p2size = int(mpz_sizeinbase(p2, 2));
+
+		const int i0 = p2size + B - 1;
+		int dcount = 100;
 
 		// v2 = v2^{2^B}
-		pTransform->setInt(gi);
+		if (!found || (ri >= p2size))
 		{
-			const int i0 = B - 1;
-			int dcount = 100;
-			for (int i = i0; i >= 0; --i)
+			if (!found) pTransform->setInt(gi);
+			for (int i = found ? ri : i0; i >= p2size; --i)
 			{
-				pTransform->squareDup(false);
+				if (_quit)
+				{
+					chrono.get();
+					saveContext(1, i, chrono.getElapsedTime());
+					return false;
+				}
+
 				if (i % dcount == 0)
 				{
 					chrono.get();
-					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i, 0, 50);
+					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i);
+					if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
-				if (_quit) return false;
+
+				pTransform->squareDup(false);
 			}
+			pTransform->copy(1, 0);
 		}
-		pTransform->copy(1, 0);
 
 		// v1' = v2 * 2^p2
-		pTransform->set(1);
+		if (!found || (ri >= p2size)) pTransform->set(1);
+		for (int i = found ? std::min(ri, p2size - 1) : p2size - 1; i >= 0; --i)
 		{
-			const int i0 = int(mpz_sizeinbase(p2, 2) - 1);
-			int dcount = 100;
-			for (int i = i0; i >= 0; --i)
+			if (_quit)
 			{
-				pTransform->squareDup(mpz_tstbit(p2, i) != 0);
-				if (i % dcount == 0)
-				{
-					chrono.get();
-					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i, 50, 100);
-				}
-				if (_quit) return false;
+				chrono.get();
+				saveContext(1, i, chrono.getElapsedTime());
+				return false;
 			}
+
+			if (i % dcount == 0)
+			{
+				chrono.get();
+				if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i);
+				if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+			}
+
+			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
 		}
-		pTransform->mul(1);
 
 		mpz_clear(p2);
+
+		pTransform->mul(1);
 
 		// ckey = hash64(v1')
 		pTransform->getInt(gi);
@@ -631,14 +654,17 @@ public:
 
 		if (mode == EMode::Check)
 		{
-			double time = 0;
-			uint64_t ckey = 0;
+			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 			if (success) ss << "checked, time = " << timer::formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
 			else if (!_quit) ss << "check failed!";
 			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
+			if (success && !_isBoinc)
+			{
+				std::remove(contextFilename().c_str());
+			}
 		}
 		else
 		{
@@ -646,8 +672,7 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0;
-				bool isPrp = false;
+				double testTime = 0, validTime = 0; bool isPrp = false;
 				success = quick(exponent, testTime, validTime, isPrp);
 				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
 				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(testTime + validTime) << ".";
@@ -658,6 +683,7 @@ public:
 				{
 					std::ostringstream ss; ss << b << "^{2^" << n << "} + 1 is " << (isPrp ? "a probable prime" : "composite") << "." << std::endl;
 					pio::result(ss.str());
+					if (!_isBoinc) std::remove(contextFilename().c_str());
 				}
 			}
 			else if (mode == EMode::Proof)
@@ -669,12 +695,15 @@ public:
 				else if (!_quit) ss << "validation failed!";
 				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
+				if (success && !_isBoinc)
+				{
+					for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckptFilename(i).c_str());
+					std::remove(contextFilename().c_str());
+				}
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0;
-				uint64_t skey = 0;
-				bool isPrp = false;
+				double time = 0; uint64_t skey = 0; bool isPrp = false;
 				success = server(exponent, time, isPrp, skey);
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(time) << ", skey = " << uint64toString(skey) << ".";
@@ -686,6 +715,7 @@ public:
 			mpz_clear(exponent);
 		}
 
+		_rootFilename.clear();
 		delete _gi; _gi = nullptr;
 		deleteTransform();
 

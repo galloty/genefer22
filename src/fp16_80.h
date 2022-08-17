@@ -77,7 +77,7 @@ public:
 		const uint32_t s = std::lround(std::sqrt(double(x)));
 		fp16_80 a((s - 1) << 16), b((s + 1) << 16);
 
-		while (true)
+		for (size_t i = 0; i < 100; ++i)
 		{
 			const fp16_80 c = fp16_80::hadd(a, b);
 			const uint32_t c2_high = c.square_hi();
@@ -92,5 +92,7 @@ public:
 				b = c;
 			}
 		}
+
+		return fp16_80::hadd(a, b);
 	}
 };

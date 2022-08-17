@@ -33,7 +33,7 @@ inline int ilog2_64(const uint64_t n) { return 63 - __builtin_clzll(n); }
 class genefer
 {
 public:
-	enum class EMode { None, Quick, Proof, Server, Check }; 
+	enum class EMode { None, Quick, Proof, Server, Check, Limit }; 
 
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };
@@ -73,28 +73,34 @@ private:
 
 private:
 #if defined(GPU)
-	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs)
+	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs, const bool verbose = true)
 	{
 		deleteTransform();
-		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id);
+		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id, verbose);
 	}
 #else
-	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs)
+	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs, const bool verbose = true)
 	{
 		deleteTransform();
 
-		if (nthreads != 0) omp_set_num_threads(int(nthreads));
-		size_t num_threads = 0;
-#pragma omp parallel
+		if (nthreads > 1) omp_set_num_threads(int(nthreads));
+		size_t num_threads = 1;
+		if (nthreads != 1)
 		{
+#pragma omp parallel
+			{
 #pragma omp single
-			num_threads = size_t(omp_get_num_threads());
+				num_threads = size_t(omp_get_num_threads());
+			}
 		}
 
 		std::string ttype;
 		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
-		std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
-		pio::print(ss.str());
+		if (verbose)
+		{
+			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
+			pio::print(ss.str());
+		}
 	}
 #endif
 
@@ -625,6 +631,58 @@ private:
 		return true;
 	}
 
+	bool check_limit(const uint32_t n, const size_t device, const size_t nthreads, const std::string & impl)
+	{
+		const size_t num_regs = 3;
+
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 1000);
+
+		uint32_t b_min = 6, b_max = 2000000000;
+		while (b_max - b_min > 2)
+		{
+			const uint32_t b = (b_min + b_max) / 4 * 2;
+
+#if defined(GPU)
+			(void)nthreads; (void)impl;
+			createTransformGPU(b, n, device, num_regs, false);
+#else
+			(void)device;
+			createTransformCPU(b, n, nthreads, impl, num_regs, false);
+#endif
+
+			_gi = new gint(1 << n, b);
+
+			{
+				std::ostringstream ss; ss << "g" << n << "_" << b;
+				_rootFilename = ss.str();
+			}
+
+			double testTime = 0, validTime = 0; bool isPrp = false;
+			const bool success = quick(exponent, testTime, validTime, isPrp);
+			if (success) b_min = b;
+			else if (!_quit) b_max = b;
+
+			// std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: " << (success ? 1 : 0) << std::endl;
+			// pio::print(ss.str());
+
+			if (!_isBoinc) std::remove(contextFilename().c_str());
+
+			_rootFilename.clear();
+			delete _gi; _gi = nullptr;
+			deleteTransform();
+
+			if (_quit) break;
+		}
+
+		mpz_clear(exponent);
+
+		const uint32_t b = (b_min + b_max) / 4 * 2;
+		std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1." << std::endl;
+		pio::print(ss.str());
+
+		return !_quit;
+	}
+
 public:
 	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
@@ -633,7 +691,11 @@ public:
 		else if (mode == EMode::Proof) num_regs = 3;
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 2;
-		else return false;
+		else
+		{
+			if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
+			return false;
+		}
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;

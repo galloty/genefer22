@@ -145,7 +145,7 @@ private:
 	size_t _n3aLocalWS = 32, _n3bLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
 
 public:
-	engine(const platform & platform, const size_t d, const int ln) : device(platform, d), _n(size_t(1) << ln), _ln(ln) {}
+	engine(const platform & platform, const size_t d, const int ln, const bool verbose) : device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln) {}
 	virtual ~engine() {}
 
 ///////////////////////////////
@@ -759,8 +759,10 @@ public:
 			}
 		}
 #if defined(ocl_debug)
-		std::ostringstream ss; ss << "n3aLocalWS = " << _n3aLocalWS << ", n3bLocalWS = " << _n3bLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
-		pio::display(ss.str());
+		{
+			std::ostringstream ss; ss << "n3aLocalWS = " << _n3aLocalWS << ", n3bLocalWS = " << _n3bLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
+			pio::display(ss.str());
+		}
 #endif
 
 		const splitter * const pSplit = _pSplit;
@@ -787,12 +789,14 @@ public:
 				}
 			}
 		}
-// #if defined(ocl_debug)
-		std::ostringstream ss;
-		for (size_t j = 0, nps = pSplit->getPartSize(_splitIndex); j < nps; ++j) ss << " " << pSplit->getPart(_splitIndex, j);
-		ss << std::endl;
-		pio::display(ss.str());
-// #endif
+#if defined(ocl_debug)
+		{
+			std::ostringstream ss;
+			for (size_t j = 0, nps = pSplit->getPartSize(_splitIndex); j < nps; ++j) ss << " " << pSplit->getPart(_splitIndex, j);
+			ss << std::endl;
+			pio::display(ss.str());
+		}
+#endif
 
 		delete[] Z;
 		delete[] Ze;
@@ -819,7 +823,7 @@ private:
 
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool bBoinc, const size_t device, const size_t num_regs,
-				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id) : transform(1 << n, b, bBoinc),
+				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose) : transform(1 << n, b, bBoinc),
 		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _num_regs(num_regs),
 		_z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
 	{
@@ -828,7 +832,7 @@ public:
 		const bool is_boinc_platform = bBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n);
+		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n, verbose);
 
 		std::ostringstream src;
 
@@ -869,8 +873,8 @@ public:
 		_pEngine->createKernels(b);
 
 		RNS_W * const wr = new RNS_W[2 * size];
-		RNS_We * const wre = new RNS_We[2 * size];
 		RNS_W * const wri = &wr[size];
+		RNS_We * const wre = new RNS_We[2 * size];
 		RNS_We * const wrie = &wre[size];
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
@@ -910,6 +914,7 @@ public:
 	{
 		_pEngine->releaseKernels();
 		_pEngine->releaseMemory();
+		_pEngine->clearProgram();
 		delete _pEngine;
 
 		delete[] _z;

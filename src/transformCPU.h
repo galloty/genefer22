@@ -15,6 +15,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "transform.h"
 #include "fp16_80.h"
 
+namespace transformCPU_namespace
+{
+
 struct Complex
 {
 	double real, imag;
@@ -1239,7 +1242,7 @@ private:
 public:
 	transformCPU(const uint32_t b, const bool isboinc, const size_t num_threads, const size_t num_regs) : transform(N, b, isboinc),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
-		_mem_size(wSize + wsSize + zSize + fcSize + (num_regs - 1) * zSize),
+		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -1466,4 +1469,6 @@ inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 
 	return pTransform;
+}
+
 }

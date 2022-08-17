@@ -304,7 +304,7 @@ private:
 	std::map<cl_kernel, profile> _profileMap;
 
 public:
-	device(const platform & parent, const size_t d) : _platform(parent.getPlatform(d)), _device(parent.getDevice(d))
+	device(const platform & parent, const size_t d, const bool verbose) : _platform(parent.getPlatform(d)), _device(parent.getDevice(d))
 #if defined(ocl_debug)
 		, _d(d)
 #endif
@@ -329,13 +329,16 @@ public:
 		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(_maxWorkGroupSize), &_maxWorkGroupSize, nullptr));
 		oclFatal(clGetDeviceInfo(_device, CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(_timerResolution), &_timerResolution, nullptr));
 
-		std::ostringstream ssd;
-		ssd << "Running on device '" << deviceName<< "', vendor '" << deviceVendor
-			<< "', version '" << deviceVersion << "' and driver '" << driverVersion << "'." << std::endl;
-		// ssd << computeUnits << " compUnits @ " << maxClockFrequency << "MHz, mem=" << (memSize >> 20) << "MB, cache="
-		// 	<< (memCacheSize >> 10) << "kB, cacheLine=" << memCacheLineSize << "B, localMem=" << (_localMemSize >> 10)
-		// 	<< "kB, constMem=" << (memConstSize >> 10) << "kB, maxWorkGroup=" << _maxWorkGroupSize << "." << std::endl;
-		pio::print(ssd.str());
+		if (verbose)
+		{
+			std::ostringstream ssd;
+			ssd << "Running on device '" << deviceName<< "', vendor '" << deviceVendor
+				<< "', version '" << deviceVersion << "' and driver '" << driverVersion << "'." << std::endl;
+			// ssd << computeUnits << " compUnits @ " << maxClockFrequency << "MHz, mem=" << (memSize >> 20) << "MB, cache="
+			// 	<< (memCacheSize >> 10) << "kB, cacheLine=" << memCacheLineSize << "B, localMem=" << (_localMemSize >> 10)
+			// 	<< "kB, constMem=" << (memConstSize >> 10) << "kB, maxWorkGroup=" << _maxWorkGroupSize << "." << std::endl;
+			pio::print(ssd.str());
+		}
 
 		const cl_context_properties contextProperties[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)_platform, 0 };
 		cl_int err_cc;
@@ -357,7 +360,8 @@ public:
 		std::ostringstream ss; ss << "Delete ocl device " << _d << "." << std::endl;
 		pio::display(ss.str());
 #endif
-		oclFatal(clReleaseCommandQueue(_queue));
+		oclFatal(clReleaseCommandQueue(_queueP));
+		oclFatal(clReleaseCommandQueue(_queueF));
 		oclFatal(clReleaseContext(_context));
 	}
 

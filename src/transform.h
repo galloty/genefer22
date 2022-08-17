@@ -41,7 +41,7 @@ public:
 private:
 #if defined(GPU)
 	static transform * create_ocl(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
-								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id);
+								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose);
 #else
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t num_threads, const size_t num_regs);
 	static transform * create_sse4(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t num_threads, const size_t num_regs);
@@ -59,10 +59,10 @@ public:
 	bool isBoinc() const { return _isBoinc; }
 
 #if defined(GPU)
-	static transform * create_gpu(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device,
-								  const size_t num_regs, const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id)
+	static transform * create_gpu(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
+								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
 	{
-		transform * const pTransform = transform::create_ocl(b, n, isBoinc, device, num_regs, boinc_platform_id, boinc_device_id);
+		transform * const pTransform = transform::create_ocl(b, n, isBoinc, device, num_regs, boinc_platform_id, boinc_device_id, verbose);
 		if (pTransform == nullptr) throw std::runtime_error("OpenCL device not found");
 		return pTransform;
 	}

@@ -1,0 +1,11 @@
+genefer22g.exe -b 1999992578 -n 10 -q
+genefer22g.exe -b 1999997802 -n 11 -q
+genefer22g.exe -b 1999999266 -n 12 -q
+genefer22g.exe -b 1999941378 -n 13 -q
+genefer22g.exe -b 699995450 -n 14 -q
+genefer22g.exe -b 302257864 -n 15 -q
+genefer22g.exe -b 168789060 -n 16 -q
+genefer22g.exe -b 114009952 -n 17 -q
+genefer22g.exe -b 15913772 -n 18 -q
+genefer22g.exe -b 4896418 -n 19 -q
+genefer22g.exe -b 1951734 -n 20 -q

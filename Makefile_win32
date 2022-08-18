@@ -1,18 +1,18 @@
 # Compiler: GCC 11
-CC = g++ -m64 -std=c++17
+CC = g++ -m32 -march=i686 -std=c++17
 RM = cmd \/C del
 
 BIN_DIR = bin
 SRC_DIR = src
 
 OCL_INC = -I Khronos
-OCL_LIB = C:/Windows/System32/OpenCL.dll
+OCL_LIB = C:/Windows/SysWOW64/OpenCL.dll
 
 BOINC_DIR = ../boinc
 BOINC_INC = -I $(BOINC_DIR) -I $(BOINC_DIR)/api -I $(BOINC_DIR)/lib -I $(BOINC_DIR)/win_build
-BOINC_LIB = $(BOINC_DIR)/lib_win64/libboinc_api.a $(BOINC_DIR)/lib_win64/libboinc.a $(BOINC_DIR)/lib_win64/libboinc_opencl.a
+BOINC_LIB = $(BOINC_DIR)/lib_win32/libboinc_api.a $(BOINC_DIR)/lib_win32/libboinc.a $(BOINC_DIR)/lib_win32/libboinc_opencl.a
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -fexceptions -ffinite-math-only -fprefetch-loop-arrays -frename-registers
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -fexceptions -ffinite-math-only -frename-registers
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
@@ -22,8 +22,8 @@ DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_
 DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/fp16_80.h
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/ocl.h
 
-EXEC_CPU = $(BIN_DIR)\genefer22.exe
-EXEC_GPU = $(BIN_DIR)\genefer22g.exe
+EXEC_CPU = $(BIN_DIR)\genefer22_x86.exe
+EXEC_GPU = $(BIN_DIR)\genefer22g_x86.exe
 
 .MAIN: rebuild
 
@@ -41,24 +41,19 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_sse2.o: $(SRC_DIR)/transform_sse2.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mtune=core2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mtune=core2 -c -S $< -o sse2.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse2 -mtune=core2 -c $< -o $@
 
 transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -msse4.1 -mtune=westmere -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -msse4.1 -mtune=westmere -c -S $< -o sse4.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c $< -o $@
 
 transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mtune=ivybridge -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mtune=ivybridge -c -S $< -o avx.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=ivybridge -c $< -o $@
 
 transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mfma -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mfma -c -S $< -o fma.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -c $< -o $@
 
 transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx512f -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx512f -c -S $< -o 512.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -c $< -o $@
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
@@ -67,4 +62,4 @@ $(EXEC_CPU): $(OBJS_CPU)
 	$(CC) $(FLAGS_CPU) -static $^ $(BOINC_LIB) -lgmp -o $@
 
 $(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) -static $^ $(BOINC_LIB) $(OCL_LIB) -lgmp -o $@
+	$(CC) $(FLAGS_GPU) -Wl,-enable-stdcall-fixup -static $^ $(BOINC_LIB) $(OCL_LIB) -lgmp -o $@

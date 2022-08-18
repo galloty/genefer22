@@ -17,5 +17,6 @@ This version is compiled with gcc and was tested on Windows and Linux (Ubuntu).
 
 ## TODO
 
-- save & restore context
 - Boinc interface
+- fast GPU transform for GFN-22
+- fast CPU transform for GFN-22

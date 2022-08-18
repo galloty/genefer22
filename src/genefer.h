@@ -135,7 +135,7 @@ private:
 		const double mulTime = elapsedTime / (i0 - i), estimatedTime = mulTime * i;
 		const double percent = (i0 - i) * (percent_end - percent_start) / i0 + percent_start;
 		const int dcount = std::max(int(0.2 / mulTime), 2);
-		std::ostringstream ss; ss << "\33[2K" << mode << ": " << std::setprecision(3) << percent << "% done, "
+		std::ostringstream ss; ss << mode << ": " << std::setprecision(3) << percent << "% done, "
 								  << timer::formatTime(estimatedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
 		pio::display(ss.str());
 		return dcount;
@@ -662,7 +662,7 @@ private:
 			if (success) b_min = b;
 			else if (!_quit) b_max = b;
 
-			// std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: " << (success ? 1 : 0) << std::endl;
+			// std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << (success ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
 
 			if (!_isBoinc) std::remove(contextFilename().c_str());
@@ -677,7 +677,7 @@ private:
 		mpz_clear(exponent);
 
 		const uint32_t b = (b_min + b_max) / 4 * 2;
-		std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1." << std::endl;
+		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1." << std::endl;
 		pio::print(ss.str());
 
 		return !_quit;
@@ -736,7 +736,7 @@ public:
 			{
 				double testTime = 0, validTime = 0; bool isPrp = false;
 				success = quick(exponent, testTime, validTime, isPrp);
-				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1";
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(testTime + validTime) << ".";
 				else if (!_quit) ss << ": validation failed!";
 				else ss << ": terminated.";
@@ -752,7 +752,7 @@ public:
 			{
 				double testTime = 0, validTime = 0, proofTime = 0;
 				success = proof(exponent, depth, testTime, validTime, proofTime);
-				std::ostringstream ss; ss << "\33[2K" << b << "^{2^" << n << "} + 1: ";
+				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 				if (success) ss << "proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
 				else if (!_quit) ss << "validation failed!";
 				else ss << "terminated.";

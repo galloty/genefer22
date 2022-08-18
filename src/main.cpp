@@ -17,6 +17,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <signal.h>
 #endif
 
+#if defined(BOINC)
+#include "version.h"
+#endif
+
 #if defined(GPU)
 #include "ocl.h"
 #endif
@@ -88,6 +92,10 @@ private:
 		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
 #endif
 
+#if defined(BOINC)
+	ssc << " boinc-" << BOINC_VERSION_STRING;
+#endif
+
 #if defined(GPU)
 		const char * const ext = "g";
 #else
@@ -122,7 +130,7 @@ private:
 #endif
 		std::ostringstream ss;
 		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                        the exponent of the GFN (14 <= n <= 22)" << std::endl;
+		ss << "  -n <n>                        the exponent of the GFN (10 <= n <= 22)" << std::endl;
 		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                            quick test" << std::endl;
 		ss << "  -p                            full test: a proof is generated" << std::endl;
@@ -136,7 +144,7 @@ private:
 #endif
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
 #if defined(BOINC)
-		ss << "  -boinc                  operate as a BOINC client app" << std::endl;
+		ss << "  -boinc                        operate as a BOINC client app" << std::endl;
 #endif
 		ss << std::endl;
 		return ss.str();
@@ -192,20 +200,12 @@ public:
 
 		pio::print(header(args, true));
 
-		if (args.empty())
-		{
-			pio::print(usage());
-#if defined(GPU)
-			platform pfm;
-			if (pfm.displayDevices() == 0) throw std::runtime_error("No OpenCL device");
-#endif
-			// return;
-		}
-
 		uint32_t b = 0, n = 0;
-		genefer::EMode mode = genefer::EMode::Limit;
-		size_t device = 0, nthreads = 1;	// 0;
+		genefer::EMode mode = genefer::EMode::None;
+		size_t device = 0, nthreads = 0;
 		std::string impl = "";
+		const int depth = 7;
+
 		// parse args
 		for (size_t i = 0, size = args.size(); i < size; ++i)
 		{
@@ -217,13 +217,13 @@ public:
 				b = std::atoi(bstr.c_str());
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
-				if ((b == 0) || ((b & (~b + 1)) != b)) throw std::runtime_error("b must not be a power of two");
+				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
 			}
 			if (arg.substr(0, 2) == "-n")
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = std::atoi(nstr.c_str());
-				if (n < 15) throw std::runtime_error("n < 15 is not supported");
+				if (n < 10) throw std::runtime_error("n < 10 is not supported");
 				if (n > 22) throw std::runtime_error("n > 22 is not supported");
 			}
 			if (arg.substr(0, 2) == "-q")
@@ -273,34 +273,16 @@ public:
 			}
 		}
 
-		genefer & g = genefer::getInstance();
-		g.setBoinc(bBoinc);
-#if defined(GPU)
-		g.setBoincParam(boinc_platform_id, boinc_device_id);
-#endif
-
-		const int depth = 7;
-
-		if ((b != 0) && (n != 0) && (mode != genefer::EMode::None))
+		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
-			g.check(b, n, mode, device, nthreads, impl, depth);
-		}
-		else if (mode == genefer::EMode::Limit)
-		{
-			for (size_t n = 10; n <= 22; ++n)
-			{
-				if (!g.check(0, n, mode, device, nthreads, impl, depth)) break;
-			}
-		}
-		else
-		{
-			static const size_t count = 20 - 10 + 1;
+			// internal test
+			/*static const size_t count = 20 - 10 + 1;
 #if defined(GPU)
 			static constexpr uint32_t bp[count] = { 1999992578, 1999997802, 1999999266, 1999941378, 699995450,
 													302257864, 167811262, 113521888, 15859176, 4896418, 1059094 };
 #else
 			static constexpr uint32_t bp[count] = { 900000066, 700005270, 500002286, 400065560, 280055314,
-													200295018, 167811262, 113521888, 15859176, 4896418, 1059094 };
+													200295018, 168789060, 114009952, 15913772, 4896418, 1951734 };
 #endif
 
 			for (size_t i = 0; i < count; ++i)
@@ -310,7 +292,32 @@ public:
 				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) break;
 				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, depth)) break;
 				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, depth)) break;
+			}*/
+
+			pio::print(usage());
+#if defined(GPU)
+			platform pfm;
+			if (pfm.displayDevices() == 0) throw std::runtime_error("No OpenCL device");
+#endif
+			return;
+		}
+
+		genefer & g = genefer::getInstance();
+		g.setBoinc(bBoinc);
+#if defined(GPU)
+		g.setBoincParam(boinc_platform_id, boinc_device_id);
+#endif
+
+		if (mode == genefer::EMode::Limit)	// internal
+		{
+			for (size_t n = 10; n <= 22; ++n)
+			{
+				if (!g.check(0, n, mode, device, nthreads, impl, depth)) break;
 			}
+		}
+		else
+		{
+			g.check(b, n, mode, device, nthreads, impl, depth);
 		}
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);
@@ -333,4 +340,3 @@ int main(int argc, char * argv[])
 
 	return EXIT_SUCCESS;
 }
-

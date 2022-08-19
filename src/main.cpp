@@ -211,7 +211,7 @@ public:
 		{
 			const std::string & arg = args[i];
 
-			if (arg.substr(0, 2) == "-b")
+			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
 				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				b = std::atoi(bstr.c_str());
@@ -251,7 +251,7 @@ public:
 				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				device = std::atoi(dstr.c_str());
 			}
-			if (arg.substr(0, 2) == "--device")
+			if (arg.substr(0, 8) == "--device")
 			{
 				const std::string dstr = ((arg == "--device") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				device = std::atoi(dstr.c_str());
@@ -273,6 +273,12 @@ public:
 			}
 		}
 
+		genefer & g = genefer::getInstance();
+		g.setBoinc(bBoinc);
+#if defined(GPU)
+		g.setBoincParam(boinc_platform_id, boinc_device_id);
+#endif
+
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
 			// internal test
@@ -287,11 +293,11 @@ public:
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) break;
+				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;
 
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) break;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, depth)) break;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, depth)) break;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) return;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, depth)) return;
+				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, depth)) return;
 			}*/
 
 			pio::print(usage());
@@ -301,12 +307,6 @@ public:
 #endif
 			return;
 		}
-
-		genefer & g = genefer::getInstance();
-		g.setBoinc(bBoinc);
-#if defined(GPU)
-		g.setBoincParam(boinc_platform_id, boinc_device_id);
-#endif
 
 		if (mode == genefer::EMode::Limit)	// internal
 		{

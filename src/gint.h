@@ -23,6 +23,9 @@ private:
 	enum class EState { Unknown, Balanced, Unbalanced };
 	mutable EState _state;
 
+private:
+	static constexpr uint64_t rotl64(const uint64_t x, const uint8_t n) { return (x << n) | (x >> (-n & 63)); }
+
 public:
 	gint(const size_t size, const uint32_t base) : _size(size), _base(base), _d(new int32_t[size]), _state(EState::Unknown) {}
 	virtual ~gint() { delete[] _d; }
@@ -162,7 +165,7 @@ public:
 		{
 			const uint64_t a_i = d[i];
 			hash += a_i;
-			hash ^= _rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * a_i + 5) % 64);
+			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * a_i + 5) % 64);
 		}
 		return hash;
 	}

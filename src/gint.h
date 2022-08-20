@@ -137,7 +137,7 @@ public:
 		uint32_t base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
 		if ((size_t(size) != _size) || (base != _base)) throw std::runtime_error("bad file");
 		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(int32_t));
-		_state = EState::Balanced;
+		_state = EState::Unbalanced;
 	}
 
 	void write(file & cFile)

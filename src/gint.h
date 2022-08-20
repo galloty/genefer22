@@ -38,16 +38,17 @@ public:
 
 	void read(file & cFile)
 	{
-		size_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
+		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
 		uint32_t base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
-		if ((size != _size) || (base != _base)) throw std::runtime_error("bad file");
+		if ((size_t(size) != _size) || (base != _base)) throw std::runtime_error("bad file");
 		reset();
 		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(int32_t));
 	}
 
 	void write(file & cFile) const
 	{
-		cFile.write(reinterpret_cast<const char *>(&_size), sizeof(_size));
+		const uint32_t size = uint32_t(_size);
+		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
 		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
 		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
 	}

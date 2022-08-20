@@ -70,6 +70,7 @@ private:
 	transform * _transform = nullptr;
 	gint * _gi = nullptr;
 	std::string _rootFilename;
+	int _print_range = 0, _print_i = 0;
 
 private:
 #if defined(GPU)
@@ -128,18 +129,30 @@ private:
 		return ss.str();
 	}
 
-	static int printProgress(const char * const mode, const double elapsedTime, const int i0, const int i,
-							 const double percent_start = 0, const double percent_end = 100)
+	void initPrintProgress(const int i0, const int i_start)
 	{
-		if (i0 == i) return 1;
-		const double mulTime = elapsedTime / (i0 - i), estimatedTime = mulTime * i;
-		const double percent = (i0 - i) * (percent_end - percent_start) / i0 + percent_start;
+		_print_range = i0; _print_i = i_start;
+		if (_isBoinc) boinc_fraction_done((i0 > i_start) ? double(i0 - i_start) / i0 : 0.0);
+	}
+
+	int printProgress(const double displayTime, const int i)
+	{
+		if (_print_i == i) return 1;
+		const double mulTime = displayTime / (_print_i - i); _print_i = i;
+		const double percent = double(_print_range - i) / _print_range;
 		const int dcount = std::max(int(0.2 / mulTime), 2);
-		std::ostringstream ss; ss << mode << ": " << std::setprecision(3) << percent << "% done, "
-								  << timer::formatTime(estimatedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
-		pio::display(ss.str());
+		if (_isBoinc) boinc_fraction_done(percent);
+		else
+		{
+			const double estimatedTime = mulTime * i;
+			std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(estimatedTime)
+									<< " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
+			pio::display(ss.str());
+		}
 		return dcount;
 	}
+
+	static void clearline() { pio::display("                                                \r"); }
 
 	bool readContext(const int where, int & i, double & elapsedTime)
 	{
@@ -236,36 +249,35 @@ private:
 				return true;
 			}
 		}
-		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1);
+
+		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
+		initPrintProgress(i0, i_start);
 		int dcount = 100;
-		for (int i = found ? ri : i0; i >= 0; --i)
+
+		for (int i = i_start; i >= 0; --i)
 		{
 			if (_quit)
 			{
-				chrono.get();
 				saveContext(0, i, chrono.getElapsedTime());
 				return false;
 			}
 
 			if (i % dcount == 0)
 			{
-				chrono.get();
-				if (chrono.getDisplayTime() >= 1) { dcount = printProgress("Test", chrono.getElapsedTime(), i0, i); chrono.resetDisplayTime(); }
+				chrono.read(); const double displayTime = chrono.getDisplayTime();
+				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 				if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
 			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
 			// if (i == 0) pTransform->add1();	// => invalid
-			if (i % B_GL == 0)
+			if ((i % B_GL == 0) && (i / B_GL != 0))
 			{
-				if (i / B_GL != 0)
-				{
-					pTransform->copy(2, 0);
-					pTransform->mul(1);	// d(t)
-					pTransform->copy(1, 0);
-					pTransform->copy(0, 2);
-				}
+				pTransform->copy(2, 0);
+				pTransform->mul(1);	// d(t)
+				pTransform->copy(1, 0);
+				pTransform->copy(0, 2);
 			}
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
@@ -275,7 +287,6 @@ private:
 			}
 		}
 
-		chrono.get();
 		testTime = chrono.getElapsedTime();
 		saveContext(0, -1, testTime);
 		return true;
@@ -289,6 +300,8 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
+		clearline(); pio::display("Validating...\r");
+
 		watch chrono;
 
 		// d(t + 1) = d(t) * result
@@ -297,19 +310,11 @@ private:
 
 		// d(t)^{2^B}
 		pTransform->copy(0, 1);
+		for (int i = B_GL - 1; i >= 0; --i)
 		{
-			const int i0 = B_GL - 1;
-			int dcount = 100;
-			for (int i = i0; i >= 0; --i)
-			{
-				pTransform->squareDup(false);
-				if (i % dcount == 0)
-				{
-					chrono.get();
-					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Valid", chrono.getElapsedTime(), i0, i, 0, 50);
-				}
-				if (_quit) return false;
-			}
+			if (_quit) return false;
+
+			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
 
@@ -325,20 +330,13 @@ private:
 
 		// 2^res
 		pTransform->set(1);
+		for (int i = int(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
-			const int i0 = int(mpz_sizeinbase(res, 2) - 1);
-			int dcount = 100;
-			for (int i = i0; i >= 0; --i)
-			{
-				pTransform->squareDup(mpz_tstbit(res, i) != 0);
-				if (i % dcount == 0)
-				{
-					chrono.get();
-					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Valid", chrono.getElapsedTime(), i0, i, 50, 100);
-				}
-				if (_quit) return false;
-			}
+			if (_quit) { mpz_clear(res); return false; }
+
+			pTransform->squareDup(mpz_tstbit(res, i) != 0);
 		}
+
 		mpz_clear(res);
 
 		// d(t)^{2^B} * 2^res
@@ -353,7 +351,7 @@ private:
 
 		const bool success = (h1 == h2);
 
-		chrono.get(); validTime = chrono.getElapsedTime();
+		validTime = chrono.getElapsedTime();
 		return success;
 	}
 
@@ -364,6 +362,8 @@ private:
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
+
+		clearline(); pio::display("Generating proof...\r");
 
 		watch chrono;
 
@@ -383,6 +383,7 @@ private:
 
 		const int l0 = (1 << depth) - depth - 1;
 // size_t s = 0;	// complexity
+
 		for (int k = 1, l = l0; k <= depth; ++k)
 		{
 			const size_t i = size_t(1) << (depth - k);
@@ -422,16 +423,18 @@ private:
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
 			}
 
-			chrono.get();
-			if (chrono.getDisplayTime() >= 1) printProgress("Proof", chrono.getElapsedTime(), l0, l);
-
-			if (_quit) return false;
+			if (_quit)
+			{
+				for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
+				delete[] w;
+				return false;
+			}
 		}
 
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		chrono.get(); proofTime = chrono.getElapsedTime();
+		proofTime = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -541,7 +544,7 @@ private:
 
 		mpz_clear(p2);
 
-		chrono.get(); time = chrono.getElapsedTime();
+		time = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -571,6 +574,7 @@ private:
 		const int p2size = int(mpz_sizeinbase(p2, 2));
 
 		const int i0 = p2size + B - 1;
+		initPrintProgress(i0, found ? ri : i0);
 		int dcount = 100;
 
 		// v2 = v2^{2^B}
@@ -581,15 +585,15 @@ private:
 			{
 				if (_quit)
 				{
-					chrono.get();
 					saveContext(1, i, chrono.getElapsedTime());
+					mpz_clear(p2);
 					return false;
 				}
 
 				if (i % dcount == 0)
 				{
-					chrono.get();
-					if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i);
+					chrono.read(); const double displayTime = chrono.getDisplayTime();
+					if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 					if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
@@ -604,15 +608,15 @@ private:
 		{
 			if (_quit)
 			{
-				chrono.get();
 				saveContext(1, i, chrono.getElapsedTime());
+				mpz_clear(p2);
 				return false;
 			}
 
 			if (i % dcount == 0)
 			{
-				chrono.get();
-				if (chrono.getDisplayTime() >= 1) dcount = printProgress("Check", chrono.getElapsedTime(), i0, i);
+				chrono.read(); const double displayTime = chrono.getDisplayTime();
+				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 				if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
@@ -627,7 +631,7 @@ private:
 		pTransform->getInt(gi);
 		ckey = gi.gethash64();
 
-		chrono.get(); time = chrono.getElapsedTime();
+		time = chrono.getElapsedTime();
 		return true;
 	}
 
@@ -718,6 +722,7 @@ public:
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
+			clearline();
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 			if (success) ss << "checked, time = " << timer::formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
 			else if (!_quit) ss << "check failed!";
@@ -736,6 +741,7 @@ public:
 			{
 				double testTime = 0, validTime = 0; bool isPrp = false;
 				success = quick(exponent, testTime, validTime, isPrp);
+				clearline();
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(testTime + validTime) << ".";
 				else if (!_quit) ss << ": validation failed!";
@@ -752,6 +758,7 @@ public:
 			{
 				double testTime = 0, validTime = 0, proofTime = 0;
 				success = proof(exponent, depth, testTime, validTime, proofTime);
+				clearline();
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 				if (success) ss << "proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
 				else if (!_quit) ss << "validation failed!";

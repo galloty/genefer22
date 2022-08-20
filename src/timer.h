@@ -54,9 +54,10 @@ public:
 
 	virtual ~watch() {}
 
-	void get() { _currentTime = timer::currentTime(); }
+	void read() { _currentTime = timer::currentTime(); }
 
-	double getElapsedTime() const { return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
+	double getElapsedTime() { read(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
+
 	double getDisplayTime() const { return timer::diffTime(_currentTime, _displayStartTime); }
 	double getRecordTime() const { return timer::diffTime(_currentTime, _recordStartTime); }
 

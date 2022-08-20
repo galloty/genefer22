@@ -69,4 +69,12 @@ public:
 		std::fclose(_cFile);
 		throw std::runtime_error("failure of a write operation");
 	}
+
+	void print(const char * const str)
+	{
+		const int ret = std::fprintf(_cFile, str);
+		if (ret >= 0) return;
+		std::fclose(_cFile);
+		throw std::runtime_error("failure of a write operation");
+	}
 };

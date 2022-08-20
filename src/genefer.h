@@ -13,6 +13,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
+#include <thread>
+#include <chrono>
 
 #include <gmp.h>
 #if !defined(GPU)
@@ -117,6 +119,8 @@ private:
 	std::string contextFilename() const { return _rootFilename + ".ctx"; }
 	std::string proofFilename() const { return _rootFilename + ".proof"; }
 	std::string certFilename() const { return _rootFilename + ".cert"; }
+	std::string ckeyFilename() const { return _rootFilename + ".ckey"; }
+	std::string skeyFilename() const { return _rootFilename + ".skey"; }
 	std::string ckptFilename(const size_t i) const
 	{
 		std::ostringstream ss; ss << _rootFilename << "_" << i << ".ckpt";
@@ -140,7 +144,7 @@ private:
 		if (_print_i == i) return 1;
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const double percent = double(_print_range - i) / _print_range;
-		const int dcount = std::max(int(0.2 / mulTime), 2);
+		const int dcount = std::max(int(0.5 / mulTime), 2);
 		if (_isBoinc) boinc_fraction_done(percent);
 		else
 		{
@@ -187,6 +191,75 @@ private:
 		contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime));
 		const size_t num_regs = 2;
 		_transform->saveContext(contextFile, num_regs);
+	}
+
+	static bool boincQuitRequest(const BOINC_STATUS & status)
+	{
+		if ((status.quit_request | status.abort_request | status.no_heartbeat) == 0) return false;
+
+		std::ostringstream ss; ss << std::endl << "Terminating because Boinc ";
+		if (status.quit_request != 0) ss << "requested that we should quit.";
+		else if (status.abort_request != 0) ss << "requested that we should abort.";
+		else if (status.no_heartbeat != 0) ss << "heartbeat was lost.";
+		ss << std::endl;
+		pio::print(ss.str());
+		return true;
+	}
+
+	void boincMonitor()
+	{
+		BOINC_STATUS status; boinc_get_status(&status);
+		const bool bQuit = boincQuitRequest(status);
+		if (bQuit) { quit(); return; }
+			
+		if (status.suspended != 0)
+		{
+			std::ostringstream ss_s; ss_s << std::endl << "Boinc client is suspended." << std::endl;
+			pio::print(ss_s.str());
+
+			while (status.suspended != 0)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				boinc_get_status(&status);
+				if (boincQuitRequest(status)) { quit(); return; }
+			}
+
+			std::ostringstream ss_r; ss_r << "Boinc client is resumed." << std::endl;
+			pio::print(ss_r.str());
+		}
+	}
+
+	bool boincMonitor(const int where, const int i, watch & chrono)
+	{
+		BOINC_STATUS status; boinc_get_status(&status);
+		const bool bQuit = boincQuitRequest(status);
+		if (bQuit) quit();
+
+		if (bQuit || (status.suspended != 0)) saveContext(where, i, chrono.getElapsedTime());
+		if (bQuit) return true;
+			
+		if (status.suspended != 0)
+		{
+			std::ostringstream ss_s; ss_s << std::endl << "Boinc client is suspended." << std::endl;
+			pio::print(ss_s.str());
+
+			while (status.suspended != 0)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				boinc_get_status(&status);
+				if (boincQuitRequest(status)) { quit(); return true; }
+			}
+
+			std::ostringstream ss_r; ss_r << "Boinc client is resumed." << std::endl;
+			pio::print(ss_r.str());
+		}
+
+		if (boinc_time_to_checkpoint() != 0)
+		{
+			saveContext(where, i, chrono.getElapsedTime());
+			boinc_checkpoint_completed();
+		}
+		return false;
 	}
 
 	void power(const size_t reg, const uint32_t e) const
@@ -266,7 +339,9 @@ private:
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-				if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+
+				if (_isBoinc) { if (boincMonitor(0, i, chrono)) return false; }
+				else if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
@@ -312,8 +387,8 @@ private:
 		pTransform->copy(0, 1);
 		for (int i = B_GL - 1; i >= 0; --i)
 		{
+			if (_isBoinc) boincMonitor();
 			if (_quit) return false;
-
 			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
@@ -332,6 +407,7 @@ private:
 		pTransform->set(1);
 		for (int i = int(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
+			if (_isBoinc) boincMonitor();
 			if (_quit) { mpz_clear(res); return false; }
 
 			pTransform->squareDup(mpz_tstbit(res, i) != 0);
@@ -411,7 +487,14 @@ private:
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
 				--l;
-				if (_quit) return false;
+
+				if (_isBoinc) boincMonitor();
+				if (_quit)
+				{
+					for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
+					delete[] w;
+					return false;
+				}
 			}
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			pTransform->getInt(gi);
@@ -421,13 +504,6 @@ private:
 			{
 				const uint32_t q = gi.gethash32();
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
-			}
-
-			if (_quit)
-			{
-				for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
-				delete[] w;
-				return false;
 			}
 		}
 
@@ -594,7 +670,8 @@ private:
 				{
 					chrono.read(); const double displayTime = chrono.getDisplayTime();
 					if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-					if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+					if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
+					else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
 				pTransform->squareDup(false);
@@ -617,7 +694,8 @@ private:
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-				if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
+				else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
@@ -690,16 +768,14 @@ private:
 public:
 	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
+		if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
+
 		size_t num_regs;
 		if (mode == EMode::Quick) num_regs = 3;
 		else if (mode == EMode::Proof) num_regs = 3;
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 2;
-		else
-		{
-			if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
-			return false;
-		}
+		else return false;
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
@@ -722,6 +798,11 @@ public:
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
+			if (success)
+			{
+				file ckeyFile(ckeyFilename(), "w");
+				ckeyFile.print(uint64toString(ckey).c_str());
+			}
 			clearline();
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
 			if (success) ss << "checked, time = " << timer::formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
@@ -774,6 +855,11 @@ public:
 			{
 				double time = 0; uint64_t skey = 0; bool isPrp = false;
 				success = server(exponent, time, isPrp, skey);
+				if (success)
+				{
+					file skeyFile(skeyFilename(), "w");
+					skeyFile.print(uint64toString(skey).c_str());
+				}
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(time) << ", skey = " << uint64toString(skey) << ".";
 				else if (!_quit) ss << ": generation failed!";

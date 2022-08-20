@@ -21,7 +21,7 @@ private:
 	int32_t * const _d;
 
 	enum class EState { Unknown, Balanced, Unbalanced };
-	mutable EState _state;
+	EState _state;
 
 private:
 	static constexpr uint64_t rotl64(const uint64_t x, const uint8_t n) { return (x << n) | (x >> (-n & 63)); }
@@ -36,24 +36,7 @@ public:
 
 	void reset() { _state = EState::Unknown; }
 
-	void read(file & cFile)
-	{
-		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
-		uint32_t base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
-		if ((size_t(size) != _size) || (base != _base)) throw std::runtime_error("bad file");
-		reset();
-		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(int32_t));
-	}
-
-	void write(file & cFile) const
-	{
-		const uint32_t size = uint32_t(_size);
-		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
-		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
-		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
-	}
-
-	void unbalance() const
+	void unbalance()
 	{
 		if (_state == EState::Unbalanced) return;
 		_state = EState::Unbalanced;
@@ -109,7 +92,7 @@ public:
 		}
 	}
 
-	void balance() const
+	void balance()
 	{
 		if (_state == EState::Balanced) return;
 		_state = EState::Balanced;
@@ -148,7 +131,25 @@ public:
 		}
 	}
 
-	bool isOne() const
+	void read(file & cFile)
+	{
+		uint32_t size; cFile.read(reinterpret_cast<char *>(&size), sizeof(size));
+		uint32_t base; cFile.read(reinterpret_cast<char *>(&base), sizeof(base));
+		if ((size_t(size) != _size) || (base != _base)) throw std::runtime_error("bad file");
+		cFile.read(reinterpret_cast<char *>(_d), _size * sizeof(int32_t));
+		_state = EState::Balanced;
+	}
+
+	void write(file & cFile)
+	{
+		unbalance();
+		const uint32_t size = uint32_t(_size);
+		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
+		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
+		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
+	}
+
+	bool isOne()
 	{
 		unbalance();
 		const int32_t * const d = _d;
@@ -157,7 +158,7 @@ public:
 		return bOne;
 	}
 
-	uint64_t gethash64() const
+	uint64_t gethash64()
 	{
 		unbalance();
 		const int32_t * const d = _d;
@@ -171,7 +172,7 @@ public:
 		return hash;
 	}
 
-	uint32_t gethash32() const
+	uint32_t gethash32()
 	{
 		const uint64_t hash = gethash64();
 		return std::max(uint32_t(2), uint32_t(hash) ^ uint32_t(hash >> 32));

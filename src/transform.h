@@ -117,11 +117,11 @@ public:
 	void getInt(gint & g) const
 	{
 		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("getInt");
-		g.reset();
 		getZi(g.data());
+		g.reset();
 	}
 
-	void setInt(const gint & g)
+	void setInt(gint & g)
 	{
 		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("setInt");
 		g.balance();

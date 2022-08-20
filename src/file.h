@@ -11,15 +11,22 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
+#if defined(_WIN32)
+#include <IO.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "pio.h"
 
 class file
 {
 private:
 	FILE * const _cFile;
+	const bool isSync;
 
 public:
-	file(const std::string & filename, const char * const mode) : _cFile(pio::open(filename.c_str(), mode))
+	file(const std::string & filename, const char * const mode) : _cFile(pio::open(filename.c_str(), mode)), isSync(std::string(mode) == "wb")
 	{
 		if (_cFile == nullptr)
 		{
@@ -28,14 +35,25 @@ public:
 		}
 	}
 
-	file(const std::string & filename) : _cFile(pio::open(filename.c_str(), "rb"))
+	file(const std::string & filename) : _cFile(pio::open(filename.c_str(), "rb")), isSync(false)
 	{
 		// _cFile may be null
 	}
 
 	virtual ~file()
 	{
-		if (_cFile != nullptr) std::fclose(_cFile);
+		if (_cFile != nullptr)
+		{
+			if (isSync)
+			{
+#if defined(_WIN32)
+				_commit(_fileno(_cFile));
+#else
+				fsync(fileno(_cFile));
+#endif
+			}
+			if (std::fclose(_cFile) != 0) pio::error("failure of a close operation");
+		}
 	}
 
 	bool exists() const { return (_cFile != nullptr); }
@@ -75,6 +93,6 @@ public:
 		const int ret = std::fprintf(_cFile, "%s", str);
 		if (ret >= 0) return;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a write operation");
+		throw std::runtime_error("failure of a print operation");
 	}
 };

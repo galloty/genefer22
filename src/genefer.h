@@ -29,8 +29,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #endif
 #include "transform.h"
 
-inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clzl(n); }
-inline int ilog2_64(const uint64_t n) { return 63 - __builtin_clzll(n); }
+inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
 class genefer
 {
@@ -127,9 +126,9 @@ private:
 		return ss.str();
 	}
 
-	static std::string uint64toString(const uint64_t u64)
+	static std::string uint64toString(const uint64_t u)
 	{
-		std::stringstream ss; ss << std::uppercase << std::hex << std::setfill('0') << std::setw(16) << u64;
+		std::stringstream ss; ss << std::uppercase << std::hex << std::setfill('0') << std::setw(16) << u;
 		return ss.str();
 	}
 
@@ -288,7 +287,7 @@ private:
 
 	static int B_GerbiczLi(const size_t esize)
 	{
-		const size_t L = (2 << (ilog2_64(esize) / 2));
+		const size_t L = (2 << (ilog2_32(uint32_t(esize)) / 2));
 		return int((esize - 1) / L) + 1;
 	}
 
@@ -576,7 +575,7 @@ private:
 			pTransform->copy(3, 0);
 
 			// v1 = v1 * mu^q
-			power(3, q);
+			power(0, q);
 			pTransform->mul(1);
 			pTransform->copy(1, 0);
 
@@ -596,6 +595,10 @@ private:
 		pTransform->getInt(gi);
 		skey = gi.gethash64();
 
+		// v2
+		pTransform->copy(0, 2);
+		pTransform->getInt(gi);
+
 		mpz_t p2; mpz_init_set_ui(p2, 0);
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
 		for (size_t i = 0; i < L; i++)
@@ -608,10 +611,6 @@ private:
 
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
-
-		// v2
-		pTransform->copy(0, 2);
-		pTransform->getInt(gi);
 
 		file certFile(certFilename(), "wb");
 		certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));

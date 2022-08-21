@@ -11,11 +11,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
-#if defined(_WIN32)
-#include <IO.h>
-#else
-#include <unistd.h>
-#endif
+// #if defined(_WIN32)
+// #include <IO.h>
+// #else
+// #include <unistd.h>
+// #endif
 
 #include "pio.h"
 
@@ -23,10 +23,10 @@ class file
 {
 private:
 	FILE * const _cFile;
-	const bool isSync;
+	// const bool _isSync;
 
 public:
-	file(const std::string & filename, const char * const mode) : _cFile(pio::open(filename.c_str(), mode)), isSync(std::string(mode) == "wb")
+	file(const std::string & filename, const char * const mode) : _cFile(pio::open(filename.c_str(), mode)) //, _isSync(std::string(mode) == "wb")
 	{
 		if (_cFile == nullptr)
 		{
@@ -35,7 +35,7 @@ public:
 		}
 	}
 
-	file(const std::string & filename) : _cFile(pio::open(filename.c_str(), "rb")), isSync(false)
+	file(const std::string & filename) : _cFile(pio::open(filename.c_str(), "rb")) //, _isSync(false)
 	{
 		// _cFile may be null
 	}
@@ -44,14 +44,14 @@ public:
 	{
 		if (_cFile != nullptr)
 		{
-			if (isSync)
-			{
-#if defined(_WIN32)
-				_commit(_fileno(_cFile));
-#else
-				fsync(fileno(_cFile));
-#endif
-			}
+// 			if (_isSync)
+// 			{
+// #if defined(_WIN32)
+// 				_commit(_fileno(_cFile));
+// #else
+// 				fsync(fileno(_cFile));
+// #endif
+// 			}
 			if (std::fclose(_cFile) != 0) pio::error("failure of a close operation");
 		}
 	}

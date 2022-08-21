@@ -46,7 +46,7 @@ public:
 		int32_t * const d = _d;
 
 		int64_t f = 0;
-		for (size_t i = 0; i != size; ++i)
+		for (size_t i = 0; i < size; ++i)
 		{
 			f += d[i];
 			int32_t r = int32_t(f % base);
@@ -60,7 +60,7 @@ public:
 		{
 			f = -f;	// d[size] = -d[0]
 
-			for (size_t i = 0; i != size; ++i)
+			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
 				int32_t r = int32_t(f % base);
@@ -74,7 +74,7 @@ public:
 			if (f == 1)
 			{
 				bool isMinusOne = true;
-				for (size_t i = 0; i != size; ++i)
+				for (size_t i = 0; i < size; ++i)
 				{
 					if (d[i] != 0)
 					{
@@ -102,7 +102,7 @@ public:
 		int32_t * const d = _d;
 
 		int64_t f = 0;
-		for (size_t i = 0; i != size; ++i)
+		for (size_t i = 0; i < size; ++i)
 		{
 			f += d[i];
 			int32_t r = int32_t(f % base);
@@ -117,7 +117,7 @@ public:
 		{
 			f = -f;	// d[size] = -d[0]
 
-			for (size_t i = 0; i != size; ++i)
+			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
 				int32_t r = int32_t(f % base);
@@ -154,7 +154,7 @@ public:
 		unbalance();
 		const int32_t * const d = _d;
 		bool bOne = (d[0] == 1);
-		if (bOne) for (size_t k = 1, size = _size; k < size; ++k) bOne &= (d[k] == 0);
+		if (bOne) for (size_t i = 1, size = _size; i < size; ++i) bOne &= (d[i] == 0);
 		return bOne;
 	}
 

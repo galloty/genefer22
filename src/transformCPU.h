@@ -1240,7 +1240,8 @@ private:
 	}
 
 public:
-	transformCPU(const uint32_t b, const bool isboinc, const size_t num_threads, const size_t num_regs) : transform(N, b, isboinc),
+	transformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs)
+		: transform(N, b, (VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8)),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
@@ -1340,25 +1341,34 @@ protected:
 	}
 
 public:
-	void readContext(file & cFile, const size_t num_regs) override
+	bool readContext(file & cFile, const size_t num_regs) override
 	{
+		int kind = 0;
+		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
+		if (kind != int(getKind())) return false;
+
 		Vc * const z = (Vc *)&_mem[zOffset];
-		cFile.read(reinterpret_cast<char *>(z), zSize);
+		if (!cFile.read(reinterpret_cast<char *>(z), zSize)) return false;
 		if (num_regs > 1)
 		{
 			Vc * const zr = (Vc *)&_mem[zrOffset];
-			cFile.read(reinterpret_cast<char *>(zr), (num_regs - 1) * zSize);
+			if (!cFile.read(reinterpret_cast<char *>(zr), (num_regs - 1) * zSize)) return false;
 		}
+
+		return true;
 	}
 
 	void saveContext(file & cFile, const size_t num_regs) const override
 	{
+		const int kind = int(getKind());
+		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
+
 		const Vc * const z = (Vc *)&_mem[zOffset];
-		cFile.write(reinterpret_cast<const char *>(z), zSize);
+		if (!cFile.write(reinterpret_cast<const char *>(z), zSize)) return;
 		if (num_regs > 1)
 		{
 			const Vc * const zr = (Vc *)&_mem[zrOffset];
-			cFile.write(reinterpret_cast<const char *>(zr), (num_regs - 1) * zSize);
+			if (!cFile.write(reinterpret_cast<const char *>(zr), (num_regs - 1) * zSize)) return;
 		}
 	}
 
@@ -1450,22 +1460,22 @@ public:
 };
 
 template<size_t VSIZE>
-inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const bool isboinc, const size_t num_threads, const size_t num_regs)
+inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
 	transform * pTransform = nullptr;
-	if (n == 10)      pTransform = new transformCPU<(1 << 10), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 11) pTransform = new transformCPU<(1 << 11), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 12) pTransform = new transformCPU<(1 << 12), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 13) pTransform = new transformCPU<(1 << 13), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 14) pTransform = new transformCPU<(1 << 14), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 15) pTransform = new transformCPU<(1 << 15), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 16) pTransform = new transformCPU<(1 << 16), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 17) pTransform = new transformCPU<(1 << 17), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 18) pTransform = new transformCPU<(1 << 18), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 19) pTransform = new transformCPU<(1 << 19), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 20) pTransform = new transformCPU<(1 << 20), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 21) pTransform = new transformCPU<(1 << 21), VSIZE>(b, isboinc, num_threads, num_regs);
-	else if (n == 22) pTransform = new transformCPU<(1 << 22), VSIZE>(b, isboinc, num_threads, num_regs);
+	if (n == 10)      pTransform = new transformCPU<(1 << 10), VSIZE>(b, num_threads, num_regs);
+	else if (n == 11) pTransform = new transformCPU<(1 << 11), VSIZE>(b, num_threads, num_regs);
+	else if (n == 12) pTransform = new transformCPU<(1 << 12), VSIZE>(b, num_threads, num_regs);
+	else if (n == 13) pTransform = new transformCPU<(1 << 13), VSIZE>(b, num_threads, num_regs);
+	else if (n == 14) pTransform = new transformCPU<(1 << 14), VSIZE>(b, num_threads, num_regs);
+	else if (n == 15) pTransform = new transformCPU<(1 << 15), VSIZE>(b, num_threads, num_regs);
+	else if (n == 16) pTransform = new transformCPU<(1 << 16), VSIZE>(b, num_threads, num_regs);
+	else if (n == 17) pTransform = new transformCPU<(1 << 17), VSIZE>(b, num_threads, num_regs);
+	else if (n == 18) pTransform = new transformCPU<(1 << 18), VSIZE>(b, num_threads, num_regs);
+	else if (n == 19) pTransform = new transformCPU<(1 << 19), VSIZE>(b, num_threads, num_regs);
+	else if (n == 20) pTransform = new transformCPU<(1 << 20), VSIZE>(b, num_threads, num_regs);
+	else if (n == 21) pTransform = new transformCPU<(1 << 21), VSIZE>(b, num_threads, num_regs);
+	else if (n == 22) pTransform = new transformCPU<(1 << 22), VSIZE>(b, num_threads, num_regs);
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 
 	return pTransform;

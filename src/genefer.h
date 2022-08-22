@@ -97,7 +97,7 @@ private:
 		}
 
 		std::string ttype;
-		_transform = transform::create_cpu(b, n, _isBoinc, num_threads, impl, num_regs, ttype);
+		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
 		if (verbose)
 		{
 			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
@@ -157,37 +157,36 @@ private:
 
 	static void clearline() { pio::display("                                                \r"); }
 
-	bool readContext(const int where, int & i, double & elapsedTime)
+	int readContext(const int where, int & i, double & elapsedTime)
 	{
 		file contextFile(contextFilename());
-		if (!contextFile.exists()) return false;
+		if (!contextFile.exists()) return -1;
 		int version = 0;
-		contextFile.read(reinterpret_cast<char *>(&version), sizeof(version));
+		if (!contextFile.read(reinterpret_cast<char *>(&version), sizeof(version))) return -2;
 #if defined(GPU)
 		version = -version;
 #endif
-		if (version != 1) return false;
+		if (version != 1) return -2;
 		int rwhere = 0;
-		contextFile.read(reinterpret_cast<char *>(&rwhere), sizeof(rwhere));
-		if (rwhere != where) return false;
-		contextFile.read(reinterpret_cast<char *>(&i), sizeof(i));
-		contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime));
+		if (!contextFile.read(reinterpret_cast<char *>(&rwhere), sizeof(rwhere))) return -2;
+		if (rwhere != where) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
 		const size_t num_regs = 2;
-		_transform->readContext(contextFile, num_regs);
-		return true;
+		return _transform->readContext(contextFile, num_regs) ? 0 : -2;
 	}
 
 	void saveContext(const int where, const int i, const double elapsedTime) const
 	{
-		file contextFile(contextFilename(), "wb");
+		file contextFile(contextFilename(), "wb", false);
 		int version = 1;
 #if defined(GPU)
 		version = -version;
 #endif
-		contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version));
-		contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where));
-		contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i));
-		contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime));
+		if (!contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
+		if (!contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
+		if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
+		if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
 		const size_t num_regs = 2;
 		_transform->saveContext(contextFile, num_regs);
 	}
@@ -303,7 +302,13 @@ private:
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const bool found = readContext(0, ri, restoredTime);
+		const int error = readContext(0, ri, restoredTime);
+		const bool found = (error == 0);
+		if (error < -1)
+		{
+			std::ostringstream ss; ss << "Invalid context." << std::endl;
+			pio::error(ss.str());
+		}
 
 		watch chrono(found ? restoredTime : 0);
 		if (!found)
@@ -356,7 +361,7 @@ private:
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
 				pTransform->getInt(gi);
-				file ckptFile(ckptFilename(i / B_PL), "wb");
+				file ckptFile(ckptFilename(i / B_PL), "wb", true);
 				gi.write(ckptFile);
 			}
 		}
@@ -442,12 +447,12 @@ private:
 
 		watch chrono;
 
-		file proofFile(proofFilename(), "wb");
+		file proofFile(proofFilename(), "wb", true);
 		proofFile.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
 
 		// mu[0] = ckpt[0]
 		{
-			file ckptFile(ckptFilename(0), "rb");
+			file ckptFile(ckptFilename(0), "rb", true);
 			gi.read(ckptFile);
 		}
 		gi.write(proofFile);
@@ -465,7 +470,7 @@ private:
 
 			// mu[k] = ckpt[i]^w[0]
 			{
-				file ckptFile(ckptFilename(i), "rb");
+				file ckptFile(ckptFilename(i), "rb", true);
 				gi.read(ckptFile);
 				pTransform->setInt(gi);
 			}
@@ -477,7 +482,7 @@ private:
 			{
 				// mu[k] *= ckpt[i + 2 * j]^w[j]
 				{
-					file ckptFile(ckptFilename(i + 2 * j), "rb");
+					file ckptFile(ckptFilename(i + 2 * j), "rb", true);
 					gi.read(ckptFile);
 					pTransform->setInt(gi);
 				}
@@ -545,7 +550,7 @@ private:
 
 		watch chrono;
 
-		file proofFile(proofFilename(), "rb");
+		file proofFile(proofFilename(), "rb", true);
 		int depth = 0; proofFile.read(reinterpret_cast<char *>(&depth), sizeof(depth));
 
 		const size_t L = size_t(1) << depth, esize = mpz_sizeinbase(exponent, 2);
@@ -612,7 +617,7 @@ private:
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		file certFile(certFilename(), "wb");
+		file certFile(certFilename(), "wb", true);
 		certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
 		gi.write(certFile);
 		certFile.write(p2);
@@ -629,7 +634,13 @@ private:
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const bool found = readContext(1, ri, restoredTime);
+		const int error = readContext(1, ri, restoredTime);
+		const bool found = (error == 0);
+		if (error < -1)
+		{
+			std::ostringstream ss; ss << "Invalid context." << std::endl;
+			pio::error(ss.str());
+		}
 		if (found)
 		{
 			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
@@ -641,7 +652,7 @@ private:
 		int B = 0;
 		mpz_t p2; mpz_init(p2);
 		{
-			file certFile(certFilename(), "rb");
+			file certFile(certFilename(), "rb", true);
 			certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
 			gi.read(certFile);
 			certFile.read(p2);
@@ -799,7 +810,7 @@ public:
 			success = check(time, ckey);
 			if (success)
 			{
-				file ckeyFile(ckeyFilename(), "w");
+				file ckeyFile(ckeyFilename(), "w", false);
 				ckeyFile.print(uint64toString(ckey).c_str());
 			}
 			clearline();
@@ -856,7 +867,7 @@ public:
 				success = server(exponent, time, isPrp, skey);
 				if (success)
 				{
-					file skeyFile(skeyFilename(), "w");
+					file skeyFile(skeyFilename(), "w", false);
 					skeyFile.print(uint64toString(skey).c_str());
 				}
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";

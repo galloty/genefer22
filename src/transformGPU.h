@@ -135,6 +135,7 @@ class engine : public device
 private:
 	const size_t _n;
 	const int _ln;
+	const bool _isBoinc;
 	cl_mem _z = nullptr, _ze = nullptr, _zp = nullptr, _zpe = nullptr, _w = nullptr, _we = nullptr, _c = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
@@ -145,15 +146,16 @@ private:
 	size_t _n3aLocalWS = 32, _n3bLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
 
 public:
-	engine(const platform & platform, const size_t d, const int ln, const bool verbose) : device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln) {}
+	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
+		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc) {}
 	virtual ~engine() {}
 
 ///////////////////////////////
 
 public:
-	static bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::ostringstream & src)
+	bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::ostringstream & src) const
 	{
-		// if (_isBoinc) return false;
+		if (_isBoinc) return false;
 
 		std::ifstream clFile(clFileName);
 		if (!clFile.is_open()) return false;
@@ -822,17 +824,18 @@ private:
 	}
 
 public:
-	transformGPU(const uint32_t b, const uint32_t n, const bool bBoinc, const size_t device, const size_t num_regs,
-				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose) : transform(1 << n, b, bBoinc),
+	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
+				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
+		: transform(1 << n, b, EKind::NTT3),
 		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _num_regs(num_regs),
 		_z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
 	{
 		const size_t size = getSize();
 
-		const bool is_boinc_platform = bBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
+		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n, verbose);
+		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
 
 		std::ostringstream src;
 
@@ -866,7 +869,7 @@ public:
 		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
 		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
 
-		if (!engine::readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
+		if (!_pEngine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory();
@@ -942,28 +945,36 @@ protected:
 	}
 
 public:
-	void readContext(file & cFile, const size_t num_regs) override
+	bool readContext(file & cFile, const size_t num_regs) override
 	{
+		int kind = 0;
+		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
+		if (kind != int(getKind())) return false;
+
 		RNS * const z = _z;
 		RNSe * const ze = _ze;
 
 		const size_t size = getSize();
-		cFile.read(reinterpret_cast<char *>(z), sizeof(RNS) * size * num_regs);
-		cFile.read(reinterpret_cast<char *>(ze), sizeof(RNSe) * size * num_regs);
+		if (!cFile.read(reinterpret_cast<char *>(z), sizeof(RNS) * size * num_regs)) return false;
+		if (!cFile.read(reinterpret_cast<char *>(ze), sizeof(RNSe) * size * num_regs)) return false;
 
 		_pEngine->writeMemory_z(z, ze);
+		return true;
 	}
 
 	void saveContext(file & cFile, const size_t num_regs) const override
 	{
+		const int kind = int(getKind());
+		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
+
 		RNS * const z = _z;
 		RNSe * const ze = _ze;
 
 		_pEngine->readMemory_z(z, ze);
 
 		const size_t size = getSize();
-		cFile.write(reinterpret_cast<const char *>(z), sizeof(RNS) * size * num_regs);
-		cFile.write(reinterpret_cast<const char *>(ze), sizeof(RNSe) * size * num_regs);
+		if (!cFile.write(reinterpret_cast<const char *>(z), sizeof(RNS) * size * num_regs)) return;
+		if (!cFile.write(reinterpret_cast<const char *>(ze), sizeof(RNSe) * size * num_regs)) return;
 	}
 
 	void set(const int32_t a) override

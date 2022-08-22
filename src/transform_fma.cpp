@@ -11,7 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "transformCPU.h"
 
 
-transform * transform::create_fma(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t num_threads, const size_t num_regs)
+transform * transform::create_fma(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
-	return transformCPU_fma::create_transformCPU<4>(b, n, isBoinc, num_threads, num_regs);
+	return transformCPU_fma::create_transformCPU<4>(b, n, num_threads, num_regs);
 }

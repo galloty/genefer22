@@ -56,7 +56,7 @@ private:
 	void _error(const std::string & str, const bool fatal) const
 	{
 		if (_isBoinc) { std::fprintf(stderr, "%s", str.c_str()); std::fflush(stderr); if (fatal) boinc_finish(EXIT_FAILURE); }
-		else { std::cerr << str; }
+		else { std::cerr << str; if (fatal) exit(EXIT_FAILURE); }
 	}
 
 private:

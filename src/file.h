@@ -22,20 +22,20 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class file
 {
 private:
+	const std::string _filename;
 	FILE * const _cFile;
+	const bool _fatal;
 	// const bool _isSync;
 
 public:
-	file(const std::string & filename, const char * const mode) : _cFile(pio::open(filename.c_str(), mode)) //, _isSync(std::string(mode) == "wb")
+	file(const std::string & filename, const char * const mode, const bool fatal)
+		: _filename(filename), _cFile(pio::open(filename.c_str(), mode)), _fatal(fatal) //, _isSync(std::string(mode) == "wb")
 	{
-		if (_cFile == nullptr)
-		{
-			std::ostringstream ss; ss << "cannot open '" << filename << "' file" << std::endl;
-			throw std::runtime_error(ss.str());
-		}
+		if (_cFile == nullptr) error("cannot open file");
 	}
 
-	file(const std::string & filename) : _cFile(pio::open(filename.c_str(), "rb")) //, _isSync(false)
+	file(const std::string & filename)
+		: _filename(filename), _cFile(pio::open(filename.c_str(), "rb")), _fatal(false) //, _isSync(false)
 	{
 		// _cFile may be null
 	}
@@ -52,47 +52,58 @@ public:
 // 				fsync(fileno(_cFile));
 // #endif
 // 			}
-			if (std::fclose(_cFile) != 0) pio::error("failure of a close operation");
+			if (std::fclose(_cFile) != 0) error("cannot close file");
 		}
+	}
+
+	void error(const std::string & str) const
+	{
+		std::ostringstream ss; ss << _filename << ": " << str << std::endl;
+		pio::error(ss.str(), _fatal);
 	}
 
 	bool exists() const { return (_cFile != nullptr); }
 
-	void read(char * const ptr, const size_t size)
+	bool read(char * const ptr, const size_t size)
 	{
 		const size_t ret = std::fread(ptr , sizeof(char), size, _cFile);
-		if (ret == size * sizeof(char)) return;
+		if (ret == size * sizeof(char)) return true;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a read operation");
+		error("failure of a read operation");
+		return false;
 	}
 
-	void write(const char * const ptr, const size_t size)
+	bool write(const char * const ptr, const size_t size)
 	{
 		const size_t ret = std::fwrite(ptr , sizeof(char), size, _cFile);
-		if (ret == size * sizeof(char)) return;
+		if (ret == size * sizeof(char)) return true;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a write operation");
+		error("failure of a write operation");
+		return false;
 	}
 
-	void read(mpz_t & z)
+	bool read(mpz_t & z)
 	{
-		if (mpz_inp_raw(z, _cFile) != 0) return;
+		if (mpz_inp_raw(z, _cFile) != 0) return true;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a read operation");
+		error("failure of a read operation");
+		return false;
 	}
 
-	void write(const mpz_t & z)
+	bool write(const mpz_t & z)
 	{
-		if (mpz_out_raw(_cFile, z) != 0) return;
+		if (mpz_out_raw(_cFile, z) != 0) return true;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a write operation");
+		error("failure of a write operation");
+		return false;
 	}
 
-	void print(const char * const str)
+	bool print(const char * const str)
 	{
 		const int ret = std::fprintf(_cFile, "%s", str);
-		if (ret >= 0) return;
+		if (ret >= 0) return true;
 		std::fclose(_cFile);
-		throw std::runtime_error("failure of a print operation");
+		error("failure of a print operation");
+		return false;
 	}
 };

@@ -34,7 +34,7 @@ inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 class genefer
 {
 public:
-	enum class EMode { None, Quick, Proof, Server, Check, Limit }; 
+	enum class EMode { None, Quick, Proof, Server, Check, Bench, Limit }; 
 
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };
@@ -722,6 +722,66 @@ private:
 		return true;
 	}
 
+	bool bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
+	{
+		static constexpr uint32_t bm[14] = { 900000000, 700000000, 500000000, 400000000, 280000000,
+											 300000000, 170000000, 115000000, 16000000, 6000000, 2000000, 820000, 230000, 980000 };
+
+		const size_t num_regs = 3;
+
+		const uint32_t b = bm[(m != 0) ? m - 10 : 13], n = (m != 0) ? m : 22;
+
+#if defined(GPU)
+		(void)nthreads; (void)impl;
+		createTransformGPU(b, n, device, num_regs, false);
+#else
+		(void)device;
+		createTransformCPU(b, n, nthreads, impl, num_regs, false);
+#endif
+
+		transform * const pTransform = _transform;
+
+		_gi = new gint(1 << n, b);
+		std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
+		double testTime = 0, validTime = 0; bool isPrp = false;
+		const bool success = quick(exponent, testTime, validTime, isPrp);
+		mpz_clear(exponent);
+		std::remove(contextFilename().c_str());
+		_rootFilename.clear();
+		delete _gi; _gi = nullptr;
+
+		if (!success)
+		{
+			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: test failed!" << std::endl;
+			pio::print(ss.str());
+		}
+		else
+		{
+			static volatile bool _break;
+
+			_break = false;
+			std::thread oneSecond([=] { std::this_thread::sleep_for(std::chrono::seconds(1)); _break = true; }); oneSecond.detach();
+
+			watch chrono(0);
+			size_t i = 1;
+			while (!_break)
+			{
+				pTransform->squareDup((i % 2) != 0);
+				++i;
+			}
+
+			pTransform->copy(1, 0);	// synchro
+			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
+			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << std::setprecision(3) << timer::formatTime(estimatedTime)
+										<< ", " << mulTime * 1e3 << "ms/bit." << std::endl;
+			pio::print(ss.str());
+		}
+
+		deleteTransform();
+		return !_quit;
+	}
+
 	bool check_limit(const uint32_t n, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 		const size_t num_regs = 3;
@@ -742,11 +802,7 @@ private:
 #endif
 
 			_gi = new gint(1 << n, b);
-
-			{
-				std::ostringstream ss; ss << "g" << n << "_" << b;
-				_rootFilename = ss.str();
-			}
+			std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
 
 			double testTime = 0, validTime = 0; bool isPrp = false;
 			const bool success = quick(exponent, testTime, validTime, isPrp);
@@ -756,8 +812,7 @@ private:
 			// std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << (success ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
 
-			if (!_isBoinc) std::remove(contextFilename().c_str());
-
+			std::remove(contextFilename().c_str());
 			_rootFilename.clear();
 			delete _gi; _gi = nullptr;
 			deleteTransform();
@@ -777,6 +832,7 @@ private:
 public:
 	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
+		if (mode == EMode::Bench) return bench(n, device, nthreads, impl);
 		if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
 
 		size_t num_regs;

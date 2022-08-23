@@ -136,6 +136,7 @@ private:
 		ss << "  -p                            full test: a proof is generated" << std::endl;
 		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
 		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
+		ss << "  -h                            validate and bench your hardware" << std::endl;
 #if defined(GPU)
 		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
 #else
@@ -246,6 +247,11 @@ public:
 				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s");
 				mode = genefer::EMode::Check;
 			}
+			if (arg.substr(0, 2) == "-h")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c");
+				mode = genefer::EMode::Bench;
+			}
 			if (arg.substr(0, 2) == "-d")
 			{
 				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
@@ -279,6 +285,16 @@ public:
 		g.setBoincParam(boinc_platform_id, boinc_device_id);
 #endif
 
+		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
+		{
+			for (size_t n = 10; n <= 22; ++n)
+			{
+				if (!g.check(0, n, mode, device, nthreads, impl, depth)) break;
+			}
+			if (mode == genefer::EMode::Bench) g.check(0, 0, mode, device, nthreads, impl, depth);	// DYFL
+			return;
+		}
+
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
 			// internal test
@@ -308,17 +324,7 @@ public:
 			return;
 		}
 
-		if (mode == genefer::EMode::Limit)	// internal
-		{
-			for (size_t n = 10; n <= 22; ++n)
-			{
-				if (!g.check(0, n, mode, device, nthreads, impl, depth)) break;
-			}
-		}
-		else
-		{
-			g.check(b, n, mode, device, nthreads, impl, depth);
-		}
+		g.check(b, n, mode, device, nthreads, impl, depth);
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);
 	}

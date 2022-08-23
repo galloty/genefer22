@@ -12,6 +12,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <iostream>
 #include <fstream>
 #include <cstdio>
+#include <thread>
+#include <chrono>
 
 #include "boinc.h"
 
@@ -55,8 +57,21 @@ private:
 	// error: normal: cerr, boinc: stderr
 	void _error(const std::string & str, const bool fatal) const
 	{
-		if (_isBoinc) { std::fprintf(stderr, "%s", str.c_str()); std::fflush(stderr); if (fatal) boinc_finish(EXIT_FAILURE); }
-		else { std::cerr << str; if (fatal) exit(EXIT_FAILURE); }
+		std::ostringstream ss; ss << std::endl << "Error: " << str << "." << std::endl;
+		if (_isBoinc)
+		{
+			std::fprintf(stderr, "%s", ss.str().c_str()); std::fflush(stderr);
+			if (fatal)
+			{
+				// std::this_thread::sleep_for(std::chrono::minutes(5));
+				boinc_finish(EXIT_FAILURE);
+			}
+		}
+		else
+		{
+			std::cerr << ss.str().c_str();
+			if (fatal) exit(EXIT_FAILURE);
+		}
 	}
 
 private:

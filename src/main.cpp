@@ -139,7 +139,7 @@ private:
 #if defined(GPU)
 		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
 #else
-		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread per logical core)" << std::endl;
+		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
 		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
@@ -192,7 +192,7 @@ public:
 		{
 			if ((arg[0] == '-') && ((arg[1] == 'v') || (arg[1] == 'V')))
 			{
-				pio::error(header(args));
+				pio::print(header(args));
 				if (bBoinc) boinc_finish(EXIT_SUCCESS);
 				return;
 			}
@@ -202,7 +202,7 @@ public:
 
 		uint32_t b = 0, n = 0;
 		genefer::EMode mode = genefer::EMode::None;
-		size_t device = 0, nthreads = 0;
+		size_t device = 0, nthreads = 1;
 		std::string impl = "";
 		const int depth = 7;
 
@@ -333,8 +333,7 @@ int main(int argc, char * argv[])
 	}
 	catch (const std::runtime_error & e)
 	{
-		std::ostringstream ss; ss << std::endl << "error: " << e.what() << "." << std::endl;
-		pio::error(ss.str(), true);
+		pio::error(e.what(), true);
 		return EXIT_FAILURE;
 	}
 

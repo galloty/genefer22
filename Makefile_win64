@@ -14,7 +14,7 @@ BOINC_LIB_DIR = $(BOINC_DIR)/lib_win64
 BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
 BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -fexceptions -ffinite-math-only -fprefetch-loop-arrays -frename-registers
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -ffinite-math-only -frename-registers
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
@@ -43,24 +43,24 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_sse2.o: $(SRC_DIR)/transform_sse2.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mtune=core2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mtune=core2 -c -S $< -o sse2.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mtune=core2 -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mtune=core2 -c -S $< -o sse2.asm
 
 transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -msse4.1 -mtune=westmere -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -msse4.1 -mtune=westmere -c -S $< -o sse4.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c -S $< -o sse4.asm
 
 transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mtune=ivybridge -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mtune=ivybridge -c -S $< -o avx.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=ivybridge -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=ivybridge -c -S $< -o avx.asm
 
 transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mfma -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx -mfma -c -S $< -o fma.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -c -S $< -o fma.asm
 
 transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPU)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx512f -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -mavx512f -c -S $< -o 512.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -c -S $< -o 512.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

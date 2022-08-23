@@ -12,6 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <algorithm>
 
 #include "file.h"
+#include "pio.h"
 
 class gint
 {
@@ -163,12 +164,15 @@ public:
 		unbalance();
 		const int32_t * const d = _d;
 		uint64_t hash = 0;
+		bool isZero = true;
 		for (size_t i = 0, size = _size; i < size; ++i)
 		{
-			const uint64_t a_i = d[i];
+			const uint32_t a_i = d[i];
 			hash += a_i;
-			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * a_i + 5) % 64);
+			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * uint64_t(a_i) + 5) % 64);
+			isZero &= (a_i == 0);
 		}
+		if (isZero) pio::error("value is zero", true);
 		return hash;
 	}
 

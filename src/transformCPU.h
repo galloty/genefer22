@@ -570,12 +570,20 @@ public:
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
+
+			// const Vc o = Vc((z0 + z1 * sb) * t2_n).round();
+			// const Vc f_i = f + o * g;
+			// const Vc f_b = Vc(f_i * b_inv).round();
+			// const Vc r = f_i - f_b * b;
+			// f = f_b;
+
 			const Vc o = Vc((z0 + z1 * sb) * t2_n).round();
 			const Vc o_b = Vc(o * b_inv).round();
 			const Vc f_i = f + (o - o_b * b) * g;
 			const Vc f_b = Vc(f_i * b_inv).round();
-			f = f_b + o_b * g;
 			const Vc r = f_i - f_b * b;
+			f = f_b + o_b * g;
+
 			const Vc irh = Vc(r * sb_inv).round();
 			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
 		}
@@ -645,6 +653,7 @@ private:
 	const double _b, _sb, _isb, _fsb;
 	const size_t _mem_size;
 	char * const _mem;
+	Vc * const _z_copy;
 
 private:
 	finline static size_t bitRev(const size_t i, const size_t n)
@@ -1244,7 +1253,8 @@ public:
 		: transform(N, b, (VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8)),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
-		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024))
+		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),
+		_z_copy((Vc *)_mm_malloc(zSize, 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -1272,6 +1282,7 @@ public:
 	virtual ~transformCPU()
 	{
 		_mm_free((void *)_mem);
+		_mm_free((void *)_z_copy);
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -1281,7 +1292,7 @@ protected:
 	{
 		const Vc * const z = (Vc *)&_mem[zOffset];
 
-		Vc * const z_copy = (Vc *)_mm_malloc(zSize, 1024);
+		Vc * const z_copy = _z_copy;
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_copy[k] = z[k];
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -1302,8 +1313,6 @@ protected:
 				zi[k + i + 1 * N / 2] = std::lround((z1.imag + sb * z2.imag) * n_io_N);
 			}
 		}
-
-		_mm_free((void *)z_copy);
 	}
 
 	void setZi(const int32_t * const zi) override

@@ -143,7 +143,7 @@ private:
 		if (_print_i == i) return 1;
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const double percent = double(_print_range - i) / _print_range;
-		const int dcount = std::max(int(0.5 / mulTime), 2);
+		const int dcount = std::max(int(1.0 / mulTime), 2);
 		if (_isBoinc) boinc_fraction_done(percent);
 		else
 		{
@@ -195,7 +195,7 @@ private:
 	{
 		if ((status.quit_request | status.abort_request | status.no_heartbeat) == 0) return false;
 
-		std::ostringstream ss; ss << std::endl << "Terminating because Boinc ";
+		std::ostringstream ss; ss << "Terminating because Boinc ";
 		if (status.quit_request != 0) ss << "requested that we should quit.";
 		else if (status.abort_request != 0) ss << "requested that we should abort.";
 		else if (status.no_heartbeat != 0) ss << "heartbeat was lost.";
@@ -212,7 +212,7 @@ private:
 			
 		if (status.suspended != 0)
 		{
-			std::ostringstream ss_s; ss_s << std::endl << "Boinc client is suspended." << std::endl;
+			std::ostringstream ss_s; ss_s << "Boinc client is suspended." << std::endl;
 			pio::print(ss_s.str());
 
 			while (status.suspended != 0)
@@ -238,7 +238,7 @@ private:
 			
 		if (status.suspended != 0)
 		{
-			std::ostringstream ss_s; ss_s << std::endl << "Boinc client is suspended." << std::endl;
+			std::ostringstream ss_s; ss_s << "Boinc client is suspended." << std::endl;
 			pio::print(ss_s.str());
 
 			while (status.suspended != 0)
@@ -310,7 +310,6 @@ private:
 			pio::error(ss.str());
 		}
 
-		watch chrono(found ? restoredTime : 0);
 		if (!found)
 		{
 			pTransform->set(1);
@@ -327,6 +326,7 @@ private:
 			}
 		}
 
+		watch chrono(found ? restoredTime : 0);
 		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
 		initPrintProgress(i0, i_start);
 		int dcount = 100;
@@ -342,7 +342,7 @@ private:
 			if (i % dcount == 0)
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
-				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 
 				if (_isBoinc) { if (boincMonitor(0, i, chrono)) return false; }
 				else if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
@@ -647,8 +647,6 @@ private:
 			pio::print(ss.str());
 		}
 
-		watch chrono(found ? restoredTime : 0);
-
 		int B = 0;
 		mpz_t p2; mpz_init(p2);
 		{
@@ -659,6 +657,7 @@ private:
 		}
 		const int p2size = int(mpz_sizeinbase(p2, 2));
 
+		watch chrono(found ? restoredTime : 0);
 		const int i0 = p2size + B - 1;
 		initPrintProgress(i0, found ? ri : i0);
 		int dcount = 100;
@@ -679,7 +678,7 @@ private:
 				if (i % dcount == 0)
 				{
 					chrono.read(); const double displayTime = chrono.getDisplayTime();
-					if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 					if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
 					else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
@@ -703,7 +702,7 @@ private:
 			if (i % dcount == 0)
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
-				if (displayTime >= 1) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 				if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
 				else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}

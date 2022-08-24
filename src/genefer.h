@@ -518,7 +518,7 @@ private:
 		return true;
 	}
 
-	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp)
+	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp, uint64_t & res64, uint64_t & old64)
 	{
 		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
 
@@ -526,7 +526,7 @@ private:
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
-			isPrp = gi.isOne();
+			isPrp = gi.isOne(res64, old64);
 		}
 		if (!GL(exponent, B_GL, validTime)) return false;
 		return true;
@@ -543,7 +543,7 @@ private:
 		return true;
 	}
 
-	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & skey)
+	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & skey, uint64_t & res64, uint64_t & old64)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -560,7 +560,7 @@ private:
 
 		// v1 = mu[0]^w[0], v1: reg = 1
 		gi.read(proofFile);
-		isPrp = gi.isOne();
+		isPrp = gi.isOne(res64, old64);
 		const uint32_t q = gi.gethash32();
 		mpz_set_ui(w[0], q);
 		pTransform->setInt(gi);
@@ -733,10 +733,10 @@ private:
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
-		createTransformGPU(b, n, device, num_regs, false);
+		createTransformGPU(b, n, device, num_regs, m == 10);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, false);
+		createTransformCPU(b, n, nthreads, impl, num_regs, m == 10);
 #endif
 
 		transform * const pTransform = _transform;
@@ -744,8 +744,8 @@ private:
 		_gi = new gint(1 << n, b);
 		std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
-		double testTime = 0, validTime = 0; bool isPrp = false;
-		const bool success = quick(exponent, testTime, validTime, isPrp);
+		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
+		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 		mpz_clear(exponent);
 		std::remove(contextFilename().c_str());
 		_rootFilename.clear();
@@ -804,8 +804,8 @@ private:
 			_gi = new gint(1 << n, b);
 			std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
 
-			double testTime = 0, validTime = 0; bool isPrp = false;
-			const bool success = quick(exponent, testTime, validTime, isPrp);
+			double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
+			const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 			if (success) b_min = b;
 			else if (!_quit) b_max = b;
 
@@ -870,7 +870,7 @@ public:
 			}
 			clearline();
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-			if (success) ss << "checked, time = " << timer::formatTime(time) << ", ckey = " << uint64toString(ckey) << ".";
+			if (success) ss << "checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
 			else if (!_quit) ss << "check failed!";
 			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
@@ -885,11 +885,17 @@ public:
 
 			if (mode == EMode::Quick)
 			{
-				double testTime = 0, validTime = 0; bool isPrp = false;
-				success = quick(exponent, testTime, validTime, isPrp);
+				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
+				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				clearline();
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
-				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(testTime + validTime) << ".";
+				if (success)
+				{
+					ss << " is ";
+					if (isPrp) ss << "a probable prime";
+					else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
+					ss << ", time = " << timer::formatTime(testTime + validTime) << ".";
+				}
 				else if (!_quit) ss << ": validation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -918,15 +924,22 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; uint64_t skey = 0; bool isPrp = false;
-				success = server(exponent, time, isPrp, skey);
+				double time = 0; uint64_t skey = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
+				success = server(exponent, time, isPrp, skey, res64, old64);
 				if (success)
 				{
 					file skeyFile(skeyFilename(), "w", false);
 					skeyFile.print(uint64toString(skey).c_str());
 				}
 				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
-				if (success) ss << " is " << (isPrp ? "a probable prime" : "composite") << ", time = " << timer::formatTime(time) << ", skey = " << uint64toString(skey) << ".";
+				if (success)
+				{
+					ss << " is ";
+					if (isPrp) ss << "a probable prime";
+					else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
+					ss << ", time = " << timer::formatTime(time) << "." << std::endl;
+					ss << "skey = " << uint64toString(skey) << ".";
+				}
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

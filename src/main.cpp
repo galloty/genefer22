@@ -289,7 +289,7 @@ public:
 		{
 			for (size_t n = 10; n <= 22; ++n)
 			{
-				if (!g.check(0, n, mode, device, nthreads, impl, depth)) break;
+				if (!g.check(0, n, mode, device, nthreads, impl, depth)) return;
 			}
 			if (mode == genefer::EMode::Bench) g.check(0, 0, mode, device, nthreads, impl, depth);	// DYFL
 			return;

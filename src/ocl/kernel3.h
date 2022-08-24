@@ -9,13 +9,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
-static const char * const src_ocl_kernel = \
+static const char * const src_ocl_kernel3 = \
 "/*\n" \
 "Copyright 2022, Yves Gallot\n" \
 "\n" \
 "genefer22 is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.\n" \
 "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.\n" \
 "*/\n" \
+"\n" \
+"typedef uint	sz_t;\n" \
 "\n" \
 "// --- uint96/int96 ---\n" \
 "\n" \
@@ -47,24 +49,42 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline int96 int96_add(const int96 x, const int96 y)\n" \
 "{\n" \
+"	int96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
+"	asm volatile (\"addc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"#else\n" \
 "	const ulong s0 = x.s0 + y.s0;\n" \
 "	const int c = (s0 < y.s0) ? 1 : 0;\n" \
-"	int96 r; r.s0 = s0; r.s1 = x.s1 + y.s1 + c;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + y.s1 + c;\n" \
+"#endif\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
 "inline uint96 uint96_add_64(const uint96 x, const ulong y)\n" \
 "{\n" \
+"	uint96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
+"	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
+"#else\n" \
 "	const ulong s0 = x.s0 + y;\n" \
 "	const uint c = (s0 < y) ? 1 : 0;\n" \
-"	uint96 r; r.s0 = s0; r.s1 = x.s1 + c;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + c;\n" \
+"#endif\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
 "inline int96 uint96_subi(const uint96 x, const uint96 y)\n" \
 "{\n" \
+"	int96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"sub.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
+"	asm volatile (\"subc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"#else\n" \
 "	const uint c = (x.s0 < y.s0) ? 1 : 0;\n" \
-"	int96 r; r.s0 = x.s0 - y.s0; r.s1 = (int)(x.s1 - y.s1 - c);\n" \
+"	r.s0 = x.s0 - y.s0; r.s1 = (int)(x.s1 - y.s1 - c);\n" \
+"#endif\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
@@ -152,8 +172,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- transform/inline ---\n" \
 "\n" \
-"inline void forward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)\n" \
+"inline void forward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const w_j = &w[j];\n" \
 "	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
@@ -168,9 +188,9 @@ static const char * const src_ocl_kernel = \
 "	Ze[0 * m] = adde(v0e, v1e); Ze[1 * m] = sube(v0e, v1e); Ze[2 * m] = adde(v2e, v3e); Ze[3 * m] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
-"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)\n" \
+"inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
+"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const w_j = &w[j];\n" \
 "	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
@@ -186,9 +206,9 @@ static const char * const src_ocl_kernel = \
 "	Ze[0 * ml] = adde(v0e, v1e); Ze[1 * ml] = sube(v0e, v1e); Ze[2 * ml] = adde(v2e, v3e); Ze[3 * ml] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
-"	const size_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
-"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const size_t j)\n" \
+"inline void forward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"	const sz_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
+"	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const w_j = &w[j];\n" \
 "	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
@@ -205,8 +225,8 @@ static const char * const src_ocl_kernel = \
 "	ze[0] = adde(v0e, v1e); ze[mg] = sube(v0e, v1e); z2mge[0] = adde(v2e, v3e); z2mge[mg] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4(const size_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)\n" \
+"inline void backward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
 "	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];\n" \
@@ -221,9 +241,9 @@ static const char * const src_ocl_kernel = \
 "	Ze[0 * m] = adde(v0e, v2e); Ze[2 * m] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * m] = adde(v1e, v3e); Ze[3 * m] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4i(const size_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
-"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)\n" \
+"inline void backward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
+"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
 "	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];\n" \
@@ -239,9 +259,9 @@ static const char * const src_ocl_kernel = \
 "	Ze[0 * ml] = adde(v0e, v2e); Ze[2 * ml] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * ml] = adde(v1e, v3e); Ze[3 * ml] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4o(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
-"	const size_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
-"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const size_t j)\n" \
+"inline void backward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"	const sz_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
+"	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
 "	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];\n" \
@@ -258,7 +278,7 @@ static const char * const src_ocl_kernel = \
 "	ze[0] = adde(v0e, v2e); z2mge[0] = mulWe(sube(v0e, v2e), wi1e); ze[mg] = adde(v1e, v3e); z2mge[mg] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void write_4(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"inline void write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__local const RNS * restrict const Z, __local const RNSe * restrict const Ze)\n" \
 "{\n" \
 "	__global RNS * const z2mg = &z[2 * mg];\n" \
@@ -268,7 +288,7 @@ static const char * const src_ocl_kernel = \
 "	ze[0] = Ze[0]; ze[mg] = Ze[1]; z2mge[0] = Ze[2]; z2mge[mg] = Ze[3];\n" \
 "}\n" \
 "\n" \
-"inline void fwd2write_4(const size_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"inline void fwd2write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__local const RNS * restrict const Z, __local const RNSe * restrict const Ze, const RNS_W w1, const RNS_We w1e)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -310,7 +330,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "inline void mul_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, const RNS_W w0, const RNS_We w0e)\n" \
+"	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, const RNS_W w0, const RNS_We w0e)\n" \
 "{\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
 "	const RNS u0p = z[0], u1p = z[mg], u2p = z2mg[0], u3p = z2mg[mg];\n" \
@@ -330,7 +350,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
-"	const size_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, \n" \
+"	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, \n" \
 "	const RNS_W w1, const RNS_W w1i, const RNS_W w0, const RNS_We w1e, const RNS_We w1ie, const RNS_We w0e)\n" \
 "{\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
@@ -361,16 +381,16 @@ static const char * const src_ocl_kernel = \
 "	__local RNSe Ze[4 * B_N * CHUNK_N]; \\\n" \
 "	\\\n" \
 "	/* threadIdx < B_N */ \\\n" \
-"	const size_t i = get_local_id(0), chunk_idx = i % CHUNK_N, threadIdx = i / CHUNK_N, blockIdx = get_group_id(0) * CHUNK_N + chunk_idx; \\\n" \
+"	const sz_t i = (sz_t)get_local_id(0), chunk_idx = i % CHUNK_N, threadIdx = i / CHUNK_N, blockIdx = (sz_t)get_group_id(0) * CHUNK_N + chunk_idx; \\\n" \
 "	__local RNS * const Zi = &Z[chunk_idx]; \\\n" \
 "	__local RNSe * const Zie = &Ze[chunk_idx]; \\\n" \
 "	\\\n" \
-"	const size_t blockIdx_m = blockIdx >> lm, idx_m = blockIdx_m * B_N + threadIdx; \\\n" \
-"	const size_t blockIdx_mm = blockIdx_m << lm, idx_mm = idx_m << lm; \\\n" \
+"	const sz_t blockIdx_m = blockIdx >> lm, idx_m = blockIdx_m * B_N + threadIdx; \\\n" \
+"	const sz_t blockIdx_mm = blockIdx_m << lm, idx_mm = idx_m << lm; \\\n" \
 "	\\\n" \
-"	const size_t ki = blockIdx + blockIdx_mm * (B_N * 3 - 1) + idx_mm, ko = blockIdx - blockIdx_mm + idx_mm * 4; \\\n" \
+"	const sz_t ki = blockIdx + blockIdx_mm * (B_N * 3 - 1) + idx_mm, ko = blockIdx - blockIdx_mm + idx_mm * 4; \\\n" \
 "	\\\n" \
-"	size_t sj = s + idx_m;\n" \
+"	sz_t sj = s + idx_m;\n" \
 "\n" \
 "#define DECLARE_VAR_FORWARD() \\\n" \
 "	__global RNS * __restrict__ const zi = &z[ki]; \\\n" \
@@ -383,7 +403,7 @@ static const char * const src_ocl_kernel = \
 "	__global RNSe * __restrict__ const zie = &ze[ko]; \\\n" \
 "	__global RNS * __restrict__ const zo = &z[ki]; \\\n" \
 "	__global RNSe * __restrict__ const zoe = &ze[ki]; \\\n" \
-"	const size_t n_4 = get_global_size(0); \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0); \\\n" \
 "	__global const RNS_W * restrict const wi = &w[4 * n_4]; \\\n" \
 "	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
@@ -394,13 +414,13 @@ static const char * const src_ocl_kernel = \
 "	forward_4i(B_N * CHUNK_N, &Z[i], &Ze[i], B_N << lm, zi, zie, w, we, sj / B_N);\n" \
 "\n" \
 "#define FORWARD_O(CHUNK_N) \\\n" \
-"	forward_4o((size_t)1 << lm, zo, zoe, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], w, we, sj / 1);\n" \
+"	forward_4o((sz_t)1 << lm, zo, zoe, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], w, we, sj / 1);\n" \
 "\n" \
 "#define BACKWARD_I(B_N, CHUNK_N) \\\n" \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
 "	DECLARE_VAR_BACKWARD(); \\\n" \
 "	\\\n" \
-"	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (size_t)1 << lm, zi, zie, wi, wie, sj / 1); \\\n" \
+"	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, zie, wi, wie, sj / 1); \\\n" \
 "\n" \
 "#define BACKWARD_O(B_N, CHUNK_N) \\\n" \
 "	backward_4o(B_N << lm, zo, zoe, B_N * CHUNK_N, &Z[i], &Ze[i], wi, wie, sj / B_N);\n" \
@@ -416,7 +436,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	FORWARD_I(B_64, CHUNK64);\n" \
 "\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], w, we, sj / 4);\n" \
 "\n" \
 "	FORWARD_O(CHUNK64);\n" \
@@ -429,7 +449,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	BACKWARD_I(B_64, CHUNK64);\n" \
 "\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	backward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], &Zie[CHUNK64 * k4], wi, wie, sj / 4);\n" \
 "\n" \
 "	BACKWARD_O(B_64, CHUNK64);\n" \
@@ -446,9 +466,9 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	FORWARD_I(B_256, CHUNK256);\n" \
 "\n" \
-"	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
 "	forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], w, we, sj / 16);\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], w, we, sj / 4);\n" \
 "\n" \
 "	FORWARD_O(CHUNK256);\n" \
@@ -461,9 +481,9 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	BACKWARD_I(B_256, CHUNK256);\n" \
 "\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	backward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], &Zie[CHUNK256 * k4], wi, wie, sj / 4);\n" \
-"	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
 "	backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], &Zie[CHUNK256 * k16], wi, wie, sj / 16);\n" \
 "\n" \
 "	BACKWARD_O(B_256, CHUNK256);\n" \
@@ -480,11 +500,11 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	FORWARD_I(B_1024, CHUNK1024);\n" \
 "\n" \
-"	const size_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );\n" \
+"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );\n" \
 "	forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], w, we, sj / 64);\n" \
-"	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
 "	forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], w, we, sj / 16);\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], w, we, sj / 4);\n" \
 "\n" \
 "	FORWARD_O(CHUNK1024);\n" \
@@ -497,11 +517,11 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	BACKWARD_I(B_1024, CHUNK1024);\n" \
 "\n" \
-"	const size_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
 "	backward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &Zie[CHUNK1024 * k4], wi, wie, sj / 4);\n" \
-"	const size_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
 "	backward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &Zie[CHUNK1024 * k16], wi, wie, sj / 16);\n" \
-"	const size_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);\n" \
+"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);\n" \
 "	backward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &Zie[CHUNK1024 * k64], wi, wie, sj / 64);\n" \
 "\n" \
 "	BACKWARD_O(B_1024, CHUNK1024);\n" \
@@ -513,10 +533,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[32 * BLK32]; \\\n" \
 "	__local RNSe Ze[32 * BLK32]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k32 = get_group_id(0) * 32 * BLK32, i = get_local_id(0); \\\n" \
-"	const size_t i32 = (i & (size_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \\\n" \
+"	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \\\n" \
+"	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k32 + i32 + i8]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k32 + i32 + i8]; \\\n" \
@@ -524,7 +544,7 @@ static const char * const src_ocl_kernel = \
 "	__local RNSe * const Z32e = &Ze[i32]; \\\n" \
 "	__local RNS * const Zi8 = &Z32[i8]; \\\n" \
 "	__local RNSe * const Zi8e = &Z32e[i8]; \\\n" \
-"	const size_t i2 = ((4 * i8) & (size_t)~(4 * 2 - 1)) + (i8 % 2); \\\n" \
+"	const sz_t i2 = ((4 * i8) & (sz_t)~(4 * 2 - 1)) + (i8 % 2); \\\n" \
 "	__local RNS * const Zi2 = &Z32[i2]; \\\n" \
 "	__local RNSe * const Zi2e = &Z32e[i2]; \\\n" \
 "	__local RNS * const Z4 = &Z32[4 * i8]; \\\n" \
@@ -548,10 +568,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[64 * BLK64]; \\\n" \
 "	__local RNSe Ze[64 * BLK64]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k64 = get_group_id(0) * 64 * BLK64, i = get_local_id(0); \\\n" \
-"	const size_t i64 = (i & (size_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \\\n" \
+"	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \\\n" \
+"	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k64 + i64 + i16]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k64 + i64 + i16]; \\\n" \
@@ -559,7 +579,7 @@ static const char * const src_ocl_kernel = \
 "	__local RNSe * const Z64e = &Ze[i64]; \\\n" \
 "	__local RNS * const Zi16 = &Z64[i16]; \\\n" \
 "	__local RNSe * const Zi16e = &Z64e[i16]; \\\n" \
-"	const size_t i4 = ((4 * i16) & (size_t)~(4 * 4 - 1)) + (i16 % 4); \\\n" \
+"	const sz_t i4 = ((4 * i16) & (sz_t)~(4 * 4 - 1)) + (i16 % 4); \\\n" \
 "	__local RNS * const Zi4 = &Z64[i4]; \\\n" \
 "	__local RNSe * const Zi4e = &Z64e[i4]; \\\n" \
 "	__local RNS * const Z4 = &Z64[4 * i16]; \\\n" \
@@ -583,10 +603,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[128 * BLK128]; \\\n" \
 "	__local RNSe Ze[128 * BLK128]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k128 = get_group_id(0) * 128 * BLK128, i = get_local_id(0); \\\n" \
-"	const size_t i128 = (i & (size_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \\\n" \
+"	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \\\n" \
+"	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k128 + i128 + i32]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k128 + i128 + i32]; \\\n" \
@@ -594,10 +614,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNSe * const Z128e = &Ze[i128]; \\\n" \
 "	__local RNS * const Zi32 = &Z128[i32]; \\\n" \
 "	__local RNSe * const Zi32e = &Z128e[i32]; \\\n" \
-"	const size_t i8 = ((4 * i32) & (size_t)~(4 * 8 - 1)) + (i32 % 8); \\\n" \
+"	const sz_t i8 = ((4 * i32) & (sz_t)~(4 * 8 - 1)) + (i32 % 8); \\\n" \
 "	__local RNS * const Zi8 = &Z128[i8]; \\\n" \
 "	__local RNSe * const Zi8e = &Z128e[i8]; \\\n" \
-"	const size_t i2 = ((4 * i32) & (size_t)~(4 * 2 - 1)) + (i32 % 2); \\\n" \
+"	const sz_t i2 = ((4 * i32) & (sz_t)~(4 * 2 - 1)) + (i32 % 2); \\\n" \
 "	__local RNS * const Zi2 = &Z128[i2]; \\\n" \
 "	__local RNSe * const Zi2e = &Z128e[i2]; \\\n" \
 "	__local RNS * const Z4 = &Z128[4 * i32]; \\\n" \
@@ -623,10 +643,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[256 * BLK256]; \\\n" \
 "	__local RNSe Ze[256 * BLK256]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k256 = get_group_id(0) * 256 * BLK256, i = get_local_id(0); \\\n" \
-"	const size_t i256 = 0, i64 = i; \\\n" \
+"	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \\\n" \
+"	const sz_t i256 = 0, i64 = i; \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k256 + i256 + i64]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k256 + i256 + i64]; \\\n" \
@@ -634,10 +654,10 @@ static const char * const src_ocl_kernel = \
 "	__local RNSe * const Z256e = &Ze[i256]; \\\n" \
 "	__local RNS * const Zi64 = &Z256[i64]; \\\n" \
 "	__local RNSe * const Zi64e = &Z256e[i64]; \\\n" \
-"	const size_t i16 = ((4 * i64) & (size_t)~(4 * 16 - 1)) + (i64 % 16); \\\n" \
+"	const sz_t i16 = ((4 * i64) & (sz_t)~(4 * 16 - 1)) + (i64 % 16); \\\n" \
 "	__local RNS * const Zi16 = &Z256[i16]; \\\n" \
 "	__local RNSe * const Zi16e = &Z256e[i16]; \\\n" \
-"	const size_t i4 = ((4 * i64) & (size_t)~(4 * 4 - 1)) + (i64 % 4); \\\n" \
+"	const sz_t i4 = ((4 * i64) & (sz_t)~(4 * 4 - 1)) + (i64 % 4); \\\n" \
 "	__local RNS * const Zi4 = &Z256[i4]; \\\n" \
 "	__local RNSe * const Zi4e = &Z256e[i4]; \\\n" \
 "	__local RNS * const Z4 = &Z256[4 * i64]; \\\n" \
@@ -663,21 +683,21 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[512]; \\\n" \
 "	__local RNSe Ze[512]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k512 = get_group_id(0) * 512, i128 = get_local_id(0); \\\n" \
+"	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k512 + i128]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k512 + i128]; \\\n" \
 "	__local RNS * const Zi128 = &Z[i128]; \\\n" \
 "	__local RNSe * const Zi128e = &Ze[i128]; \\\n" \
-"	const size_t i32 = ((4 * i128) & (size_t)~(4 * 32 - 1)) + (i128 % 32); \\\n" \
+"	const sz_t i32 = ((4 * i128) & (sz_t)~(4 * 32 - 1)) + (i128 % 32); \\\n" \
 "	__local RNS * const Zi32 = &Z[i32]; \\\n" \
 "	__local RNSe * const Zi32e = &Ze[i32]; \\\n" \
-"	const size_t i8 = ((4 * i128) & (size_t)~(4 * 8 - 1)) + (i128 % 8); \\\n" \
+"	const sz_t i8 = ((4 * i128) & (sz_t)~(4 * 8 - 1)) + (i128 % 8); \\\n" \
 "	__local RNS * const Zi8 = &Z[i8]; \\\n" \
 "	__local RNSe * const Zi8e = &Ze[i8]; \\\n" \
-"	const size_t i2 = ((4 * i128) & (size_t)~(4 * 2 - 1)) + (i128 % 2); \\\n" \
+"	const sz_t i2 = ((4 * i128) & (sz_t)~(4 * 2 - 1)) + (i128 % 2); \\\n" \
 "	__local RNS * const Zi2 = &Z[i2]; \\\n" \
 "	__local RNSe * const Zi2e = &Ze[i2]; \\\n" \
 "	__local RNS * const Z4 = &Z[4 * i128]; \\\n" \
@@ -705,21 +725,21 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[1024]; \\\n" \
 "	__local RNSe Ze[1024]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k1024 = get_group_id(0) * 1024, i256 = get_local_id(0); \\\n" \
+"	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k1024 + i256]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k1024 + i256]; \\\n" \
 "	__local RNS * const Zi256 = &Z[i256]; \\\n" \
 "	__local RNSe * const Zi256e = &Ze[i256]; \\\n" \
-"	const size_t i64 = ((4 * i256) & (size_t)~(4 * 64 - 1)) + (i256 % 64); \\\n" \
+"	const sz_t i64 = ((4 * i256) & (sz_t)~(4 * 64 - 1)) + (i256 % 64); \\\n" \
 "	__local RNS * const Zi64 = &Z[i64]; \\\n" \
 "	__local RNSe * const Zi64e = &Ze[i64]; \\\n" \
-"	const size_t i16 = ((4 * i256) & (size_t)~(4 * 16 - 1)) + (i256 % 16); \\\n" \
+"	const sz_t i16 = ((4 * i256) & (sz_t)~(4 * 16 - 1)) + (i256 % 16); \\\n" \
 "	__local RNS * const Zi16 = &Z[i16]; \\\n" \
 "	__local RNSe * const Zi16e = &Ze[i16]; \\\n" \
-"	const size_t i4 = ((4 * i256) & (size_t)~(4 * 4 - 1)) + (i256 % 4); \\\n" \
+"	const sz_t i4 = ((4 * i256) & (sz_t)~(4 * 4 - 1)) + (i256 % 4); \\\n" \
 "	__local RNS * const Zi4 = &Z[i4]; \\\n" \
 "	__local RNSe * const Zi4e = &Ze[i4]; \\\n" \
 "	__local RNS * const Z4 = &Z[4 * i256]; \\\n" \
@@ -747,24 +767,24 @@ static const char * const src_ocl_kernel = \
 "	__local RNS Z[2048]; \\\n" \
 "	__local RNSe Ze[2048]; \\\n" \
 "	\\\n" \
-"	const size_t n_4 = get_global_size(0), idx = get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
-"	const size_t k2048 = get_group_id(0) * 2048, i512 = get_local_id(0); \\\n" \
+"	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
 "	__global RNS * restrict const zk = &z[k2048 + i512]; \\\n" \
 "	__global RNSe * restrict const zke = &ze[k2048 + i512]; \\\n" \
 "	__local RNS * const Zi512 = &Z[i512]; \\\n" \
 "	__local RNSe * const Zi512e = &Ze[i512]; \\\n" \
-"	const size_t i128 = ((4 * i512) & (size_t)~(4 * 128 - 1)) + (i512 % 128); \\\n" \
+"	const sz_t i128 = ((4 * i512) & (sz_t)~(4 * 128 - 1)) + (i512 % 128); \\\n" \
 "	__local RNS * const Zi128 = &Z[i128]; \\\n" \
 "	__local RNSe * const Zi128e = &Ze[i128]; \\\n" \
-"	const size_t i32 = ((4 * i512) & (size_t)~(4 * 32 - 1)) + (i512 % 32); \\\n" \
+"	const sz_t i32 = ((4 * i512) & (sz_t)~(4 * 32 - 1)) + (i512 % 32); \\\n" \
 "	__local RNS * const Zi32 = &Z[i32]; \\\n" \
 "	__local RNSe * const Zi32e = &Ze[i32]; \\\n" \
-"	const size_t i8 = ((4 * i512) & (size_t)~(4 * 8 - 1)) + (i512 % 8); \\\n" \
+"	const sz_t i8 = ((4 * i512) & (sz_t)~(4 * 8 - 1)) + (i512 % 8); \\\n" \
 "	__local RNS * const Zi8 = &Z[i8]; \\\n" \
 "	__local RNSe * const Zi8e = &Ze[i8]; \\\n" \
-"	const size_t i2 = ((4 * i512) & (size_t)~(4 * 2 - 1)) + (i512 % 2); \\\n" \
+"	const sz_t i2 = ((4 * i512) & (sz_t)~(4 * 2 - 1)) + (i512 % 2); \\\n" \
 "	__local RNS * const Zi2 = &Z[i2]; \\\n" \
 "	__local RNSe * const Zi2e = &Ze[i2]; \\\n" \
 "	__local RNS * const Z4 = &Z[4 * i512]; \\\n" \
@@ -1066,7 +1086,7 @@ static const char * const src_ocl_kernel = \
 "void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,\n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)\n" \
 "{\n" \
-"	const size_t idx = get_global_id(0);\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	const unsigned int blk = abs(sblk);\n" \
 "	__global RNS * restrict const zi = &z[blk * idx];\n" \
 "	__global RNSe * restrict const zie = &ze[blk * idx];\n" \
@@ -1078,7 +1098,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	int96 f = int96_set_si(0);\n" \
 "\n" \
-"	size_t j = 0;\n" \
+"	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
 "		const RNS zj = zi[j];\n" \
@@ -1092,7 +1112,7 @@ static const char * const src_ocl_kernel = \
 "		++j;\n" \
 "	} while (j != blk);\n" \
 "\n" \
-"	const size_t i = (idx + 1) & (get_global_size(0) - 1);\n" \
+"	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
 "	c[i] = (i == 0) ? -(long)f.s0 : (long)f.s0;\n" \
 "}\n" \
 "\n" \
@@ -1100,13 +1120,13 @@ static const char * const src_ocl_kernel = \
 "void normalize3b(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, \n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)\n" \
 "{\n" \
-"	const size_t idx = get_global_id(0);\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	__global RNS * restrict const zi = &z[blk * idx];\n" \
 "	__global RNSe * restrict const zie = &ze[blk * idx];\n" \
 "\n" \
 "	long f = c[idx];\n" \
 "\n" \
-"	size_t j = 0;\n" \
+"	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
 "		f += geti_P1(zi[j].s0);\n" \

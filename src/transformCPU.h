@@ -1250,7 +1250,7 @@ private:
 
 public:
 	transformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs)
-		: transform(N, b, (VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8)),
+		: transform(N, b, (VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8)),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),

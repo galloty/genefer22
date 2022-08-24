@@ -769,6 +769,7 @@ private:
 			{
 				pTransform->squareDup((i % 2) != 0);
 				++i;
+				if (_quit) break;
 			}
 
 			pTransform->copy(1, 0);	// synchro

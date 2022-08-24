@@ -14,7 +14,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl.h"
 #include "transform.h"
 
-#include "ocl/kernel.h"
+#include "ocl/kernel2.h"
+#include "ocl/kernel3.h"
 
 template <cl_uint p, cl_uint prRoot>
 class Zp
@@ -807,6 +808,7 @@ public:
 	}
 };
 
+template<size_t RNS_SIZE>
 class transformGPU : public transform
 {
 private:
@@ -826,7 +828,7 @@ private:
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(1 << n, b, EKind::NTT3),
+		: transform(1 << n, b, (RNS_SIZE == 2) ? EKind::NTT2 : EKind::NTT3),
 		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _num_regs(num_regs),
 		_z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
 	{
@@ -841,24 +843,19 @@ public:
 
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;
-		src << "#define\tP3\t" << P3 << "u" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP3\t" << P3 << "u" << std::endl;
 		src << "#define\tP1_INV\t" << uint64_t(-1) / P1 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tP2_INV\t" << uint64_t(-1) / P2 - (uint64_t(1) << 32) << "u" << std::endl;
-		src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tInvP2_P1\t1822724754u" << std::endl;		// 1 / P2 mod P1
-		src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
-		src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
+		if (RNS_SIZE >= 3) src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
+		if (RNS_SIZE >= 3) src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
 		src << "#define\tP1P2\t(P1 * (ulong)P2)" << std::endl;
-		src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
-		src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
-		src << "#define\tP1P2P3h\t3942432002u" << std::endl;
-		src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
-		src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
-
-		src << "#define\tP1\t" << P1 << "u" << std::endl;
-		src << "#define\tP1\t" << P1 << "u" << std::endl;
-		src << "#define\tP1\t" << P1 << "u" << std::endl;
-		src << "#define\tP1\t" << P1 << "u" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP1P2P3h\t3942432002u" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
+		if (RNS_SIZE >= 3) src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
 
 		src << "#define\tBLK32\t" << BLK32 << std::endl;
 		src << "#define\tBLK64\t" << BLK64 << std::endl;
@@ -869,7 +866,14 @@ public:
 		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
 		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
 
-		if (!_pEngine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
+		if (RNS_SIZE == 2)
+		{
+			if (!_pEngine->readOpenCL("ocl/kernel2.cl", "src/ocl/kernel2.h", "src_ocl_kernel2", src)) src << src_ocl_kernel2;
+		}
+		else	// RNS_SIZE == 3
+		{
+			if (!_pEngine->readOpenCL("ocl/kernel3.cl", "src/ocl/kernel3.h", "src_ocl_kernel3", src)) src << src_ocl_kernel3;
+		}
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory();

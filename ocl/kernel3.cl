@@ -408,7 +408,7 @@ inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const 
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_BACKWARD(); \
 	\
-	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, zie, wi, wie, sj / 1); \
+	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, zie, wi, wie, sj / 1);
 
 #define BACKWARD_O(B_N, CHUNK_N) \
 	backward_4o(B_N << lm, zo, zoe, B_N * CHUNK_N, &Z[i], &Ze[i], wi, wie, sj / B_N);
@@ -1071,7 +1071,7 @@ inline int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)
 }
 
 __kernel
-void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,
+void normalize1(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,
 	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
@@ -1105,7 +1105,7 @@ void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const
 }
 
 __kernel
-void normalize3b(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, 
+void normalize2(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, 
 	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)
 {
 	const sz_t idx = (sz_t)get_global_id(0);

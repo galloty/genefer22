@@ -420,7 +420,7 @@ static const char * const src_ocl_kernel3 = \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
 "	DECLARE_VAR_BACKWARD(); \\\n" \
 "	\\\n" \
-"	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, zie, wi, wie, sj / 1); \\\n" \
+"	backward_4i(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, zie, wi, wie, sj / 1);\n" \
 "\n" \
 "#define BACKWARD_O(B_N, CHUNK_N) \\\n" \
 "	backward_4o(B_N << lm, zo, zoe, B_N * CHUNK_N, &Z[i], &Ze[i], wi, wie, sj / B_N);\n" \
@@ -1083,7 +1083,7 @@ static const char * const src_ocl_kernel3 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void normalize3a(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,\n" \
+"void normalize1(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,\n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
@@ -1117,7 +1117,7 @@ static const char * const src_ocl_kernel3 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void normalize3b(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, \n" \
+"void normalize2(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, \n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \

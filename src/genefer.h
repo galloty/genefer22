@@ -727,6 +727,10 @@ private:
 		static constexpr uint32_t bm[14] = { 900000000, 700000000, 500000000, 400000000, 280000000,
 											 300000000, 170000000, 115000000, 16000000, 6000000, 2000000, 820000, 230000, 980000 };
 
+		// NTT2 limits
+		// static constexpr uint32_t bm[14] = { 93328418, 65993156, 46664208, 32996578, 23332104,
+		// 									 16498288, 11666052, 8249144, 5833026, 4124572, 2916512, 2062286, 1458256, 1458256 };
+
 		const size_t num_regs = 3;
 
 		const uint32_t b = bm[(m != 0) ? m - 10 : 13], n = (m != 0) ? m : 22;
@@ -902,7 +906,6 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success)
 				{
-					std::ostringstream ss; ss << b << "^{2^" << n << "} + 1 is " << (isPrp ? "a probable prime" : "composite") << "." << std::endl;
 					pio::result(ss.str());
 					if (!_isBoinc) std::remove(contextFilename().c_str());
 				}

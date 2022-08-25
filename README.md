@@ -19,6 +19,5 @@ This version is compiled with gcc 11 and was tested on Windows and Linux (Ubuntu
 
 ## TODO
 
-- add crc (or ecc?) to binary files
-- fast GPU transform for GFN-20-21-22 and DYFL projects
+- add crc32 to binary files
 - fast CPU transform for the GFN-22 project (*b* < 600,000)

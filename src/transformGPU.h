@@ -131,20 +131,23 @@ typedef RNSe	RNS_We;
 #define CHUNK256	4
 #define CHUNK1024	2
 
+template<size_t RNS_SIZE>
 class engine : public device
 {
 private:
 	const size_t _n;
 	const int _ln;
 	const bool _isBoinc;
-	cl_mem _z = nullptr, _ze = nullptr, _zp = nullptr, _zpe = nullptr, _w = nullptr, _we = nullptr, _c = nullptr;
+	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr;
+	cl_mem _ze = nullptr, _zpe = nullptr, _we = nullptr;
+	cl_mem _c = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
-	cl_kernel _normalize3a = nullptr, _normalize3b = nullptr;
+	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
 	splitter * _pSplit = nullptr;
-	size_t _n3aLocalWS = 32, _n3bLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
+	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
 
 public:
 	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
@@ -207,11 +210,14 @@ public:
 		if (n != 0)
 		{
 			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
-			_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
 			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
-			_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
 			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_W) * 2 * n);
-			_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_We) * 2 * n);
+			if (RNS_SIZE == 3)
+			{
+				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
+				_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
+				_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_We) * 2 * n);
+			}
 			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long) * n / 4);
 		}
 	}
@@ -224,9 +230,15 @@ public:
 #endif
 		if (_n != 0)
 		{
-			_releaseBuffer(_z); _releaseBuffer(_ze);
-			_releaseBuffer(_zp); _releaseBuffer(_zpe);
-			_releaseBuffer(_w); _releaseBuffer(_we);
+			_releaseBuffer(_z);
+			_releaseBuffer(_zp); 
+			_releaseBuffer(_w);  
+			if (RNS_SIZE == 3)
+			{
+				_releaseBuffer(_ze);
+				_releaseBuffer(_zpe);
+				_releaseBuffer(_we);
+			}
 			_releaseBuffer(_c);
 		}
 	}
@@ -237,34 +249,37 @@ private:
 	cl_kernel createTransformKernel(const char * const kernelName, const bool isMultiplier = true)
 	{
 		cl_kernel kernel = _createKernel(kernelName);
-		_setKernelArg(kernel, 0, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		_setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
-		_setKernelArg(kernel, 2, sizeof(cl_mem), &_w);
-		_setKernelArg(kernel, 3, sizeof(cl_mem), &_we);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
 	cl_kernel createNormalizeKernel(const char * const kernelName, const cl_uint b, const cl_uint b_inv, const cl_int b_s)
 	{
 		cl_kernel kernel = _createKernel(kernelName);
-		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
-		_setKernelArg(kernel, 1, sizeof(cl_mem), &_ze);
-		_setKernelArg(kernel, 2, sizeof(cl_mem), &_c);
-		_setKernelArg(kernel, 3, sizeof(cl_uint), &b);
-		_setKernelArg(kernel, 4, sizeof(cl_uint), &b_inv);
-		_setKernelArg(kernel, 5, sizeof(cl_int), &b_s);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_c);
+		_setKernelArg(kernel, index++, sizeof(cl_uint), &b);
+		_setKernelArg(kernel, index++, sizeof(cl_uint), &b_inv);
+		_setKernelArg(kernel, index++, sizeof(cl_int), &b_s);
 		return kernel;
 	}
 
 	cl_kernel createMulKernel(const char * const kernelName)
 	{
 		cl_kernel kernel = _createKernel(kernelName);
-		_setKernelArg(kernel, 0, sizeof(cl_mem), &_z);
-		_setKernelArg(kernel, 1, sizeof(cl_mem), &_ze);
-		_setKernelArg(kernel, 2, sizeof(cl_mem), &_zp);
-		_setKernelArg(kernel, 3, sizeof(cl_mem), &_zpe);
-		_setKernelArg(kernel, 4, sizeof(cl_mem), &_w);
-		_setKernelArg(kernel, 5, sizeof(cl_mem), &_we);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
@@ -292,8 +307,8 @@ public:
 
 		const cl_int b_s = cl_int(31 - __builtin_clz(b) - 1);
 		const cl_uint b_inv = cl_uint((uint64_t(1) << (b_s + 32)) / b);
-		_normalize3a = createNormalizeKernel("normalize3a", cl_uint(b), b_inv, b_s);
-		_normalize3b = createNormalizeKernel("normalize3b", cl_uint(b), b_inv, b_s);
+		_normalize1 = createNormalizeKernel("normalize1", cl_uint(b), b_inv, b_s);
+		_normalize2 = createNormalizeKernel("normalize2", cl_uint(b), b_inv, b_s);
 
 		_fwd32p = createTransformKernel("fwd32p", false);
 		_fwd64p = createTransformKernel("fwd64p", false);
@@ -311,7 +326,7 @@ public:
 		_mul1024 = createMulKernel("mul1024");
 		_mul2048 = createMulKernel("mul2048");
 
-		_pSplit = new splitter(_ln, CHUNK256, CHUNK1024, sizeof(RNS) + sizeof(RNSe), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(_ln, CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -327,7 +342,7 @@ public:
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024);
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
-		_releaseKernel(_normalize3a); _releaseKernel(_normalize3b);
+		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
 		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
@@ -336,33 +351,17 @@ public:
 
 ///////////////////////////////
 
-	void readMemory_z(RNS * const zPtr, RNSe  * const zPtre)
-	{
-		const size_t n = _n;
-		_readBuffer(_z, zPtr, sizeof(RNS) * n);
-		_readBuffer(_ze, zPtre, sizeof(RNSe) * n);
-	}
+	void readMemory_z(RNS * const zPtr) { _readBuffer(_z, zPtr, sizeof(RNS) * _n); }
+	void readMemory_ze(RNSe  * const zPtre) { _readBuffer(_ze, zPtre, sizeof(RNSe) * _n); }
 
-	void writeMemory_z(const RNS * const zPtr, const RNSe * const zPtre)
-	{
-		const size_t n = _n;
-		_writeBuffer(_z, zPtr, sizeof(RNS) * n);
-		_writeBuffer(_ze, zPtre, sizeof(RNSe) * n);
-	}
+	void writeMemory_z(const RNS * const zPtr) { _writeBuffer(_z, zPtr, sizeof(RNS) * _n); }
+	void writeMemory_ze(const RNSe * const zPtre) { _writeBuffer(_ze, zPtre, sizeof(RNSe) * _n); }
 
-	void writeMemory_zp(const RNS * const zPtr, const RNSe * const zPtre)
-	{
-		const size_t n = _n;
-		_writeBuffer(_zp, zPtr, sizeof(RNS) * n);
-		_writeBuffer(_zpe, zPtre, sizeof(RNSe) * n);
-	}
+	void writeMemory_zp(const RNS * const zPtr) { _writeBuffer(_zp, zPtr, sizeof(RNS) * _n); }
+	void writeMemory_zpe(const RNSe * const zPtre) { _writeBuffer(_zpe, zPtre, sizeof(RNSe) * _n); }
 
-	void writeMemory_w(const RNS_W * const wPtr, const RNS_We * const wPtre)
-	{
-		const size_t n = _n;
-		_writeBuffer(_w, wPtr, sizeof(RNS_W) * 2 * n);
-		_writeBuffer(_we, wPtre, sizeof(RNS_We) * 2 * n);
-	}
+	void writeMemory_w(const RNS_W * const wPtr) { _writeBuffer(_w, wPtr, sizeof(RNS_W) * 2 * _n); }
+	void writeMemory_we(const RNS_We * const wPtre) { _writeBuffer(_we, wPtre, sizeof(RNS_We) * 2 * _n); }
 
 ///////////////////////////////
 
@@ -371,8 +370,9 @@ private:
 	{
 		const size_t n_4 = _n / 4;
 		const cl_int ilm = cl_int(lm), is = cl_uint(n_4 >> lm);
-		_setKernelArg(kernel, 4, sizeof(cl_int), &ilm);
-		_setKernelArg(kernel, 5, sizeof(cl_uint), &is);
+		cl_uint index = (RNS_SIZE == 3) ? 4 : 2;
+		_setKernelArg(kernel, index++, sizeof(cl_int), &ilm);
+		_setKernelArg(kernel, index++, sizeof(cl_uint), &is);
 		_executeKernel(kernel, n_4, localWorkSize);
 	}
 
@@ -410,7 +410,7 @@ private:
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
 		_setKernelArg(kernel, 0, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		_setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
 	}
 
 	void forward64p(const int lm)
@@ -501,7 +501,8 @@ private:
 
 		for (size_t j = 0; j != count; ++j)
 		{
-			writeMemory_z(Z, Ze);
+			writeMemory_z(Z);
+			if (RNS_SIZE == 3) writeMemory_ze(Ze);
 
 			const size_t s = pSplit->getPartSize(sIndex);
 
@@ -665,11 +666,14 @@ public:
 		const size_t size = _n / blk;
 		const cl_int ln = cl_int(_ln);
 
-		_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
-		_setKernelArg(_normalize3a, 7, sizeof(cl_int), &ln);
-		_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &blk);
-		_executeKernel(_normalize3a, size, std::min(size, _n3aLocalWS));
-		_executeKernel(_normalize3b, size, std::min(size, _n3bLocalWS));
+		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
+		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
+		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &ln);
+		_executeKernel(_normalize1, size, std::min(size, _naLocalWS));
+
+		cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
+		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
+		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
 private:
@@ -682,13 +686,17 @@ private:
 
 		for (size_t i = 0; i != count; ++i)
 		{
-			writeMemory_z(Z, Ze);
+			writeMemory_z(Z);
+			if (RNS_SIZE == 3) writeMemory_ze(Ze);
 
-			_setKernelArg(_normalize3a, 6, sizeof(cl_int), &sblk);
-			_setKernelArg(_normalize3a, 7, sizeof(cl_int), &ln);
-			_setKernelArg(_normalize3b, 6, sizeof(cl_uint), &cblk);
-			_executeKernel(_normalize3a, size, std::min(size, n3aLocalWS));
-			_executeKernel(_normalize3b, size, std::min(size, n3bLocalWS));
+			cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
+			_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
+			_setKernelArg(_normalize1, index1++, sizeof(cl_int), &ln);
+			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
+
+			cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
+			_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &cblk);
+			_executeKernel(_normalize2, size, std::min(size, n3bLocalWS));
 		}
 	}
 
@@ -698,12 +706,12 @@ public:
 		const size_t n = _n;
 
 		RNS * const Z = new RNS[n];
-		RNSe * const Ze = new RNSe[n];
+		RNSe * const Ze = (RNS_SIZE == 3) ? new RNSe[n] : nullptr;
 		const double maxSqr = n * (base * double(base));
 		for (size_t i = 0; i != n; ++i)
 		{
 			const int v = int(maxSqr * cos(double(i)));
-			Z[i] = RNS(v); Ze[i] = RNSe(v);
+			Z[i] = RNS(v); if (RNS_SIZE == 3) Ze[i] = RNSe(v);
 		}
 
 		setProfiling(true);
@@ -711,7 +719,7 @@ public:
 		resetProfiles();
 		baseModTune(1, 16, 0, 0, Z, Ze);
 		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z; delete[] Ze; setProfiling(false); return; }
+		if (time == 0) { delete[] Z; if (RNS_SIZE == 3) delete[] Ze; setProfiling(false); return; }
 		const size_t count = std::min(std::max(size_t(100 * getTimerResolution() / time), size_t(2)), size_t(100));
 
 		cl_ulong minT = cl_ulong(-1);
@@ -756,14 +764,14 @@ public:
 			if (minT_b < minT)
 			{
 				minT = minT_b;
-				_n3aLocalWS = minsa;
-				_n3bLocalWS = minsb;
+				_naLocalWS = minsa;
+				_nbLocalWS = minsb;
 				_baseModBlk = b;
 			}
 		}
 #if defined(ocl_debug)
 		{
-			std::ostringstream ss; ss << "n3aLocalWS = " << _n3aLocalWS << ", n3bLocalWS = " << _n3bLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
+			std::ostringstream ss; ss << "n3aLocalWS = " << _naLocalWS << ", n3bLocalWS = " << _nbLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
 			pio::display(ss.str());
 		}
 #endif
@@ -802,7 +810,7 @@ public:
 #endif
 
 		delete[] Z;
-		delete[] Ze;
+		if (RNS_SIZE == 3) delete[] Ze;
 
 		setProfiling(false);
 	}
@@ -816,7 +824,7 @@ private:
 	const size_t _num_regs;
 	RNS * const _z;
 	RNSe * const _ze;
-	engine * _pEngine = nullptr;
+	engine<RNS_SIZE> * _pEngine = nullptr;
 
 	static size_t bitRev(const size_t i, const size_t n)
 	{
@@ -828,34 +836,34 @@ private:
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(1 << n, b, (RNS_SIZE == 2) ? EKind::NTT2 : EKind::NTT3),
-		_mem_size((1 << n) * num_regs * (sizeof(RNS) + sizeof(RNSe))), _num_regs(num_regs),
-		_z(new RNS[(1 << n) * num_regs]), _ze(new RNSe[(1 << n) * num_regs])
+		: transform(1 << n, b, (RNS_SIZE == 3) ? EKind::NTT3 : EKind::NTT2),
+		_mem_size((1 << n) * num_regs * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
+		_z(new RNS[(1 << n) * num_regs]), _ze((RNS_SIZE == 3) ? new RNSe[(1 << n) * num_regs] : nullptr)
 	{
 		const size_t size = getSize();
 
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
+		_pEngine = new engine<RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
 
 		std::ostringstream src;
 
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP3\t" << P3 << "u" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP3\t" << P3 << "u" << std::endl;
 		src << "#define\tP1_INV\t" << uint64_t(-1) / P1 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tP2_INV\t" << uint64_t(-1) / P2 - (uint64_t(1) << 32) << "u" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tInvP2_P1\t1822724754u" << std::endl;		// 1 / P2 mod P1
-		if (RNS_SIZE >= 3) src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
-		if (RNS_SIZE >= 3) src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
+		if (RNS_SIZE == 3) src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
+		if (RNS_SIZE == 3) src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
 		src << "#define\tP1P2\t(P1 * (ulong)P2)" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP1P2P3h\t3942432002u" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
-		if (RNS_SIZE >= 3) src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP1P2P3h\t3942432002u" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
+		if (RNS_SIZE == 3) src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
 
 		src << "#define\tBLK32\t" << BLK32 << std::endl;
 		src << "#define\tBLK64\t" << BLK64 << std::endl;
@@ -881,40 +889,60 @@ public:
 
 		RNS_W * const wr = new RNS_W[2 * size];
 		RNS_W * const wri = &wr[size];
-		RNS_We * const wre = new RNS_We[2 * size];
-		RNS_We * const wrie = &wre[size];
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
 			const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
-			const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
 			for (size_t i = 0; i < s; ++i)
 			{
 				const size_t e = bitRev(i, 2 * s) + 1;
 				const RNS wrsi = prRoot_m.pow(uint32_t(e));
 				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
-				const RNSe wrsie = prRoot_me.pow(uint32_t(e));
-				wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
 			}
 		}
 
 		const size_t m = 4 * size / 2;
 		const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
-		const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
 		for (size_t i = 0; i != size / 4; ++i)
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
 			wr[size / 2 + i] = prRoot_m.pow(uint32_t(e));
 			wri[size / 2 + i] = prRoot_m.pow(uint32_t(m - e));
-			wre[size / 2 + i] = prRoot_me.pow(uint32_t(e));
-			wrie[size / 2 + i] = prRoot_me.pow(uint32_t(m - e));
 		}
 
-		_pEngine->writeMemory_w(wr, wre);
-		_pEngine->tune(b);
-
+		_pEngine->writeMemory_w(wr);
 		delete[] wr;
-		delete[] wre;
+
+		if (RNS_SIZE == 3)
+		{
+			RNS_We * const wre = new RNS_We[2 * size];
+			RNS_We * const wrie = &wre[size];
+			for (size_t s = 1; s < size / 2; s *= 2)
+			{
+				const size_t m = 4 * s;
+				const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
+				for (size_t i = 0; i < s; ++i)
+				{
+					const size_t e = bitRev(i, 2 * s) + 1;
+					const RNSe wrsie = prRoot_me.pow(uint32_t(e));
+					wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
+				}
+			}
+
+			const size_t m = 4 * size / 2;
+			const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
+			for (size_t i = 0; i != size / 4; ++i)
+			{
+				const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
+				wre[size / 2 + i] = prRoot_me.pow(uint32_t(e));
+				wrie[size / 2 + i] = prRoot_me.pow(uint32_t(m - e));
+			}
+
+			_pEngine->writeMemory_we(wre);
+			delete[] wre;
+		}
+
+		_pEngine->tune(b);
 	}
 
 	virtual ~transformGPU()
@@ -925,7 +953,7 @@ public:
 		delete _pEngine;
 
 		delete[] _z;
-		delete[] _ze;
+		if (RNS_SIZE == 3) delete[] _ze;
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -933,19 +961,28 @@ public:
 protected:
 	void getZi(int32_t * const zi) const override
 	{
-		RNS * const z = _z;
-		_pEngine->readMemory_z(z, _ze);
+		_pEngine->readMemory_z(_z);
 
-		for (size_t i = 0, size = getSize(); i < size; ++i) zi[i] = z[i].r1().getInt();
+		const size_t size = getSize();
+
+		RNS * const z = _z;
+		for (size_t i = 0; i < size; ++i) zi[i] = z[i].r1().getInt();
 	}
 
 	void setZi(const int32_t * const zi) override
 	{
-		RNS * const z = _z;
-		RNSe * const ze = _ze;
-		for (size_t i = 0, size = getSize(); i < size; ++i) { z[i] = RNS(zi[i]); ze[i] = RNSe(zi[i]); }
+		const size_t size = getSize();
 
-		_pEngine->writeMemory_z(z, ze);
+		RNS * const z = _z;
+		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]);
+		_pEngine->writeMemory_z(z);
+
+		if (RNS_SIZE == 3)
+		{
+			RNSe * const ze = _ze;
+			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]);
+			_pEngine->writeMemory_ze(_ze);
+		}
 	}
 
 public:
@@ -955,14 +992,17 @@ public:
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(getKind())) return false;
 
-		RNS * const z = _z;
-		RNSe * const ze = _ze;
-
 		const size_t size = getSize();
-		if (!cFile.read(reinterpret_cast<char *>(z), sizeof(RNS) * size * num_regs)) return false;
-		if (!cFile.read(reinterpret_cast<char *>(ze), sizeof(RNSe) * size * num_regs)) return false;
 
-		_pEngine->writeMemory_z(z, ze);
+		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(RNS) * size * num_regs)) return false;
+		_pEngine->writeMemory_z(_z);
+
+		if (RNS_SIZE == 3)
+		{
+			if (!cFile.read(reinterpret_cast<char *>(_ze), sizeof(RNSe) * size * num_regs)) return false;
+			_pEngine->writeMemory_ze(_ze);
+		}
+
 		return true;
 	}
 
@@ -971,24 +1011,33 @@ public:
 		const int kind = int(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
-		RNS * const z = _z;
-		RNSe * const ze = _ze;
-
-		_pEngine->readMemory_z(z, ze);
-
 		const size_t size = getSize();
-		if (!cFile.write(reinterpret_cast<const char *>(z), sizeof(RNS) * size * num_regs)) return;
-		if (!cFile.write(reinterpret_cast<const char *>(ze), sizeof(RNSe) * size * num_regs)) return;
+		_pEngine->readMemory_z(_z);
+		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(RNS) * size * num_regs)) return;
+
+		if (RNS_SIZE == 3)
+		{
+			_pEngine->readMemory_ze(_ze);
+			if (!cFile.write(reinterpret_cast<const char *>(_ze), sizeof(RNSe) * size * num_regs)) return;
+		}
 	}
 
 	void set(const int32_t a) override
 	{
-		RNS * const z = _z;
-		RNSe * const ze = _ze;
-		z[0] = RNS(a); ze[0] = RNSe(a);
-		for (size_t i = 1, size = getSize(); i < size; ++i) { z[i] = RNS(0); ze[i] = RNSe(0); }
+		const size_t size = getSize();
 
-		_pEngine->writeMemory_z(z, ze);
+		RNS * const z = _z;
+		z[0] = RNS(a);
+		for (size_t i = 1; i < size; ++i) z[i] = RNS(0);
+		_pEngine->writeMemory_z(_z);
+
+		if (RNS_SIZE == 3)
+		{
+			RNSe * const ze = _ze;
+			ze[0] = RNSe(a);
+			for (size_t i = 1; i < size; ++i) ze[i] = RNSe(0);
+			_pEngine->writeMemory_ze(_ze);
+		}
 	}
 
 	void squareDup(const bool dup) override
@@ -1000,7 +1049,8 @@ public:
 	void initMultiplicand(const size_t src) override
 	{
 		const size_t size = getSize();
-		_pEngine->writeMemory_zp(&_z[src * size], &_ze[src * size]);
+		_pEngine->writeMemory_zp(&_z[src * size]);
+		if (RNS_SIZE == 3) _pEngine->writeMemory_zpe(&_ze[src * size]);
 		_pEngine->initMultiplicand();
 	}
 
@@ -1012,13 +1062,19 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
+		const size_t size = getSize();
+
 		RNS * const z = _z;
-		RNSe * const ze = _ze;
+		if (src == 0) _pEngine->readMemory_z(z);
+		for (size_t i = 0; i < size; ++i) z[dst * size + i] = z[src * size + i];
+		if (dst == 0) _pEngine->writeMemory_z(z);
 
-		if (src == 0) _pEngine->readMemory_z(z, ze);
-
-		for (size_t i = 0, size = getSize(); i < size; ++i) { z[dst * size + i] = z[src * size + i]; ze[dst * size + i] = ze[src * size + i]; }
-
-		if (dst == 0) _pEngine->writeMemory_z(z, ze);
+		if (RNS_SIZE == 3)
+		{
+			RNSe * const ze = _ze;
+			if (src == 0) _pEngine->readMemory_ze(ze);
+			for (size_t i = 0; i < size; ++i) ze[dst * size + i] = ze[src * size + i];
+			if (dst == 0) _pEngine->writeMemory_ze(ze);
+		}
 	}
 };

@@ -130,7 +130,7 @@ private:
 #endif
 		std::ostringstream ss;
 		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                        the exponent of the GFN (10 <= n <= 22)" << std::endl;
+		ss << "  -n <n>                        the exponent of the GFN (12 <= n <= 22)" << std::endl;
 		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                            quick test" << std::endl;
 		ss << "  -p                            full test: a proof is generated" << std::endl;
@@ -224,32 +224,32 @@ public:
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = std::atoi(nstr.c_str());
-				if (n < 10) throw std::runtime_error("n < 10 is not supported");
+				if (n < 12) throw std::runtime_error("n < 12 is not supported");
 				if (n > 22) throw std::runtime_error("n > 22 is not supported");
 			}
 			if (arg.substr(0, 2) == "-q")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
 				mode = genefer::EMode::Quick;
 			}
 			if (arg.substr(0, 2) == "-p")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -h)");
 				mode = genefer::EMode::Proof;
 			}
 			if (arg.substr(0, 2) == "-s")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -h)");
 				mode = genefer::EMode::Server;
 			}
 			if (arg.substr(0, 2) == "-c")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -h)");
 				mode = genefer::EMode::Check;
 			}
 			if (arg.substr(0, 2) == "-h")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
 				mode = genefer::EMode::Bench;
 			}
 			if (arg.substr(0, 2) == "-d")
@@ -287,7 +287,7 @@ public:
 
 		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
 		{
-			for (size_t n = 10; n <= 22; ++n)
+			for (size_t n = 12; n <= 22; ++n)
 			{
 				if (!g.check(0, n, mode, device, nthreads, impl, depth)) return;
 			}
@@ -298,22 +298,22 @@ public:
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
 			// internal test
-			/*static const size_t count = 20 - 10 + 1;
+			/*static const size_t count = 20 - 12 + 1;
 #if defined(GPU)
-			static constexpr uint32_t bp[count] = { 1999992578, 1999997802, 1999999266, 1999941378, 699995450,
-													302257864, 167811262, 113521888, 15859176, 4896418, 1059094 };
+			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 699995450, 302257864,
+													167811262, 113521888, 15859176, 4896418, 1059094 };
 #else
-			static constexpr uint32_t bp[count] = { 900000066, 700005270, 500002286, 400065560, 280055314,
-													200295018, 168789060, 114009952, 15913772, 4896418, 1951734 };
+			static constexpr uint32_t bp[count] = { 500002286, 400065560, 280055314, 200295018,
+													168789060, 114009952, 15913772, 4896418, 1951734 };
 #endif
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				// if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;
+				// if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;
 
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) return;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Server, device, nthreads, impl, depth)) return;
-				if (!g.check(bp[i] + 0, 10 + i, genefer::EMode::Check, device, nthreads, impl, depth)) return;
+				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) return;
+				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth)) return;
+				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth)) return;
 			}*/
 
 			pio::print(usage());

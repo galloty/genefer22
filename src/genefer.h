@@ -725,16 +725,20 @@ private:
 
 	bool bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
-		static constexpr uint32_t bm[14] = { 900000000, 700000000, 500000000, 400000000, 280000000,
-											 300000000, 170000000, 115000000, 16000000, 6000000, 2000000, 820000, 230000, 980000 };
+		static constexpr uint32_t bm[12] = { 600000000, 500000000, 400000000, 300000000, 170000000,
+											 115000000, 16000000, 6000000, 2000000, 820000, 230000, 980000 };
 
 		// NTT2 limits
-		// static constexpr uint32_t bm[14] = { 93328418, 65993156, 46664208, 32996578, 23332104,
-		// 									 16498288, 11666052, 8249144, 5833026, 4124572, 2916512, 2062286, 1458256, 1458256 };
+		// static constexpr uint32_t bm[12] = { 46664208, 32996578, 23332104, 16498288, 11666052,
+		// 									 8249144, 5833026, 4124572, 2916512, 2062286, 1458256, 1458256 };
+
+		// DT limits
+		// static constexpr uint32_t bm[12] = { 4500000, 3700000, 3000000, 2500000, 2000000,
+		// 									 1700000, 1400000, 1150000, 950000, 780000, 650000, 650002 };
 
 		const size_t num_regs = 3;
 
-		const uint32_t b = bm[(m != 0) ? m - 10 : 13], n = (m != 0) ? m : 22;
+		const uint32_t b = bm[(m != 0) ? m - 12 : 11], n = (m != 0) ? m : 22;
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
@@ -794,8 +798,8 @@ private:
 
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 1000);
 
-		uint32_t b_min = 6, b_max = 2000000000;
-		while (b_max - b_min > 2)
+		uint32_t b_min = 100000, b_max = 2000000000;
+		while (b_max - b_min > 10000)
 		{
 			const uint32_t b = (b_min + b_max) / 4 * 2;
 

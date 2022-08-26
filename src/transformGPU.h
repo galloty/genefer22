@@ -836,9 +836,9 @@ private:
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(1 << n, b, (RNS_SIZE == 3) ? EKind::NTT3 : EKind::NTT2),
-		_mem_size((1 << n) * num_regs * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
-		_z(new RNS[(1 << n) * num_regs]), _ze((RNS_SIZE == 3) ? new RNSe[(1 << n) * num_regs] : nullptr)
+		: transform(size_t(1) << n, n, b, (RNS_SIZE == 3) ? EKind::NTT3 : EKind::NTT2),
+		_mem_size((size_t(1) << n) * num_regs * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
+		_z(new RNS[(size_t(1) << n) * num_regs]), _ze((RNS_SIZE == 3) ? new RNSe[(size_t(1) << n) * num_regs] : nullptr)
 	{
 		const size_t size = getSize();
 

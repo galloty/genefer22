@@ -21,6 +21,7 @@ protected:
 
 private:
 	const size_t _size;
+	const uint32_t _n;
 	const uint32_t _b;
 	const EKind _kind;
 
@@ -55,7 +56,7 @@ private:
 #endif
 
 public:
-	transform(const size_t size, const uint32_t b, const EKind kind) : _size(size), _b(b), _kind(kind) {}
+	transform(const size_t size, const uint32_t n, const uint32_t b, const EKind kind) : _size(size), _n(n), _b(b), _kind(kind) {}
 	virtual ~transform() {}
 
 protected:
@@ -121,14 +122,14 @@ public:
 
 	void getInt(gint & g) const
 	{
-		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("getInt");
+		if ((g.getSize() != (size_t(1) << _n)) || (g.getBase() != _b)) throw std::runtime_error("getInt");
 		getZi(g.data());
 		g.reset();
 	}
 
 	void setInt(gint & g)
 	{
-		if ((g.getSize() != _size) || (g.getBase() != _b)) throw std::runtime_error("setInt");
+		if ((g.getSize() != (size_t(1) << _n)) || (g.getBase() != _b)) throw std::runtime_error("setInt");
 		g.balance();
 		setZi(g.data());
 	}

@@ -563,10 +563,29 @@ public:
 		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
 	}
 
-	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
-						 const double sb, const double sb_inv, const double isb, const double fsb)
+	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n)
 	{
 		Vc f = f_prev;
+
+		for (size_t i = 0; i < 8; ++i)
+		{
+			Vc & zi = z[i];
+			const Vc o = Vc(zi * t2_n).round();
+			const Vc o_b = Vc(o * b_inv).round();
+			const Vc f_i = f + (o - o_b * b) * g;
+			const Vc f_b = Vc(f_i * b_inv).round();
+			f = f_b + o_b * g;
+			zi = f_i - f_b * b;
+		}
+
+		return f;
+	}
+
+	finline Vc mul_carry_i(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
+						   const double sb, const double sb_inv, const double isb, const double fsb)
+	{
+		Vc f = f_prev;
+
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
@@ -587,37 +606,52 @@ public:
 			const Vc irh = Vc(r * sb_inv).round();
 			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
 		}
+
 		return f;
 	}
 
-	finline void carry(const Vc & f_i, const double b, const double b_inv, const double sb, const double sb_inv, const double isb, const double fsb)
+	finline void carry(const Vc & f_i, const double b, const double b_inv)
 	{
 		Vc f = f_i;
+
+		for (size_t i = 0; i < 8 - 1; ++i)
+		{
+			Vc & zi = z[i];
+			f += zi.round();
+			const Vc f_o = Vc(f * b_inv).round();
+			zi = f - f_o * b;
+			f = f_o;
+			if (f.isZero()) return;
+		}
+
+		Vc & zi = z[8 - 1];
+		zi = f + zi.round();
+	}
+
+	finline void carry_i(const Vc & f_i, const double b, const double b_inv, const double sb, const double sb_inv, const double isb, const double fsb)
+	{
+		Vc f = f_i;
+
 		for (size_t i = 0; i < 4 - 1; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
-			const Vc o = z0 + z1 * sb, oi = o.round();
-			f += oi;
+			f += Vc(z0 + z1 * sb).round();
 			const Vc f_o = Vc(f * b_inv).round();
 			const Vc r = f - f_o * b;
 			f = f_o;
 			const Vc irh = Vc(r * sb_inv).round();
 			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
-			if (f.isZero()) break;
+			if (f.isZero()) return;
 		}
 
-		if (!f.isZero())
-		{
-			Vc & z0 = z[2 * (4 - 1) + 0]; Vc & z1 = z[2 * (4 - 1) + 1];
-			const Vc o = z0 + z1 * sb, oi = o.round();
-			const Vc r = f + oi;
-			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
-		}
+		Vc & z0 = z[2 * (4 - 1) + 0]; Vc & z1 = z[2 * (4 - 1) + 1];
+		const Vc r = f + Vc(z0 + z1 * sb).round();
+		const Vc irh = Vc(r * sb_inv).round();
+		z0 = (r - irh * isb) - irh * fsb; z1 = irh;
 	}
 };
 
-template<size_t N, size_t VSIZE>
+template<size_t N, size_t VSIZE, bool IBASE>
 class transformCPU : public transform
 {
 private:
@@ -650,7 +684,7 @@ private:
 	const fp16_80 _sqrt_b;
 
 	const size_t _num_threads;
-	const double _b, _sb, _isb, _fsb;
+	const double _b, _b_inv, _sb, _sb_inv, _isb, _fsb;
 	const size_t _mem_size, _cache_size;
 	char * const _mem;
 	Vc * const _z_copy;
@@ -1191,8 +1225,7 @@ private:
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
-		const double b = _b, sb = _sb, isb = _isb, fsb = _fsb;
-		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb, g = dup ? 2.0 : 1.0;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, isb = _isb, fsb = _fsb, g = dup ? 2.0 : 1.0;
 
 		const size_t num_threads = _num_threads;
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
@@ -1209,7 +1242,8 @@ private:
 				z8.transpose_in();
 
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
-				f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
+				if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
+				else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N);
 
 				if (lh != l_min) z8.transpose_out();
 				z8.store(zj, index(n_io));	// transposed if lh = l_min
@@ -1228,8 +1262,7 @@ private:
 		Vc * const z = (Vc *)&_mem[zOffset]; Vc * const zl = &z[2 * 4 / VSIZE * lh];
 		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
 
-		const double b = _b, sb = _sb, isb = _isb, fsb = _fsb;
-		const double b_inv = 1.0 / b, sb_inv = 1.0 / sb;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, isb = _isb, fsb = _fsb;
 
 		for (size_t j = 0; j < n_io_inv; ++j)
 		{
@@ -1238,7 +1271,8 @@ private:
 
 			Vc f_prev = f[j];
 			if (thread_id == 0) f_prev.shift(f[((j == 0) ? n_io_inv : j) - 1], j == 0);
-			z8.carry(f_prev, b, b_inv, sb, sb_inv, isb, fsb);
+			if (IBASE) z8.carry_i(f_prev, b, b_inv, sb, sb_inv, isb, fsb);
+			else z8.carry(f_prev, b, b_inv);
 
 			z8.transpose_out();
 			z8.store(zj, index(n_io));
@@ -1250,8 +1284,10 @@ private:
 
 public:
 	transformCPU(const uint32_t b, const size_t num_threads, const size_t num_regs)
-		: transform(N, b, (VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8)),
-		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
+		: transform(N, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
+								: ((VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8))),
+		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads),
+		_b(b), _b_inv(1.0 / b), _sb(double(sqrtl(b))), _sb_inv(double(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),
@@ -1303,16 +1339,34 @@ protected:
 			backward_out(&z_copy[2 * 4 / VSIZE * lh], w122i);
 		}
 
-		const double sb = _sb, n_io_N = double(n_io) / N;
+		const double n_io_N = double(n_io) / N;
 
-		for (size_t k = 0; k < N / 2; k += VSIZE / 2)
+		if (IBASE)
 		{
-			Vc vc = z_copy[index(2 * k) / VSIZE];
-			for (size_t i = 0; i < VSIZE / 2; ++i)
+			const double sb = _sb;
+
+			for (size_t k = 0; k < N / 2; k += VSIZE / 2)
 			{
-				const Complex z1 = vc[2 * i + 0], z2 = vc[2 * i + 1];
-				zi[k + i + 0 * N / 2] = std::lround((z1.real + sb * z2.real) * n_io_N);
-				zi[k + i + 1 * N / 2] = std::lround((z1.imag + sb * z2.imag) * n_io_N);
+				const Vc vc = z_copy[index(2 * k) / VSIZE];
+				for (size_t i = 0; i < VSIZE / 2; ++i)
+				{
+					const Complex z1 = vc[2 * i + 0], z2 = vc[2 * i + 1];
+					zi[k + i + 0 * N / 2] = std::lround((z1.real + sb * z2.real) * n_io_N);
+					zi[k + i + 1 * N / 2] = std::lround((z1.imag + sb * z2.imag) * n_io_N);
+				}
+			}
+		}
+		else
+		{
+			for (size_t k = 0; k < N; k += VSIZE)
+			{
+				const Vc vc = z_copy[index(k) / VSIZE];
+				for (size_t i = 0; i < VSIZE; ++i)
+				{
+					const Complex zc = vc[i];
+					zi[k + i + 0 * N] = std::lround(zc.real * n_io_N);
+					zi[k + i + 1 * N] = std::lround(zc.imag * n_io_N);
+				}
 			}
 		}
 	}
@@ -1320,28 +1374,45 @@ protected:
 	void setZi(const int32_t * const zi) override
 	{
 		Vc * const z = (Vc *)&_mem[zOffset];
-		const Vd<VSIZE> isb = Vd<VSIZE>::broadcast(_isb), fsb = Vd<VSIZE>::broadcast(_fsb), sb_inv = Vd<VSIZE>::broadcast(1.0 / _sb);
 
-		for (size_t k = 0; k < N / 2; k += VSIZE / 2)
+		if (IBASE)
 		{
-			Vd<VSIZE> r;
-			for (size_t i = 0; i < VSIZE / 2; ++i)
+			const Vd<VSIZE> isb = Vd<VSIZE>::broadcast(_isb), fsb = Vd<VSIZE>::broadcast(_fsb), sb_inv = Vd<VSIZE>::broadcast(_sb_inv);
+
+			for (size_t k = 0; k < N / 2; k += VSIZE / 2)
 			{
-				r.set(2 * i + 0, double(zi[k + i + 0 * N / 2]));
-				r.set(2 * i + 1, double(zi[k + i + 1 * N / 2]));
+				Vd<VSIZE> r;
+				for (size_t i = 0; i < VSIZE / 2; ++i)
+				{
+					r.set(2 * i + 0, double(zi[k + i + 0 * N / 2]));
+					r.set(2 * i + 1, double(zi[k + i + 1 * N / 2]));
+				}
+
+				const Vd<VSIZE> irh = Vd<VSIZE>(r * sb_inv).round();
+				const Vd<VSIZE> re = (r - irh * isb) - irh * fsb, im = irh;
+
+				Vc vc;
+				for (size_t i = 0; i < VSIZE / 2; ++i)
+				{
+					vc.set(2 * i + 0, Complex(re[2 * i + 0], re[2 * i + 1]));
+					vc.set(2 * i + 1, Complex(im[2 * i + 0], im[2 * i + 1]));
+				}
+
+				z[index(2 * k) / VSIZE] = vc;
 			}
-
-			const Vd<VSIZE> irh = Vd<VSIZE>(r * sb_inv).round();
-			const Vd<VSIZE> re = (r - irh * isb) - irh * fsb, im = irh;
-
-			Vc vc;
-			for (size_t i = 0; i < VSIZE / 2; ++i)
+		}
+		else
+		{
+			for (size_t k = 0; k < N; k += VSIZE)
 			{
-				vc.set(2 * i + 0, Complex(re[2 * i + 0], re[2 * i + 1]));
-				vc.set(2 * i + 1, Complex(im[2 * i + 0], im[2 * i + 1]));
+				Vc vc;
+				for (size_t i = 0; i < VSIZE; ++i)
+				{
+					const Complex zc(double(zi[k + i + 0 * N]), double(zi[k + i + 1 * N]));
+					vc.set(i, zc);
+				}
+				z[index(k) / VSIZE] = vc;
 			}
-
-			z[index(2 * k) / VSIZE] = vc;
 		}
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -1474,19 +1545,27 @@ template<size_t VSIZE>
 inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
 	transform * pTransform = nullptr;
-	if (n == 10)      pTransform = new transformCPU<(1 << 10), VSIZE>(b, num_threads, num_regs);
-	else if (n == 11) pTransform = new transformCPU<(1 << 11), VSIZE>(b, num_threads, num_regs);
-	else if (n == 12) pTransform = new transformCPU<(1 << 12), VSIZE>(b, num_threads, num_regs);
-	else if (n == 13) pTransform = new transformCPU<(1 << 13), VSIZE>(b, num_threads, num_regs);
-	else if (n == 14) pTransform = new transformCPU<(1 << 14), VSIZE>(b, num_threads, num_regs);
-	else if (n == 15) pTransform = new transformCPU<(1 << 15), VSIZE>(b, num_threads, num_regs);
-	else if (n == 16) pTransform = new transformCPU<(1 << 16), VSIZE>(b, num_threads, num_regs);
-	else if (n == 17) pTransform = new transformCPU<(1 << 17), VSIZE>(b, num_threads, num_regs);
-	else if (n == 18) pTransform = new transformCPU<(1 << 18), VSIZE>(b, num_threads, num_regs);
-	else if (n == 19) pTransform = new transformCPU<(1 << 19), VSIZE>(b, num_threads, num_regs);
-	else if (n == 20) pTransform = new transformCPU<(1 << 20), VSIZE>(b, num_threads, num_regs);
-	else if (n == 21) pTransform = new transformCPU<(1 << 21), VSIZE>(b, num_threads, num_regs);
-	else if (n == 22) pTransform = new transformCPU<(1 << 22), VSIZE>(b, num_threads, num_regs);
+	if (n == 10)      pTransform = new transformCPU<(1 << 10), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 11)
+	{
+		/* if (b <= 10000) pTransform = new transformCPU<(1 << 10), VSIZE, false>(b, num_threads, num_regs);
+		else*/            pTransform = new transformCPU<(1 << 11), VSIZE, true>(b, num_threads, num_regs);
+	}
+	else if (n == 12) pTransform = new transformCPU<(1 << 12), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 13) pTransform = new transformCPU<(1 << 13), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 14) pTransform = new transformCPU<(1 << 14), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 15) pTransform = new transformCPU<(1 << 15), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 16) pTransform = new transformCPU<(1 << 16), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 17) pTransform = new transformCPU<(1 << 17), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 18) pTransform = new transformCPU<(1 << 18), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 19) pTransform = new transformCPU<(1 << 19), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 20) pTransform = new transformCPU<(1 << 20), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 21) pTransform = new transformCPU<(1 << 21), VSIZE, true>(b, num_threads, num_regs);
+	else if (n == 22)
+	{
+		/*if (b <= 300000) pTransform = new transformCPU<(1 << 21), VSIZE, false>(b, num_threads, num_regs);
+		else*/ pTransform = new transformCPU<(1 << 22), VSIZE, true>(b, num_threads, num_regs);
+	}
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 
 	return pTransform;

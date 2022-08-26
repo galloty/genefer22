@@ -20,9 +20,10 @@ FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
 OBJS_GPU = maing.o transform_ocl.o
-DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h  $(SRC_DIR)/boinc.h
-DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/fp16_80.h
-DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/transform.h $(SRC_DIR)/gint.h $(SRC_DIR)/ocl.h
+DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
+DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPU = $(SRC_DIR)/transformCPU.h $(SRC_DIR)/fp16_80.h $(DEPS_COMMON)
+DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
 EXEC_CPU = $(BIN_DIR)/genefer22_x86.exe
 EXEC_GPU = $(BIN_DIR)/genefer22g_x86.exe

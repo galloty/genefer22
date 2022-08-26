@@ -957,6 +957,7 @@ public:
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
+	size_t getCacheSize() const override { return 0; }
 
 protected:
 	void getZi(int32_t * const zi) const override

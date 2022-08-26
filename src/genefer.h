@@ -100,7 +100,8 @@ private:
 		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
 		if (verbose)
 		{
-			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)." << std::endl;
+			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s), data size: "
+									  << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB." << std::endl;
 			pio::print(ss.str());
 		}
 	}
@@ -779,7 +780,7 @@ private:
 			pTransform->copy(1, 0);	// synchro
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
 			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << std::setprecision(3) << timer::formatTime(estimatedTime)
-										<< ", " << mulTime * 1e3 << "ms/bit." << std::endl;
+										<< ", " << mulTime * 1e3 << " ms/bit." << std::endl;
 			pio::print(ss.str());
 		}
 

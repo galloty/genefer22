@@ -651,7 +651,7 @@ private:
 
 	const size_t _num_threads;
 	const double _b, _sb, _isb, _fsb;
-	const size_t _mem_size;
+	const size_t _mem_size, _cache_size;
 	char * const _mem;
 	Vc * const _z_copy;
 
@@ -1253,6 +1253,7 @@ public:
 		: transform(N, b, (VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8)),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads), _b(b), _sb(double(sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
+		_cache_size(wSize + wsSize + zSize + fcSize),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),
 		_z_copy((Vc *)_mm_malloc(zSize, 1024))
 	{
@@ -1286,6 +1287,7 @@ public:
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
+	size_t getCacheSize() const override { return _cache_size; }
 
 protected:
 	void getZi(int32_t * const zi) const override

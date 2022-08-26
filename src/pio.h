@@ -63,7 +63,8 @@ private:
 			std::fprintf(stderr, "%s", ss.str().c_str()); std::fflush(stderr);
 			if (fatal)
 			{
-				// std::this_thread::sleep_for(std::chrono::minutes(5));
+				// delay five minutes before reporting to the host in order to slow down the error rate.
+				std::this_thread::sleep_for(std::chrono::minutes(5));
 				boinc_finish(EXIT_FAILURE);
 			}
 		}

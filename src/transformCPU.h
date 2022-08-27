@@ -1544,8 +1544,8 @@ public:
 template<size_t VSIZE>
 inline transform * create_transformCPU(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
-	const uint32_t b12 = 4500000, b13 = 3700000, b14 = 3000000, b15 = 2500000, b16 = 2000000,
-				   b17 = 1700000, b18 = 1400000, b19 = 1150000, b20 = 950000, b21 = 780000, b22 = 650000;
+	const uint32_t b12 = 4200000, b13 = 3500000, b14 = 2800000, b15 = 2300000, b16 = 1900000,
+				   b17 = 1600000, b18 = 1300000, b19 = 1100000, b20 = 880000, b21 = 730000, b22 = 600000;
 
 	transform * pTransform = nullptr;
 	if (n == 12)

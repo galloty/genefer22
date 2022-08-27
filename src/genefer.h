@@ -725,7 +725,7 @@ private:
 
 	bool bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
-		static constexpr uint32_t bm[12] = { 600000000, 500000000, 400000000, 300000000, 170000000,
+		static constexpr uint32_t bm[12] = { 500000000, 380000000, 290000000, 220000000, 160000000,
 											 115000000, 16000000, 6000000, 2000000, 820000, 230000, 980000 };
 
 		// NTT2 limits
@@ -733,8 +733,8 @@ private:
 		// 									 8249144, 5833026, 4124572, 2916512, 2062286, 1458256, 1458256 };
 
 		// DT limits
-		// static constexpr uint32_t bm[12] = { 4500000, 3700000, 3000000, 2500000, 2000000,
-		// 									 1700000, 1400000, 1150000, 950000, 780000, 650000, 650002 };
+		// static constexpr uint32_t bm[12] = { 4200000, 3500000, 2800000, 2300000, 1900000,
+		// 									 1600000, 1300000, 1100000, 880000, 730000, 600000, 600002 };
 
 		const size_t num_regs = 3;
 
@@ -751,7 +751,7 @@ private:
 		transform * const pTransform = _transform;
 
 		_gi = new gint(1 << n, b);
-		std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
+		std::ostringstream ssr; ssr << "g" << n << "_" << b; _rootFilename = ssr.str();
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
@@ -760,17 +760,16 @@ private:
 		_rootFilename.clear();
 		delete _gi; _gi = nullptr;
 
-		if (!success)
-		{
-			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: test failed!" << std::endl;
-			pio::print(ss.str());
-		}
+		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
+		pio::print(ss.str()); ss.str("");
+
+		if (!success) ss << "test failed!" << std::endl;
 		else
 		{
 			static volatile bool _break;
 
 			_break = false;
-			std::thread oneSecond([=] { std::this_thread::sleep_for(std::chrono::seconds(1)); _break = true; }); oneSecond.detach();
+			std::thread oneSecond([=] { std::this_thread::sleep_for(std::chrono::seconds(5)); _break = true; }); oneSecond.detach();
 
 			watch chrono(0);
 			size_t i = 1;
@@ -783,10 +782,9 @@ private:
 
 			pTransform->copy(1, 0);	// synchro
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
-			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << std::setprecision(3) << timer::formatTime(estimatedTime)
-										<< ", " << mulTime * 1e3 << " ms/bit." << std::endl;
-			pio::print(ss.str());
+			ss << std::setprecision(3) << timer::formatTime(estimatedTime) << ", " << mulTime * 1e3 << " ms/bit." << std::endl;
 		}
+		pio::print(ss.str());
 
 		deleteTransform();
 		return !_quit;
@@ -799,7 +797,7 @@ private:
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 1000);
 
 		uint32_t b_min = 100000, b_max = 2000000000;
-		while (b_max - b_min > 10000)
+		while (b_max - b_min > 5000)
 		{
 			const uint32_t b = (b_min + b_max) / 4 * 2;
 
@@ -858,6 +856,13 @@ public:
 #else
 		(void)device;
 		createTransformCPU(b, n, nthreads, impl, num_regs);
+
+		static constexpr uint32_t bm[22 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31 };
+		if (b > bm[n - 12] * 1000000)
+		{
+			std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
+			pio::print(ss.str());
+		}
 #endif
 
 		_gi = new gint(1 << n, b);

@@ -13,7 +13,7 @@ The test is validated with [Gerbicz - Li](https://www.mersenneforum.org/showthre
 
 The stage of development of *genefer22* is Release Candidate.  
 Any number of the form *b*<sup>2<sup>*n*</sup></sup> + 1 such that 2 &le; *b* < 2,000,000,000 and 12 &le; *n* &le; 22 can be tested on GPU.  
-On CPU, the limit is fuzzy and is varying from *b* ~ 500,000,000 (*n* = 12) to *b* ~ 50,000,000 (*n* = 22).  
+On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 290M (*n* = 14), 220M (*n* = 15), 160M (*n* = 16), 125M (*n* = 17), 94M (*n* = 18), 71M (*n* = 19), 54M (*n* = 20), 41M (*n* = 21), 31M (*n* = 22).  
 
 This version is compiled with gcc 11 and was tested on Windows and Linux (Ubuntu).  
 

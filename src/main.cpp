@@ -103,7 +103,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " 0.1.0 " << sysver << ssc.str() << std::endl;
+		ss << "genefer22" << ext << " 0.9.0 " << sysver << ssc.str() << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)

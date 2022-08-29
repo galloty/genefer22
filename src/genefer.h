@@ -118,6 +118,7 @@ private:
 
 	std::string contextFilename() const { return _rootFilename + ".ctx"; }
 	std::string proofFilename() const { return _rootFilename + ".proof"; }
+	std::string sfvFilename() const { return _rootFilename + ".sfv"; }
 	std::string certFilename() const { return _rootFilename + ".cert"; }
 	std::string ckeyFilename() const { return _rootFilename + ".ckey"; }
 	std::string skeyFilename() const { return _rootFilename + ".skey"; }
@@ -512,6 +513,15 @@ private:
 			}
 		}
 
+		proofFile.write_crc32();
+
+		// if (_isBoinc)
+		// {
+		// 	file sfvFile(sfvFilename(), "w", false);
+		// 	std::ostringstream ss; ss << proofFilename() << " " << std::uppercase << std::hex << std::setfill('0') << std::setw(8) << proofFile.crc32() << std::endl;
+		// 	sfvFile.print(ss.str().c_str());
+		// }
+
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
 
@@ -595,6 +605,8 @@ private:
 
 			if (_quit) return false;
 		}
+
+		proofFile.check_crc32();
 
 		// skey = hash64(v1);
 		pTransform->copy(0, 1);
@@ -742,10 +754,10 @@ private:
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
-		createTransformGPU(b, n, device, num_regs, m == 10);
+		createTransformGPU(b, n, device, num_regs, m == 12);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, m == 10);
+		createTransformCPU(b, n, nthreads, impl, num_regs, m == 12);
 #endif
 
 		transform * const pTransform = _transform;

@@ -152,12 +152,13 @@ public:
 
 	void write_crc32()
 	{
-		write(reinterpret_cast<const char *>(&_crc32), sizeof(_crc32));
+		uint32_t crc32 = ~_crc32 ^ 0xa23777ac;
+		write(reinterpret_cast<const char *>(&crc32), sizeof(crc32));
 	}
 
 	void check_crc32()
 	{
-		uint32_t crc32 = 0, ocrc32 = _crc32;	// before the read operation
+		uint32_t crc32 = 0, ocrc32 = ~_crc32 ^ 0xa23777ac;	// before the read operation
 		read(reinterpret_cast<char *>(&crc32), sizeof(crc32));
 		if (crc32 != ocrc32) error("bad file (crc32)");
 	}

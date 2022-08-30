@@ -146,6 +146,7 @@ private:
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
+	cl_kernel _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
 
@@ -200,7 +201,7 @@ public:
 	}
 
 public:
-	void allocMemory()
+	void allocMemory(const size_t num_regs)
 	{
 #if defined(ocl_debug)
 		std::ostringstream ss; ss << "Alloc gpu memory." << std::endl;
@@ -209,12 +210,12 @@ public:
 		const size_t n = _n;
 		if (n != 0)
 		{
-			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
+			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n * num_regs);
 			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
 			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_W) * 2 * n);
 			if (RNS_SIZE == 3)
 			{
-				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
+				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n * num_regs);
 				_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
 				_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_We) * 2 * n);
 			}
@@ -283,6 +284,26 @@ private:
 		return kernel;
 	}
 
+	cl_kernel createCopyKernel(const char * const kernelName)
+	{
+		cl_kernel kernel = _createKernel(kernelName);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		return kernel;
+	}
+
+	cl_kernel createCopypKernel(const char * const kernelName)
+	{
+		cl_kernel kernel = _createKernel(kernelName);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		return kernel;
+	}
+
 public:
 	void createKernels(const uint32_t b)
 	{
@@ -326,6 +347,9 @@ public:
 		_mul1024 = createMulKernel("mul1024");
 		_mul2048 = createMulKernel("mul2048");
 
+		_copy = createCopyKernel("copy");
+		_copyp = createCopypKernel("copyp");
+
 		_pSplit = new splitter(_ln, CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
@@ -347,18 +371,16 @@ public:
 		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
 		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048);
+		_releaseKernel(_copy); _releaseKernel(_copyp);
 	}
 
 ///////////////////////////////
 
-	void readMemory_z(RNS * const zPtr) { _readBuffer(_z, zPtr, sizeof(RNS) * _n); }
-	void readMemory_ze(RNSe  * const zPtre) { _readBuffer(_ze, zPtre, sizeof(RNSe) * _n); }
+	void readMemory_z(RNS * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(RNS) * _n * count); }
+	void readMemory_ze(RNSe  * const zPtre, const size_t count = 1) { _readBuffer(_ze, zPtre, sizeof(RNSe) * _n * count); }
 
-	void writeMemory_z(const RNS * const zPtr) { _writeBuffer(_z, zPtr, sizeof(RNS) * _n); }
-	void writeMemory_ze(const RNSe * const zPtre) { _writeBuffer(_ze, zPtre, sizeof(RNSe) * _n); }
-
-	void writeMemory_zp(const RNS * const zPtr) { _writeBuffer(_zp, zPtr, sizeof(RNS) * _n); }
-	void writeMemory_zpe(const RNSe * const zPtre) { _writeBuffer(_zpe, zPtre, sizeof(RNSe) * _n); }
+	void writeMemory_z(const RNS * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(RNS) * _n * count); }
+	void writeMemory_ze(const RNSe * const zPtre, const size_t count = 1) { _writeBuffer(_ze, zPtre, sizeof(RNSe) * _n * count); }
 
 	void writeMemory_w(const RNS_W * const wPtr) { _writeBuffer(_w, wPtr, sizeof(RNS_W) * 2 * _n); }
 	void writeMemory_we(const RNS_We * const wPtre) { _writeBuffer(_we, wPtre, sizeof(RNS_We) * 2 * _n); }
@@ -560,8 +582,12 @@ private:
 	}
 
 public:
-	void initMultiplicand()
+	void initMultiplicand(const size_t src)
 	{
+		const cl_uint isrc = cl_uint(src * _n);
+		_setKernelArg(_copyp, (RNS_SIZE == 3) ? 4 : 2, sizeof(cl_uint), &isrc);
+		_executeKernel(_copyp, _n);
+
 		const splitter * const pSplit = _pSplit;
 
 		const size_t sIndex = _splitIndex;
@@ -656,6 +682,15 @@ public:
 				lm += 6;
 			}
 		}
+	}
+
+	void copy(const size_t dst, const size_t src)
+	{
+		const cl_uint idst = cl_uint(dst * _n), isrc = cl_uint(src * _n);
+		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
+		_setKernelArg(_copy, index++, sizeof(cl_uint), &idst);
+		_setKernelArg(_copy, index++, sizeof(cl_uint), &isrc);
+		_executeKernel(_copy, _n);
 	}
 
 public:
@@ -884,7 +919,7 @@ public:
 		}
 
 		_pEngine->loadProgram(src.str());
-		_pEngine->allocMemory();
+		_pEngine->allocMemory(num_regs);
 		_pEngine->createKernels(b);
 
 		RNS_W * const wr = new RNS_W[2 * size];
@@ -996,12 +1031,12 @@ public:
 		const size_t size = getSize();
 
 		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(RNS) * size * num_regs)) return false;
-		_pEngine->writeMemory_z(_z);
+		_pEngine->writeMemory_z(_z, num_regs);
 
 		if (RNS_SIZE == 3)
 		{
 			if (!cFile.read(reinterpret_cast<char *>(_ze), sizeof(RNSe) * size * num_regs)) return false;
-			_pEngine->writeMemory_ze(_ze);
+			_pEngine->writeMemory_ze(_ze, num_regs);
 		}
 
 		return true;
@@ -1013,12 +1048,12 @@ public:
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
 		const size_t size = getSize();
-		_pEngine->readMemory_z(_z);
+		_pEngine->readMemory_z(_z, num_regs);
 		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(RNS) * size * num_regs)) return;
 
 		if (RNS_SIZE == 3)
 		{
-			_pEngine->readMemory_ze(_ze);
+			_pEngine->readMemory_ze(_ze, num_regs);
 			if (!cFile.write(reinterpret_cast<const char *>(_ze), sizeof(RNSe) * size * num_regs)) return;
 		}
 	}
@@ -1049,10 +1084,7 @@ public:
 
 	void initMultiplicand(const size_t src) override
 	{
-		const size_t size = getSize();
-		_pEngine->writeMemory_zp(&_z[src * size]);
-		if (RNS_SIZE == 3) _pEngine->writeMemory_zpe(&_ze[src * size]);
-		_pEngine->initMultiplicand();
+		_pEngine->initMultiplicand(src);
 	}
 
 	void mul() override
@@ -1063,19 +1095,6 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const size_t size = getSize();
-
-		RNS * const z = _z;
-		if (src == 0) _pEngine->readMemory_z(z);
-		for (size_t i = 0; i < size; ++i) z[dst * size + i] = z[src * size + i];
-		if (dst == 0) _pEngine->writeMemory_z(z);
-
-		if (RNS_SIZE == 3)
-		{
-			RNSe * const ze = _ze;
-			if (src == 0) _pEngine->readMemory_ze(ze);
-			for (size_t i = 0; i < size; ++i) ze[dst * size + i] = ze[src * size + i];
-			if (dst == 0) _pEngine->writeMemory_ze(ze);
-		}
+		_pEngine->copy(dst, src);
 	}
 };

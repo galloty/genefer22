@@ -79,6 +79,11 @@ private:
 	{
 		deleteTransform();
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id, verbose);
+		if (verbose)
+		{
+			std::ostringstream ss; ss << ", data size: " << std::setprecision(3) << _transform->getMemSize() / (1024 * 1024.0) << " MB." << std::endl;
+			pio::print(ss.str());
+		}
 	}
 #else
 	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs, const bool verbose = true)
@@ -306,11 +311,7 @@ private:
 		int ri = 0; double restoredTime = 0;
 		const int error = readContext(0, ri, restoredTime);
 		const bool found = (error == 0);
-		if (error < -1)
-		{
-			std::ostringstream ss; ss << "Invalid context." << std::endl;
-			pio::error(ss.str());
-		}
+		if (error < -1) pio::error("invalid context");
 
 		if (!found)
 		{
@@ -649,11 +650,7 @@ private:
 		int ri = 0; double restoredTime = 0;
 		const int error = readContext(1, ri, restoredTime);
 		const bool found = (error == 0);
-		if (error < -1)
-		{
-			std::ostringstream ss; ss << "Invalid context." << std::endl;
-			pio::error(ss.str());
-		}
+		if (error < -1) pio::error("invalid context");
 		if (found)
 		{
 			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;

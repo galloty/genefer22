@@ -57,7 +57,9 @@ private:
 	// error: normal: cerr, boinc: stderr
 	void _error(const std::string & str, const bool fatal) const
 	{
-		std::ostringstream ss; ss << std::endl << "Error: " << str << "." << std::endl;
+		std::ostringstream ss;
+		if (fatal) ss << std::endl;
+		ss << "Error: " << str << "." << std::endl;
 		if (_isBoinc)
 		{
 			std::fprintf(stderr, "%s", ss.str().c_str()); std::fflush(stderr);
@@ -76,13 +78,13 @@ private:
 	}
 
 private:
-	// result: normal: 'results.txt' file, boinc: 'out' file
+	// result: normal: 'results.txt' file
 	bool _result(const std::string & str) const
 	{
 		if (_isBoinc)
 		{
-			FILE * const out_file = _open("out", "a");
-			if (out_file == nullptr) throw std::runtime_error("Cannot write results to out file");
+			FILE * const out_file = _open("results.txt", "a");
+			if (out_file == nullptr) throw std::runtime_error("Cannot write 'results.txt' file");
 			std::fprintf(out_file, "%s", str.c_str());
 			std::fclose(out_file);
 			return true;

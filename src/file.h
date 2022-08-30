@@ -59,7 +59,7 @@ public:
 
 	void error(const std::string & str) const
 	{
-		std::ostringstream ss; ss << _filename << ": " << str << std::endl;
+		std::ostringstream ss; ss << _filename << ": " << str;
 		pio::error(ss.str(), _fatal);
 	}
 

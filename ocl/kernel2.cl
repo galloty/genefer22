@@ -839,3 +839,17 @@ void normalize2(__global RNS * restrict const z, __global const long * restrict 
 	const int r = (int)f;
 	zi[blk - 1] = add(zi[blk - 1], toRNS(r));
 }
+
+__kernel
+void copy(__global RNS * restrict const z, const unsigned int dst, const unsigned int src)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	z[dst + idx] = z[src + idx];
+}
+
+__kernel
+void copyp(__global RNS * restrict const zp, __global const RNS * restrict const z, const unsigned int src)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	zp[idx] = z[src + idx];
+}

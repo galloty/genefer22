@@ -1128,3 +1128,20 @@ void normalize2(__global RNS * restrict const z, __global RNSe * restrict const 
 	zi[blk - 1] = add(zi[blk - 1], toRNS(r));
 	zie[blk - 1] = adde(zie[blk - 1], toRNSe(r));
 }
+
+__kernel
+void copy(__global RNS * restrict const z, __global RNSe * restrict const ze, const unsigned int dst, const unsigned int src)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	z[dst + idx] = z[src + idx];
+	ze[dst + idx] = ze[src + idx];
+}
+
+__kernel
+void copyp(__global RNS * restrict const zp, __global RNSe * restrict const zpe,
+		   __global const RNS * restrict const z, __global const RNSe * restrict const ze, const unsigned int src)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	zp[idx] = z[src + idx];
+	zpe[idx] = ze[src + idx];
+}

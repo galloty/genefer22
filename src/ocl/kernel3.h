@@ -1140,4 +1140,21 @@ static const char * const src_ocl_kernel3 = \
 "	zi[blk - 1] = add(zi[blk - 1], toRNS(r));\n" \
 "	zie[blk - 1] = adde(zie[blk - 1], toRNSe(r));\n" \
 "}\n" \
+"\n" \
+"__kernel\n" \
+"void copy(__global RNS * restrict const z, __global RNSe * restrict const ze, const unsigned int dst, const unsigned int src)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	z[dst + idx] = z[src + idx];\n" \
+"	ze[dst + idx] = ze[src + idx];\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void copyp(__global RNS * restrict const zp, __global RNSe * restrict const zpe,\n" \
+"		   __global const RNS * restrict const z, __global const RNSe * restrict const ze, const unsigned int src)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	zp[idx] = z[src + idx];\n" \
+"	zpe[idx] = ze[src + idx];\n" \
+"}\n" \
 "";

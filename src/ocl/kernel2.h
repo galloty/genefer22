@@ -851,4 +851,18 @@ static const char * const src_ocl_kernel2 = \
 "	const int r = (int)f;\n" \
 "	zi[blk - 1] = add(zi[blk - 1], toRNS(r));\n" \
 "}\n" \
+"\n" \
+"__kernel\n" \
+"void copy(__global RNS * restrict const z, const unsigned int dst, const unsigned int src)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	z[dst + idx] = z[src + idx];\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void copyp(__global RNS * restrict const zp, __global const RNS * restrict const z, const unsigned int src)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	zp[idx] = z[src + idx];\n" \
+"}\n" \
 "";

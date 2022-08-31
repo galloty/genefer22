@@ -143,6 +143,7 @@ private:
 		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
 		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
+		ss << "  -f <filename>                 main filename (without extension) of input and output files" << std::endl;
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
 #if defined(BOINC)
 		ss << "  -boinc                        operate as a BOINC client app" << std::endl;
@@ -204,7 +205,7 @@ public:
 		uint32_t b = 0, n = 0;
 		genefer::EMode mode = genefer::EMode::None;
 		size_t device = 0, nthreads = 1;
-		std::string impl = "";
+		std::string mainFilename = "", impl = "";
 		const int depth = 7;
 
 		// parse args
@@ -252,6 +253,10 @@ public:
 				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
 				mode = genefer::EMode::Bench;
 			}
+			if (arg.substr(0, 2) == "-f")
+			{
+				mainFilename = ((arg == "-f") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+			}
 			if (arg.substr(0, 2) == "-d")
 			{
 				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
@@ -284,6 +289,7 @@ public:
 #if defined(GPU)
 		g.setBoincParam(boinc_platform_id, boinc_device_id);
 #endif
+		g.setFilename(mainFilename);
 
 		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
 		{

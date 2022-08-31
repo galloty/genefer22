@@ -49,17 +49,6 @@ public:
 		return *pInstance;
 	}
 
-public:
-	void quit() { _quit = true; }
-	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
-#if defined(GPU)
-	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)
-	{
-		_boinc_platform_id = platform_id;
-		_boinc_device_id = device_id;
-	}
-#endif
-
 protected:
 	volatile bool _quit = false;
 private:
@@ -70,8 +59,20 @@ private:
 #endif
 	transform * _transform = nullptr;
 	gint * _gi = nullptr;
-	std::string _rootFilename;
+	std::string _mainFilename;
 	int _print_range = 0, _print_i = 0;
+
+public:
+	void quit() { _quit = true; }
+	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
+#if defined(GPU)
+	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)
+	{
+		_boinc_platform_id = platform_id;
+		_boinc_device_id = device_id;
+	}
+#endif
+	void setFilename(const std::string & mainFilename) { _mainFilename = mainFilename; }
 
 private:
 #if defined(GPU)
@@ -121,15 +122,15 @@ private:
 		}
 	}
 
-	std::string contextFilename() const { return _rootFilename + ".ctx"; }
-	std::string proofFilename() const { return _rootFilename + ".proof"; }
-	std::string sfvFilename() const { return _rootFilename + ".sfv"; }
-	std::string certFilename() const { return _rootFilename + ".cert"; }
-	std::string ckeyFilename() const { return _rootFilename + ".ckey"; }
-	std::string skeyFilename() const { return _rootFilename + ".skey"; }
+	std::string contextFilename() const { return _mainFilename + ".ctx"; }
+	std::string proofFilename() const { return _mainFilename + ".proof"; }
+	std::string sfvFilename() const { return _mainFilename + ".sfv"; }
+	std::string certFilename() const { return _mainFilename + ".cert"; }
+	std::string ckeyFilename() const { return _mainFilename + ".ckey"; }
+	std::string skeyFilename() const { return _mainFilename + ".skey"; }
 	std::string ckptFilename(const size_t i) const
 	{
-		std::ostringstream ss; ss << _rootFilename << "_" << i << ".ckpt";
+		std::ostringstream ss; ss << _mainFilename << "_" << i << ".ckpt";
 		return ss.str();
 	}
 
@@ -760,13 +761,11 @@ private:
 		transform * const pTransform = _transform;
 
 		_gi = new gint(1 << n, b);
-		std::ostringstream ssr; ssr << "g" << n << "_" << b; _rootFilename = ssr.str();
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 		mpz_clear(exponent);
 		std::remove(contextFilename().c_str());
-		_rootFilename.clear();
 		delete _gi; _gi = nullptr;
 
 		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
@@ -819,18 +818,16 @@ private:
 #endif
 
 			_gi = new gint(1 << n, b);
-			std::ostringstream ss; ss << "g" << n << "_" << b; _rootFilename = ss.str();
 
 			double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 			const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 			if (success) b_min = b;
 			else if (!_quit) b_max = b;
 
-			// std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: " << (success ? 1 : 0) << std::endl;
+			// std::ostringstream ss; ss << n << ", " << b << ": " << (success ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
 
 			std::remove(contextFilename().c_str());
-			_rootFilename.clear();
 			delete _gi; _gi = nullptr;
 			deleteTransform();
 
@@ -840,7 +837,7 @@ private:
 		mpz_clear(exponent);
 
 		const uint32_t b = (b_min + b_max) / 4 * 2;
-		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1." << std::endl;
+		std::ostringstream ss; ss << n << ": " << b << std::endl;
 		pio::print(ss.str());
 
 		return !_quit;
@@ -849,6 +846,13 @@ private:
 public:
 	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
 	{
+		const bool emptyMainFilename = _mainFilename.empty();
+		if (emptyMainFilename)
+		{
+			std::ostringstream ss; ss << "g" << n << "_" << b;
+			_mainFilename = ss.str();
+		}
+
 		if (mode == EMode::Bench) return bench(n, device, nthreads, impl);
 		if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
 
@@ -876,12 +880,9 @@ public:
 
 		_gi = new gint(1 << n, b);
 
-		{
-			std::ostringstream ss; ss << "g" << n << "_" << b;
-			_rootFilename = ss.str();
-		}
-
 		bool success = false;
+
+		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 
 		if (mode == EMode::Check)
 		{
@@ -893,10 +894,9 @@ public:
 				ckeyFile.print(uint64toString(ckey).c_str());
 			}
 			clearline();
-			std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-			if (success) ss << "checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
-			else if (!_quit) ss << "check failed!";
-			else ss << "terminated.";
+			if (success) ss << ": checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
+			else if (!_quit) ss << ": check failed!";
+			else ss << ": terminated.";
 			ss << std::endl; pio::print(ss.str());
 			if (success && !_isBoinc)
 			{
@@ -912,7 +912,6 @@ public:
 				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				clearline();
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success)
 				{
 					ss << " is ";
@@ -934,10 +933,9 @@ public:
 				double testTime = 0, validTime = 0, proofTime = 0;
 				success = proof(exponent, depth, testTime, validTime, proofTime);
 				clearline();
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-				if (success) ss << "proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
-				else if (!_quit) ss << "validation failed!";
-				else ss << "terminated.";
+				if (success) ss << ": proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
+				else if (!_quit) ss << ": validation failed!";
+				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
 				if (success && !_isBoinc)
 				{
@@ -954,7 +952,6 @@ public:
 					file skeyFile(skeyFilename(), "w", false);
 					skeyFile.print(uint64toString(skey).c_str());
 				}
-				std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
 				if (success)
 				{
 					ss << " is ";
@@ -971,9 +968,9 @@ public:
 			mpz_clear(exponent);
 		}
 
-		_rootFilename.clear();
 		delete _gi; _gi = nullptr;
 		deleteTransform();
+		if (emptyMainFilename) _mainFilename.clear();
 
 		return success;
 	}

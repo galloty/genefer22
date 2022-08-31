@@ -126,7 +126,7 @@ public:
 	bool read(mpz_t & z)
 	{
 		if (mpz_inp_raw(z, _cFile) != 0) return true;
-		// no crc32!
+		_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
 		std::fclose(_cFile);
 		error("failure of a read operation");
 		return false;
@@ -135,7 +135,7 @@ public:
 	bool write(const mpz_t & z)
 	{
 		if (mpz_out_raw(_cFile, z) != 0) return true;
-		// no crc32!
+		_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
 		std::fclose(_cFile);
 		error("failure of a write operation");
 		return false;

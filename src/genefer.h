@@ -381,6 +381,7 @@ private:
 				pTransform->getInt(gi);
 				file ckptFile(ckptFilename(i / B_PL), "wb", true);
 				gi.write(ckptFile);
+				ckptFile.write_crc32();
 			}
 		}
 
@@ -472,6 +473,7 @@ private:
 		{
 			file ckptFile(ckptFilename(0), "rb", true);
 			gi.read(ckptFile);
+			ckptFile.check_crc32();
 		}
 		gi.write(proofFile);
 
@@ -490,6 +492,7 @@ private:
 			{
 				file ckptFile(ckptFilename(i), "rb", true);
 				gi.read(ckptFile);
+				ckptFile.check_crc32();
 				pTransform->setInt(gi);
 			}
 			power(0, w[0]);
@@ -502,6 +505,7 @@ private:
 				{
 					file ckptFile(ckptFilename(i + 2 * j), "rb", true);
 					gi.read(ckptFile);
+					ckptFile.check_crc32();
 					pTransform->setInt(gi);
 				}
 				power(0, w[j]);
@@ -651,10 +655,13 @@ private:
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		file certFile(certFilename(), "wb", true);
-		certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
-		gi.write(certFile);
-		certFile.write(p2);
+		{
+			file certFile(certFilename(), "wb", true);
+			certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
+			gi.write(certFile);
+			certFile.write(p2);
+			certFile.write_crc32();
+		}
 
 		mpz_clear(p2);
 
@@ -684,6 +691,7 @@ private:
 			certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
 			gi.read(certFile);
 			certFile.read(p2);
+			certFile.check_crc32();
 		}
 		const int p2size = int(mpz_sizeinbase(p2, 2));
 

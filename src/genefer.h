@@ -467,6 +467,8 @@ private:
 		watch chrono;
 
 		file proofFile(proofFilename(), "wb", true);
+		int version = 1;
+		proofFile.write(reinterpret_cast<const char *>(&version), sizeof(version));
 		proofFile.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
 
 		// mu[0] = ckpt[0]
@@ -587,6 +589,7 @@ private:
 		watch chrono;
 
 		file proofFile(proofFilename(), "rb", true);
+		int version = 0; proofFile.read(reinterpret_cast<char *>(&version), sizeof(version));
 		int depth = 0; proofFile.read(reinterpret_cast<char *>(&depth), sizeof(depth));
 
 		const size_t L = size_t(1) << depth, esize = mpz_sizeinbase(exponent, 2);
@@ -657,6 +660,8 @@ private:
 
 		{
 			file certFile(certFilename(), "wb", true);
+			int version = 1;
+			certFile.write(reinterpret_cast<const char *>(&version), sizeof(version));
 			certFile.write(reinterpret_cast<const char *>(&B), sizeof(B));
 			gi.write(certFile);
 			certFile.write(p2);
@@ -688,6 +693,7 @@ private:
 		mpz_t p2; mpz_init(p2);
 		{
 			file certFile(certFilename(), "rb", true);
+			int version = 0; certFile.read(reinterpret_cast<char *>(&version), sizeof(version));
 			certFile.read(reinterpret_cast<char *>(&B), sizeof(B));
 			gi.read(certFile);
 			certFile.read(p2);

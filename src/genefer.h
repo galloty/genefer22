@@ -140,6 +140,20 @@ private:
 		return ss.str();
 	}
 
+	static std::string gfn(const uint32_t b, const uint32_t n)
+	{
+		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
+		return ss.str();
+	}
+
+	static std::string gfnStatus(const bool isPrp, const uint64_t res64, const uint64_t old64, const double time)
+	{
+		std::ostringstream ss; ss << " is ";
+		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
+		ss << ", time = " << timer::formatTime(time) << ".";
+		return ss.str();
+	}
+
 	void initPrintProgress(const int i0, const int i_start)
 	{
 		_print_range = i0; _print_i = i_start;
@@ -545,12 +559,17 @@ private:
 		return true;
 	}
 
-	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime)
+	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime, bool & isPrp, uint64_t & res64, uint64_t & old64)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
 		if (!prp(exponent, B_GL, B_PL, testTime)) return false;
+		{
+			gint & gi = *_gi;
+			_transform->getInt(gi);
+			isPrp = gi.isOne(res64, old64);
+		}
 		if (!GL(exponent, B_GL, validTime)) return false;
 		if (!PL(depth, proofTime)) return false;
 		return true;
@@ -768,10 +787,10 @@ private:
 		std::remove(contextFilename().c_str());
 		delete _gi; _gi = nullptr;
 
-		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1: ";
-		pio::print(ss.str()); ss.str("");
+		pio::print(gfn(b, n));
 
-		if (!success) ss << "test failed!" << std::endl;
+		std::ostringstream ss;
+		if (!success) ss << ": test failed!" << std::endl;
 		else
 		{
 			static volatile bool _break;
@@ -790,7 +809,7 @@ private:
 
 			pTransform->copy(1, 0);	// synchro
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
-			ss << std::setprecision(3) << timer::formatTime(estimatedTime) << ", " << mulTime * 1e3 << " ms/bit." << std::endl;
+			ss << ": " << std::setprecision(3) << timer::formatTime(estimatedTime) << ", " << mulTime * 1e3 << " ms/bit." << std::endl;
 		}
 		pio::print(ss.str());
 
@@ -882,8 +901,6 @@ public:
 
 		bool success = false;
 
-		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
-
 		if (mode == EMode::Check)
 		{
 			double time = 0; uint64_t ckey = 0;
@@ -894,9 +911,10 @@ public:
 				ckeyFile.print(uint64toString(ckey).c_str());
 			}
 			clearline();
-			if (success) ss << ": checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
-			else if (!_quit) ss << ": check failed!";
-			else ss << ": terminated.";
+			std::ostringstream ss; ss << gfn(b, n) << ": ";
+			if (success) ss << "checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
+			else if (!_quit) ss << "check failed!";
+			else ss << "terminated.";
 			ss << std::endl; pio::print(ss.str());
 			if (success && !_isBoinc)
 			{
@@ -912,13 +930,8 @@ public:
 				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				clearline();
-				if (success)
-				{
-					ss << " is ";
-					if (isPrp) ss << "a probable prime";
-					else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
-					ss << ", time = " << timer::formatTime(testTime + validTime) << ".";
-				}
+				std::ostringstream ss; ss << gfn(b, n);
+				if (success) ss << gfnStatus(isPrp, res64, old64, testTime + validTime);
 				else if (!_quit) ss << ": validation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -930,17 +943,24 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0;
-				success = proof(exponent, depth, testTime, validTime, proofTime);
+				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
+				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, res64, old64);
+				const double time = testTime + validTime + proofTime;
 				clearline();
-				if (success) ss << ": proof file is generated, time = " << timer::formatTime(testTime + validTime + proofTime) << ".";
-				else if (!_quit) ss << ": validation failed!";
-				else ss << ": terminated.";
+				std::ostringstream ss; ss << gfn(b, n) << ": ";
+				if (success) ss << "proof file is generated, time = " << timer::formatTime(time) << ".";
+				else if (!_quit) ss << "validation failed!";
+				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
-				if (success && !_isBoinc)
+				if (success)
 				{
-					for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckptFilename(i).c_str());
-					std::remove(contextFilename().c_str());
+					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, res64, old64, time) << std::endl;
+					pio::result(ssr.str());
+					if (!_isBoinc)
+					{
+						for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckptFilename(i).c_str());
+						std::remove(contextFilename().c_str());
+					}
 				}
 			}
 			else if (mode == EMode::Server)
@@ -952,14 +972,8 @@ public:
 					file skeyFile(skeyFilename(), "w", false);
 					skeyFile.print(uint64toString(skey).c_str());
 				}
-				if (success)
-				{
-					ss << " is ";
-					if (isPrp) ss << "a probable prime";
-					else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
-					ss << ", time = " << timer::formatTime(time) << "." << std::endl;
-					ss << "skey = " << uint64toString(skey) << ".";
-				}
+				std::ostringstream ss; ss << gfn(b, n);
+				if (success) ss << gfnStatus(isPrp, res64, old64, time) << std::endl << "skey = " << uint64toString(skey) << ".";
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

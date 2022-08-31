@@ -134,12 +134,12 @@ public:
 		setZi(g.data());
 	}
 
-	void add1()
-	{
-		int32_t * const zi = new int32_t[_size];
-		getZi(zi);
-		zi[0] += 1;
-		setZi(zi);
-		delete[] zi;
-	}
+	// void add1()
+	// {
+	// 	int32_t * const zi = new int32_t[size_t(1) << _n];
+	// 	getZi(zi);
+	// 	zi[0] += 1;
+	// 	setZi(zi);
+	// 	delete[] zi;
+	// }
 };

@@ -126,8 +126,8 @@ private:
 	std::string proofFilename() const { return _mainFilename + ".proof"; }
 	std::string sfvFilename() const { return _mainFilename + ".sfv"; }
 	std::string certFilename() const { return _mainFilename + ".cert"; }
-	std::string ckeyFilename() const { return _mainFilename + ".ckey"; }
-	std::string skeyFilename() const { return _mainFilename + ".skey"; }
+	// std::string ckeyFilename() const { return _mainFilename + ".ckey"; }
+	// std::string skeyFilename() const { return _mainFilename + ".skey"; }
 	std::string ckptFilename(const size_t i) const
 	{
 		std::ostringstream ss; ss << _mainFilename << "_" << i << ".ckpt";
@@ -146,10 +146,11 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfnStatus(const bool isPrp, const uint64_t res64, const uint64_t old64, const double time)
+	static std::string gfnStatus(const bool isPrp, const uint64_t pkey, const uint64_t res64, const uint64_t old64, const double time)
 	{
 		std::ostringstream ss; ss << " is ";
 		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
+		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
 		ss << ", time = " << timer::formatTime(time) << ".";
 		return ss.str();
 	}
@@ -455,9 +456,9 @@ private:
 	}
 
 	// (Pietrzak-Li proof generation
-	// in: reg_{3 + i}, i in [0; 2^L[, // ckpt[i]
-	// out: proof file
-	bool PL(const int depth, double & proofTime)
+	// in: ckpt[i]
+	// out: proof file, proof key
+	bool PL(const int depth, double & proofTime, uint64_t & pkey)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -478,10 +479,15 @@ private:
 			ckptFile.check_crc32();
 		}
 		gi.write(proofFile);
+		// v1 = mu[0]^w[0]
+		const uint32_t q = gi.gethash32();
+		pTransform->setInt(gi);
+		power(0, q);
+		pTransform->copy(2, 0);
 
 		const size_t L = size_t(1) << depth;
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
-		mpz_set_ui(w[0], gi.gethash32());
+		mpz_set_ui(w[0], q);
 
 		const int l0 = (1 << depth) - depth - 1;
 // size_t s = 0;	// complexity
@@ -527,10 +533,14 @@ private:
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
 			pTransform->getInt(gi);
 			gi.write(proofFile);
+			const uint32_t q = gi.gethash32();
+			// v1 = v1 * mu[k]^w[k]
+			power(0, q);
+			pTransform->mul(2);
+			pTransform->copy(2, 0);
 
 			if (i > 1)
 			{
-				const uint32_t q = gi.gethash32();
 				for (size_t j = 0; j < L / 2; j += i) mpz_mul_ui(w[i / 2 + j], w[j], q);
 			}
 		}
@@ -546,6 +556,11 @@ private:
 
 		for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 		delete[] w;
+
+		// pkey = hash64(v1);
+		pTransform->copy(0, 2);
+		pTransform->getInt(gi);
+		pkey = gi.gethash64();
 
 		proofTime = chrono.getElapsedTime();
 		return true;
@@ -565,7 +580,8 @@ private:
 		return true;
 	}
 
-	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime, bool & isPrp, uint64_t & res64, uint64_t & old64)
+	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime,
+			   bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
@@ -577,11 +593,11 @@ private:
 			isPrp = gi.isOne(res64, old64);
 		}
 		if (!GL(exponent, B_GL, validTime)) return false;
-		if (!PL(depth, proofTime)) return false;
+		if (!PL(depth, proofTime, pkey)) return false;
 		return true;
 	}
 
-	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & skey, uint64_t & res64, uint64_t & old64)
+	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -618,12 +634,12 @@ private:
 			pTransform->setInt(gi);
 			pTransform->copy(3, 0);
 
-			// v1 = v1 * mu^q
+			// v1 = v1 * mu[k]^w[k]
 			power(0, q);
 			pTransform->mul(1);
 			pTransform->copy(1, 0);
 
-			// v2 = v2^q * mu
+			// v2 = v2^w[k] * mu[k]
 			power(2, q);
 			pTransform->mul(3);
 			pTransform->copy(2, 0);
@@ -636,10 +652,10 @@ private:
 
 		proofFile.check_crc32();
 
-		// skey = hash64(v1);
+		// pkey = hash64(v1);
 		pTransform->copy(0, 1);
 		pTransform->getInt(gi);
-		skey = gi.gethash64();
+		pkey = gi.gethash64();
 
 		// v2
 		pTransform->copy(0, 2);
@@ -919,20 +935,21 @@ public:
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
+			// if (success)
+			// {
+			// 	file ckeyFile(ckeyFilename(), "w", false);
+			// 	ckeyFile.print(uint64toString(ckey).c_str());
+			// }
+			clearline();
+			std::ostringstream ss; ss << gfn(b, n);
+			if (success) ss << " is checked, ckey = " << uint64toString(ckey) << ", time = " << timer::formatTime(time) << ".";
+			else if (!_quit) ss << ": check failed!";
+			else ss << ": terminated.";
+			ss << std::endl; pio::print(ss.str());
 			if (success)
 			{
-				file ckeyFile(ckeyFilename(), "w", false);
-				ckeyFile.print(uint64toString(ckey).c_str());
-			}
-			clearline();
-			std::ostringstream ss; ss << gfn(b, n) << ": ";
-			if (success) ss << "checked, time = " << timer::formatTime(time) << "." << std::endl << "ckey = " << uint64toString(ckey) << ".";
-			else if (!_quit) ss << "check failed!";
-			else ss << "terminated.";
-			ss << std::endl; pio::print(ss.str());
-			if (success && !_isBoinc)
-			{
-				std::remove(contextFilename().c_str());
+				pio::result(ss.str());
+				if (!_isBoinc) std::remove(contextFilename().c_str());
 			}
 		}
 		else
@@ -945,7 +962,7 @@ public:
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, res64, old64, testTime + validTime);
+				if (success) ss << gfnStatus(isPrp, 0, res64, old64, testTime + validTime);
 				else if (!_quit) ss << ": validation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
@@ -957,8 +974,8 @@ public:
 			}
 			else if (mode == EMode::Proof)
 			{
-				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, res64, old64);
+				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
+				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64, old64);
 				const double time = testTime + validTime + proofTime;
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n) << ": ";
@@ -968,7 +985,7 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success)
 				{
-					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, res64, old64, time) << std::endl;
+					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, res64, old64, time) << std::endl;
 					pio::result(ssr.str());
 					if (!_isBoinc)
 					{
@@ -979,18 +996,19 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; uint64_t skey = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-				success = server(exponent, time, isPrp, skey, res64, old64);
-				if (success)
-				{
-					file skeyFile(skeyFilename(), "w", false);
-					skeyFile.print(uint64toString(skey).c_str());
-				}
+				double time = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
+				success = server(exponent, time, isPrp, pkey, res64, old64);
+				// if (success)
+				// {
+				// 	file skeyFile(skeyFilename(), "w", false);
+				// 	skeyFile.print(uint64toString(pkey).c_str());
+				// }
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, res64, old64, time) << std::endl << "skey = " << uint64toString(skey) << ".";
+				if (success) ss << gfnStatus(isPrp, pkey, res64, old64, time);
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
+				if (success) pio::result(ss.str());
 			}
 
 			mpz_clear(exponent);

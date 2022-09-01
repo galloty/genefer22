@@ -156,10 +156,12 @@ public:
 		write(reinterpret_cast<const char *>(&crc32), sizeof(crc32));
 	}
 
-	void check_crc32()
+	bool check_crc32()
 	{
 		uint32_t crc32 = 0, ocrc32 = ~_crc32 ^ 0xa23777ac;	// before the read operation
 		read(reinterpret_cast<char *>(&crc32), sizeof(crc32));
-		if (crc32 != ocrc32) error("bad file (crc32)");
+		const bool success = (crc32 == ocrc32);
+		if (!success) error("bad file (crc32)");
+		return success;
 	}
 };

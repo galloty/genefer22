@@ -15,6 +15,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <sys/stat.h>
 
 #include <gmp.h>
 #if !defined(GPU)
@@ -182,8 +183,13 @@ private:
 
 	int readContext(const int where, int & i, double & elapsedTime)
 	{
-		file contextFile(contextFilename());
+		std::string ctxFile = contextFilename();
+		struct stat s;
+		if (stat(ctxFile.c_str(), &s) != 0) ctxFile += ".old";	// not found, try old one
+
+		file contextFile(ctxFile);
 		if (!contextFile.exists()) return -1;
+
 		int version = 0;
 		if (!contextFile.read(reinterpret_cast<char *>(&version), sizeof(version))) return -2;
 #if defined(GPU)
@@ -196,22 +202,51 @@ private:
 		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
 		const size_t num_regs = 2;
-		return _transform->readContext(contextFile, num_regs) ? 0 : -2;
+		if (!_transform->readContext(contextFile, num_regs)) return -2;
+		if (!contextFile.check_crc32()) return -2;
+		return 0;
 	}
 
 	void saveContext(const int where, const int i, const double elapsedTime) const
 	{
-		file contextFile(contextFilename(), "wb", false);
-		int version = 1;
+		const std::string ctxFile = contextFilename(), oldCtxFile = ctxFile + ".old", newCtxFile = ctxFile + ".new";
+
+		std::remove(oldCtxFile.c_str());
+
+		{
+			file contextFile(newCtxFile, "wb", false);
+			int version = 1;
 #if defined(GPU)
-		version = -version;
+			version = -version;
 #endif
-		if (!contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
-		if (!contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
-		if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
-		if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
-		const size_t num_regs = 2;
-		_transform->saveContext(contextFile, num_regs);
+			if (!contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
+			const size_t num_regs = 2;
+			_transform->saveContext(contextFile, num_regs);
+			contextFile.write_crc32();
+		}
+
+		struct stat s;
+		if ((stat(ctxFile.c_str(), &s) == 0) && (std::rename(ctxFile.c_str(), oldCtxFile.c_str()) != 0))	// file exists and cannot rename it
+		{
+			pio::error("cannot save context");
+			return;
+		}
+
+		if (std::rename(newCtxFile.c_str(), ctxFile.c_str()) != 0)
+		{
+			pio::error("cannot save context");
+			return;
+		}
+	}
+
+	void clearContext() const
+	{
+		const std::string ctxFile = contextFilename();
+		std::remove(ctxFile.c_str());
+		std::remove(std::string(ctxFile + ".old").c_str());
 	}
 
 	static bool boincQuitRequest(const BOINC_STATUS & status)
@@ -814,7 +849,7 @@ private:
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 		mpz_clear(exponent);
-		std::remove(contextFilename().c_str());
+		clearContext();
 		delete _gi; _gi = nullptr;
 
 		pio::print(gfn(b, n));
@@ -876,7 +911,7 @@ private:
 			// std::ostringstream ss; ss << n << ", " << b << ": " << (success ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
 
-			std::remove(contextFilename().c_str());
+			clearContext();
 			delete _gi; _gi = nullptr;
 			deleteTransform();
 
@@ -949,7 +984,7 @@ public:
 			if (success)
 			{
 				pio::result(ss.str());
-				if (!_isBoinc) std::remove(contextFilename().c_str());
+				if (!_isBoinc) clearContext();
 			}
 		}
 		else
@@ -969,7 +1004,7 @@ public:
 				if (success)
 				{
 					pio::result(ss.str());
-					if (!_isBoinc) std::remove(contextFilename().c_str());
+					if (!_isBoinc) clearContext();
 				}
 			}
 			else if (mode == EMode::Proof)
@@ -990,7 +1025,7 @@ public:
 					if (!_isBoinc)
 					{
 						for (size_t i = 0, L = size_t(1) << depth; i < L; ++i) std::remove(ckptFilename(i).c_str());
-						std::remove(contextFilename().c_str());
+						clearContext();
 					}
 				}
 			}

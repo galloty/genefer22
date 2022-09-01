@@ -21,3 +21,5 @@ This version is compiled with gcc 11 and was tested on Windows and Linux (Ubuntu
 
 ## TODO
 
+ - add a (slow) NTT on CPU
+ - store checkpoints into GPU memory for small GFNs

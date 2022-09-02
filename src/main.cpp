@@ -141,7 +141,7 @@ private:
 		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
 #else
 		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
-		ss << "  -x <implementation>           set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
+		ss << "  -x <implementation>           set a specific implementation (i32, sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
 		ss << "  -f <filename>                 main filename (without extension) of input and output files" << std::endl;
 		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
@@ -280,7 +280,10 @@ public:
 			if (arg.substr(0, 2) == "-x")
 			{
 				impl = ((arg == "-x") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				if ((impl != "sse2") && (impl != "sse4") && (impl != "avx") && (impl != "fma") && (impl != "512")) throw std::runtime_error("implementation is not valid");
+				if ((impl != "i32") && (impl != "sse2") && (impl != "sse4") && (impl != "avx") && (impl != "fma") && (impl != "512"))
+				{
+					throw std::runtime_error("implementation is not valid");
+				}
 			}
 		}
 
@@ -312,6 +315,10 @@ public:
 			static constexpr uint32_t bp[count] = { 500002286, 380018796, 290067480, 220129842,
 													169277952, 114340846, 15913772, 4896418, 1951734 };
 #endif
+
+			if (!g.check(1999998986, 8, genefer::EMode::Proof, device, nthreads, "i32", 5)) return;
+			if (!g.check(1999998986, 8, genefer::EMode::Server, device, nthreads, "i32", 5)) return;
+			if (!g.check(1999998986, 8, genefer::EMode::Check, device, nthreads, "i32", 5)) return;
 
 			for (size_t i = 0; i < count; ++i)
 			{

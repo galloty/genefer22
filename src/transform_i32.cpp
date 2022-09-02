@@ -7,10 +7,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
-#define transformCPU_namespace	transformCPU_sse4
-#include "transformCPUf64.h"
+#include "transformCPUi32.h"
 
-transform * transform::create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
+transform * transform::create_i32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
 {
-	return transformCPU_sse4::create_transformCPUf64<2>(b, n, num_threads, num_regs);
+	return new transformCPUi32(b, n, num_threads, num_regs);
 }

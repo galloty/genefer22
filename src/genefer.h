@@ -954,11 +954,14 @@ public:
 		(void)device;
 		createTransformCPU(b, n, nthreads, impl, num_regs);
 
-		static constexpr uint32_t bm[22 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31 };
-		if (b > bm[n - 12] * 1000000)
+		if (impl != "i32")
 		{
-			std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
-			pio::print(ss.str());
+			static constexpr uint32_t bm[22 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31 };
+			if (b > bm[n - 12] * 1000000)
+			{
+				std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
+				pio::print(ss.str());
+			}
 		}
 #endif
 

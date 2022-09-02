@@ -26,7 +26,7 @@ private:
 private:
 	explicit Zp(const cl_uint n) : _n(n) {}
 
-	Zp _mulMod(const Zp & rhs) const { return Zp((cl_uint)((_n * (cl_ulong)rhs._n) % p)); }
+	Zp _mulMod(const Zp & rhs) const { return Zp(cl_uint((_n * cl_ulong(rhs._n)) % p)); }
 
 public:
 	Zp() {}

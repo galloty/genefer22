@@ -179,6 +179,8 @@ public:
 	}
 };
 
+#define finline	__attribute__((always_inline))
+
 class transformCPUi32 : public transform
 {
 private:
@@ -235,7 +237,6 @@ private:
 		return r;
 	}
 
-protected:
 	static int32_t reduce96(int96 & f, const uint32_t b, const uint32_t b_inv, const int b_s)
 	{
 		const uint96 t = uint96::abs(f);
@@ -276,14 +277,14 @@ public:
 	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs) : transform(1 << n, n, b, EKind::NTT3cpu),
 		_num_threads(num_threads), _num_regs(num_regs),
 		_mem_size((size_t(1) << n) * (num_regs + 2) * sizeof(RNS)), _cache_size((size_t(1) << n) * sizeof(RNS)),
-		_norm(RNS::norm(uint32_t(1) << n)), _b(b), _b_inv(uint32_t((uint64_t(1) << ((int(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(int(31 - __builtin_clz(b) - 1)),
+		_norm(RNS::norm(uint32_t(1) << (n - 1))), _b(b), _b_inv(uint32_t((uint64_t(1) << ((int(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(int(31 - __builtin_clz(b) - 1)),
 		_z(new RNS[(size_t(1) << n) * num_regs]), _wr(new RNS[2 * (size_t(1) << n)]), _zp(new RNS[size_t(1) << n])
 	{
 		const size_t size = (size_t(1) << n);
-
 		RNS * const wr = _wr;
 		RNS * const wri = &wr[size];
-		for (size_t s = 1; s < size; s *= 2)
+
+		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
 			const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
@@ -294,6 +295,14 @@ public:
 				const RNS wrsi = prRoot_m.pow(uint32_t(e));
 				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
 			}
+		}
+
+		const size_t m = 4 * size / 2;
+		const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+		for (size_t i = 0; i != size / 4; ++i)
+		{
+			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
+			wr[size / 2 + i] = prRoot_m.pow(uint32_t(e));
 		}
 	}
 
@@ -308,45 +317,131 @@ public:
 	size_t getCacheSize() const override { return _cache_size; }
 
 private:
-	static void forward(const size_t n, RNS * const z, const RNS * const wr)
+	finline static void forward_2(const size_t m, RNS * const z, const RNS & w1)
 	{
-		for (size_t m = n / 2, s = 1; m >= 1; m /= 2, s *= 2)
+		const RNS u0 = z[0 * m], u2 = z[2 * m] * w1, u1 = z[1 * m], u3 = z[3 * m] * w1;
+		z[0 * m] = u0 + u2; z[2 * m] = u0 - u2; z[1 * m] = u1 + u3; z[3 * m] = u1 - u3;
+	}
+
+	finline static void forward_4(const size_t m, RNS * const z, const RNS & w1, const RNS & w2, const RNS & w3)
+	{
+		const RNS u0 = z[0 * m], u2 = z[2 * m] * w1, u1 = z[1 * m], u3 = z[3 * m] * w1;
+		const RNS v0 = u0 + u2, v1 = (u1 + u3) * w2, v2 = u0 - u2, v3 = (u1 - u3) * w3;
+		z[0 * m] = v0 + v1; z[1 * m] = v0 - v1; z[2 * m] = v2 + v3; z[3 * m] = v2 - v3;
+	}
+
+	finline static void backward_4(const size_t m, RNS * const z, const RNS & wi1, const RNS & wi2, const RNS & wi3)
+	{
+		const RNS u0 = z[0 * m], u1 = z[1 * m], u2 = z[2 * m], u3 = z[3 * m];
+		const RNS v0 = u0 + u1, v1 = RNS(u0 - u1) * wi2, v2 = u2 + u3, v3 = RNS(u2 - u3) * wi3;
+		z[0 * m] = v0 + v2; z[2 * m] = RNS(v0 - v2) * wi1; z[1 * m] = v1 + v3; z[3 * m] = RNS(v1 - v3) * wi1;
+	}
+
+	finline static void square_22(RNS * const z, const RNS & w0)
+	{
+		const RNS u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];
+		const RNS t1 = u1 * w0, t3 = u3 * w0;
+		z[0] = u0 * u0 + t1 * t1; z[1] = (u0 + u0) * u1; z[2] = u2 * u2 - t3 * t3; z[3] = (u2 + u2) * u3;
+	}
+
+	finline static void square_4(RNS * const z, const RNS & w0, const RNS & w1, const RNS & wi1)
+	{
+		const RNS u0 = z[0], u2 = z[2] * w1, u1 = z[1], u3 = z[3] * w1;
+		const RNS v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+		const RNS t1 = v1 * w0, t3 = v3 * w0;
+		const RNS s0 = v0 * v0 + t1 * t1, s1 = (v0 + v0) * v1;
+		const RNS s2 = v2 * v2 - t3 * t3, s3 = (v2 + v2) * v3;
+		z[0] = s0 + s2; z[2] = RNS(s0 - s2) * wi1; z[1] = s1 + s3; z[3] = RNS(s1 - s3) * wi1;
+	}
+
+	finline static void mul_22(RNS * const z, const RNS * const zp, const RNS & w0)
+	{
+		const RNS u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];
+		const RNS u0p = zp[0], u1p = zp[1], u2p = zp[2], u3p = zp[3];
+		const RNS v1 = u1 * w0, v3 = u3 * w0, v1p = u1p * w0, v3p = u3p * w0;;
+		z[0] = u0 * u0p + v1 * v1p; z[1] = u0 * u1p + u0p * u1;
+		z[2] = u2 * u2p - v3 * v3p; z[3] = u2 * u3p + u2p * u3;
+	}
+
+	finline static void mul_4(RNS * const z, const RNS * const zp, const RNS & w0, const RNS & w1, const RNS & wi1)
+	{
+		const RNS u0 = z[0], u2 = z[2] * w1, u1 = z[1], u3 = z[3] * w1;
+		const RNS v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+		const RNS v0p = zp[0], v1p = zp[1], v2p = zp[2], v3p = zp[3];
+		const RNS t1 = v1 * w0, t3 = v3 * w0, t1p = v1p * w0, t3p = v3p * w0;
+		const RNS s0 = v0 * v0p + t1 * t1p, s1 = v0 * v1p + v0p * v1;
+		const RNS s2 = v2 * v2p - t3 * t3p, s3 = v2 * v3p + v2p * v3;
+		z[0] = s0 + s2; z[2] = RNS(s0 - s2) * wi1; z[1] = s1 + s3; z[3] = RNS(s1 - s3) * wi1;
+	}
+
+	static size_t forward(const size_t n, RNS * const z, const RNS * const wr)
+	{
+		size_t m = n / 4;
+		for (size_t s = (n / 4) / m; m >= 2; m /= 4, s *= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				const RNS w = wr[s + j];
+				const RNS w1 = wr[s + j], w2 = wr[2 * (s + j) + 0], w3 = wr[2 * (s + j) + 1];
 
 				for (size_t i = 0; i < m; ++i)
 				{
-					const size_t k = 2 * m * j + i;
-					const RNS u0 = z[k + 0 * m], u1 = z[k + 1 * m] * w;
-					z[k + 0 * m] = u0 + u1; z[k + 1 * m] = u0 - u1;
+					forward_4(m, &z[4 * m * j + i], w1, w2, w3);
+				}
+			}
+		}
+		return (m == 0) ? 2 : (4 * m);
+	}
+
+	static void backward(const size_t n, RNS * const z, const RNS * const wri, const size_t mi)
+	{
+		for (size_t m = mi, s = (n / 4) / m; m <= n / 2; m *= 4, s /= 4)
+		{
+			for (size_t j = 0; j < s; ++j)
+			{
+				const RNS wi1 = wri[s + j], wi2 = wri[2 * (s + j) + 0], wi3 = wri[2 * (s + j) + 1];
+
+				for (size_t i = 0; i < m; ++i)
+				{
+					backward_4(m, &z[4 * m * j + i], wi1, wi2, wi3);
 				}
 			}
 		}
 	}
 
-	static void backward(const size_t n, RNS * const z, const RNS * const wri)
+	static void square22(const size_t n, RNS * const z, const RNS * const wr)
 	{
-		for (size_t m = 1, s = n / 2; m <= n / 2; m *= 2, s /= 2)
+		for (size_t j = 0; j < n / 4; ++j)
 		{
-			for (size_t j = 0; j < s; ++j)
-			{
-				const RNS wi = wri[s + j];
-
-				for (size_t i = 0; i < m; ++i)
-				{
-					const size_t k = 2 * m * j + i;
-					const RNS u0 = z[k + 0 * m], u1 = z[k + 1 * m];
-					z[k + 0 * m] = u0 + u1; z[k + 1 * m] = RNS(u0 - u1) * wi;
-				}
-			}
+			square_22(&z[4 * j], wr[n / 2 + j]);
 		}
 	}
 
-	static void mul(const size_t n, RNS * const z, const RNS * const zp)
+	static void square4(const size_t n, RNS * const z, const RNS * const wr)
 	{
-		for (size_t k = 0; k < n; ++k) z[k] *= zp[k];
+		const RNS * const wri = &wr[n];
+
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			square_4(&z[4 * j], wr[n / 2 + j], wr[n / 4 + j], wri[n / 4 + j]);
+		}
+	}
+
+	static void mul22(const size_t n, RNS * const z, const RNS * const zp, const RNS * const wr)
+	{
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			mul_22(&z[4 * j], &zp[4 * j], wr[n / 2 + j]);
+		}
+	}
+
+	static void mul4(const size_t n, RNS * const z, const RNS * const zp, const RNS * const wr)
+	{
+		const RNS * const wri = &wr[n];
+
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			mul_4(&z[4 * j], &zp[4 * j], wr[n / 2 + j], wr[n / 4 + j], wri[n / 4 + j]);
+		}
 	}
 
 	void baseMod(const size_t n, RNS * const z, const bool dup = false)
@@ -434,21 +529,30 @@ public:
 		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
-		forward(size, z, wr);
-		mul(size, z, z);
-		backward(size, z, &wr[size]);
+		const size_t m = forward(size, z, wr);
+		if (m == 4) square4(size, z, wr); else square22(size, z, wr);
+		backward(size, z, &wr[size], m);
 		baseMod(size, z, dup);
 	}
 
 	void initMultiplicand(const size_t src) override
 	{
 		const size_t size = getSize();
+		const RNS * const wr = _wr;
 		const RNS * const z = _z;
 		RNS * const zp = _zp;
 
 		for (size_t k = 0; k < size; ++k) zp[k] = z[k + src * size];
 
-		forward(size, zp, _wr);
+		const size_t m = forward(size, zp, wr);
+
+		if (m == 4)
+		{
+			for (size_t j = 0; j < size / 4; ++j)
+			{
+				forward_2(1, &zp[4 * j], wr[size / 4 + j]);
+			}
+		}
 	}
 
 	void mul() override
@@ -457,9 +561,9 @@ public:
 		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
-		forward(size, z, wr);
-		mul(size, z, _zp);
-		backward(size, z, &wr[size]);
+		const size_t m = forward(size, z, wr);
+		if (m == 4) mul4(size, z, _zp, wr); else mul22(size, z, _zp, wr);
+		backward(size, z, &wr[size], m);
 		baseMod(size, z);
 	}
 

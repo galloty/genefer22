@@ -942,7 +942,6 @@ public:
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
 			wr[size / 2 + i] = prRoot_m.pow(uint32_t(e));
-			wri[size / 2 + i] = prRoot_m.pow(uint32_t(m - e));
 		}
 
 		_pEngine->writeMemory_w(wr);
@@ -970,7 +969,6 @@ public:
 			{
 				const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
 				wre[size / 2 + i] = prRoot_me.pow(uint32_t(e));
-				wrie[size / 2 + i] = prRoot_me.pow(uint32_t(m - e));
 			}
 
 			_pEngine->writeMemory_we(wre);

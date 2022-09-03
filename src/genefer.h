@@ -77,18 +77,22 @@ public:
 
 private:
 #if defined(GPU)
-	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs, const bool verbose = true)
+	void createTransformGPU(const uint32_t b, const uint32_t n, const size_t device, const size_t num_regs,
+							const bool verbose = true, const bool full = true)
 	{
 		deleteTransform();
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id, verbose);
 		if (verbose)
 		{
-			std::ostringstream ss; ss << ", data size: " << std::setprecision(3) << _transform->getMemSize() / (1024 * 1024.0) << " MB." << std::endl;
+			std::ostringstream ss;
+			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getMemSize() / (1024 * 1024.0) << " MB";
+			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
 	}
 #else
-	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs, const bool verbose = true)
+	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs,
+							const bool verbose = true, const bool full = true)
 	{
 		deleteTransform();
 
@@ -107,8 +111,9 @@ private:
 		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
 		if (verbose)
 		{
-			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s), data size: "
-									  << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB." << std::endl;
+			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)";
+			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB";
+			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
 	}
@@ -836,10 +841,10 @@ private:
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
-		createTransformGPU(b, n, device, num_regs, m == 12);
+		createTransformGPU(b, n, device, num_regs, m == 12, false);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, m == 12);
+		createTransformCPU(b, n, nthreads, impl, num_regs, m == 12, false);
 #endif
 
 		transform * const pTransform = _transform;
@@ -873,8 +878,17 @@ private:
 			}
 
 			pTransform->copy(1, 0);	// synchro
+
+			const size_t memsize = 
+#if defined(GPU)
+			_transform->getMemSize();
+#else
+			_transform->getCacheSize();
+#endif
+
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
-			ss << ": " << std::setprecision(3) << timer::formatTime(estimatedTime) << ", " << mulTime * 1e3 << " ms/bit." << std::endl;
+			ss << ": " << timer::formatTime(estimatedTime) << std::setprecision(3) << ", " << mulTime * 1e3 << " ms/bit, ";
+			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());
 

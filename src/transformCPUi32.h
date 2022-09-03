@@ -11,34 +11,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transform.h"
 
-template <uint32_t p, uint32_t p_inv, uint32_t prRoot>
+template <uint32_t p, uint32_t prRoot>
 class Zp
 {
 private:
 	uint32_t _n;
 
-private:
-	static uint32_t _addMod(const uint32_t lhs, const uint32_t rhs)
-	{
-		const uint32_t c = (lhs >= p - rhs) ? p : 0;
-		return lhs + rhs - c;
-	}
-
-	static uint32_t _subMod(const uint32_t lhs, const uint32_t rhs)
-	{
-		const uint32_t c = (lhs < rhs) ? p : 0;
-		return lhs - rhs + c;
-	}
-
-	static uint32_t _mulMod(const uint32_t lhs, const uint32_t rhs)
-	{
-		// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
-		const uint64_t m = lhs * uint64_t(rhs), q = (m >> 32) * p_inv + m;
-		uint32_t r = uint32_t(m) - (1 + uint32_t(q >> 32)) * p;
-		if (r > uint32_t(q)) r += p;
-		return (r >= p) ? r - p : r;
-	}
- 
 public:
 	Zp() {}
 	explicit Zp(const uint32_t n) : _n(n) {}
@@ -49,9 +27,22 @@ public:
 
 	Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
 
-	Zp operator+(const Zp & rhs) const { return Zp(_addMod(_n, rhs._n)); }
-	Zp operator-(const Zp & rhs) const { return Zp(_subMod(_n, rhs._n)); }
-	Zp operator*(const Zp & rhs) const { return Zp(_mulMod(_n, rhs._n)); }
+	Zp operator+(const Zp & rhs) const
+	{
+		const uint64_t s = _n + uint64_t(rhs._n);
+		return Zp((s >= p) ? uint32_t(s - p) : uint32_t(s));
+	}
+
+	Zp operator-(const Zp & rhs) const
+	{
+		const uint32_t c = (_n < rhs._n) ? p : 0;
+		return Zp(_n - rhs._n + c);
+	}
+
+	Zp operator*(const Zp & rhs) const
+	{
+		return Zp(uint32_t((_n * uint64_t(rhs._n)) % p));
+	}
 
 	Zp & operator+=(const Zp & rhs) { *this = *this + rhs; return *this; }
 	Zp & operator-=(const Zp & rhs) { *this = *this - rhs; return *this; }
@@ -76,13 +67,13 @@ public:
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
-#define P1			4253024257u		// 507 * 2^23 + 1
-#define P2			4194304001u		// 125 * 2^25 + 1
-#define P3			4076863489u		// 243 * 2^24 + 1
+#define P1		4253024257u		// 507 * 2^23 + 1
+#define P2		4194304001u		// 125 * 2^25 + 1
+#define P3		4076863489u		// 243 * 2^24 + 1
 
-typedef Zp<P1, uint32_t(uint64_t(-1) / P1 - (uint64_t(1) << 32)), 5> Zp1;
-typedef Zp<P2, uint32_t(uint64_t(-1) / P2 - (uint64_t(1) << 32)), 3> Zp2;
-typedef Zp<P3, uint32_t(uint64_t(-1) / P3 - (uint64_t(1) << 32)), 7> Zp3;
+typedef Zp<P1, 5> Zp1;
+typedef Zp<P2, 3> Zp2;
+typedef Zp<P3, 7> Zp3;
 
 class RNS
 {
@@ -116,71 +107,77 @@ public:
 	static const RNS prRoot_n(const uint32_t n) { return RNS(Zp1::prRoot_n(n), Zp2::prRoot_n(n), Zp3::prRoot_n(n)); }
 };
 
-typedef RNS		RNS_W;
-
-struct uint96
+class int96
 {
-	uint64_t s0;
-	uint32_t s1;
+private:
+	uint64_t _lo;
+	int32_t  _hi;
+
+public:
+	int96(const uint64_t lo, const int32_t hi) : _lo(lo), _hi(hi) {}
+	int96(const int64_t n) : _lo(uint64_t(n)), _hi((n < 0) ? -1 : 0) {}
+
+	uint64_t lo() const { return _lo; }
+	int32_t hi() const { return _hi; }
+
+	bool is_neg() const { return (_hi < 0); }
+
+	int96 operator-() const
+	{
+		const int32_t c = (_lo != 0) ? 1 : 0;
+		return int96(-_lo, -_hi - c);
+	}
+
+	int96 & operator+=(const int96 & rhs)
+	{
+		const uint64_t lo = _lo + rhs._lo;
+		const int32_t c = (lo < rhs._lo) ? 1 : 0;
+		_lo = lo; _hi += rhs._hi + c;
+		return *this;
+	}
 };
 
-struct int96
+class uint96
 {
-	uint64_t s0;
-	int32_t  s1;
+private:
+	uint64_t _lo;
+	uint32_t _hi;
+
+public:
+	uint96(const uint64_t lo, const uint32_t hi) : _lo(lo), _hi(hi) {}
+	uint96(const int96 & rhs) : _lo(rhs.lo()), _hi(uint32_t(rhs.hi())) {}
+
+	uint64_t lo() const { return _lo; }
+	uint32_t hi() const { return _hi; }
+
+	int96 u2i() const { return int96(_lo, int32_t(_hi)); }
+
+	bool is_greater(const uint96 & rhs) const { return (_hi > rhs._hi) || ((_hi == rhs._hi) && (_lo > rhs._lo)); }
+
+	uint96 operator+(const uint64_t & rhs) const
+	{
+		const uint64_t lo = _lo + rhs;
+		const uint32_t c = (lo < rhs) ? 1 : 0;
+		return uint96(lo, _hi + c);
+	}
+
+	int96 operator-(const uint96 & rhs) const
+	{
+		const uint32_t c = (_lo < rhs._lo) ? 1 : 0;
+		return int96(_lo - rhs._lo, int32_t(_hi - rhs._hi - c));
+	}
+
+	static uint96 mul_64_32(const uint64_t x, const uint32_t y)
+	{
+		const uint64_t l = uint64_t(uint32_t(x)) * y, h = (x >> 32) * y + (l >> 32);
+		return uint96((h << 32) | uint32_t(l), uint32_t(h >> 32));
+	}
+
+	static uint96 abs(const int96 & rhs)
+	{
+		return uint96(rhs.is_neg() ? -rhs : rhs);
+	}
 };
-
-inline uint96 uint96_set(const uint64_t s0, const uint32_t s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
-inline int96 int96_set_si(const int64_t n) { int96 r; r.s0 = uint64_t(n); r.s1 = (n < 0) ? -1 : 0; return r; }
-
-inline uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = uint32_t(x.s1); return r; }
-inline int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = int32_t(x.s1); return r; }
-
-inline bool int96_is_neg(const int96 x) { return (x.s1 < 0); }
-inline bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }
-
-inline int96 int96_neg(const int96 x)
-{
-	const int32_t c = (x.s0 != 0) ? 1 : 0;
-	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - c;
-	return r;
-}
-
-inline int96 int96_add(const int96 x, const int96 y)
-{
-	const uint64_t s0 = x.s0 + y.s0;
-	const int32_t c = (s0 < y.s0) ? 1 : 0;
-	int96 r; r.s0 = s0; r.s1 = x.s1 + y.s1 + c;
-	return r;
-}
-
-inline uint96 uint96_add_64(const uint96 x, const uint64_t y)
-{
-	const uint64_t s0 = x.s0 + y;
-	const uint32_t c = (s0 < y) ? 1 : 0;
-	uint96 r; r.s0 = s0; r.s1 = x.s1 + c;
-	return r;
-}
-
-inline int96 uint96_subi(const uint96 x, const uint96 y)
-{
-	const uint32_t c = (x.s0 < y.s0) ? 1 : 0;
-	int96 r; r.s0 = x.s0 - y.s0; r.s1 = int32_t(x.s1 - y.s1 - c);
-	return r;
-}
-
-inline uint96 uint96_mul_64_32(const uint64_t x, const uint32_t y)
-{
-	const uint64_t l = uint64_t(uint32_t(x)) * y, h = (x >> 32) * y + (l >> 32);
-	uint96 r; r.s0 = (h << 32) | uint32_t(l); r.s1 = uint32_t(h >> 32);
-	return r;
-}
-
-inline uint96 int96_abs(const int96 x)
-{
-	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;
-	return int96_u(t);
-}
 
 class transformCPUi32 : public transform
 {
@@ -191,7 +188,7 @@ private:
 	const uint32_t _b, _b_inv;
 	const int _b_s;
 	RNS * const _z;
-	RNS_W * const _wr;
+	RNS * const _wr;
 	RNS * const _zp;
 
 private:
@@ -241,16 +238,16 @@ private:
 protected:
 	static int32_t reduce96(int96 & f, const uint32_t b, const uint32_t b_inv, const int b_s)
 	{
-		const uint96 t = int96_abs(f);
-		const uint64_t t_h = (uint64_t(t.s1) << (64 - 29)) | (t.s0 >> 29);
-		const uint32_t t_l = uint32_t(t.s0) & ((uint32_t(1) << 29) - 1);
+		const uint96 t = uint96::abs(f);
+		const uint64_t t_h = (uint64_t(t.hi()) << (64 - 29)) | (t.lo() >> 29);
+		const uint32_t t_l = uint32_t(t.lo()) & ((uint32_t(1) << 29) - 1);
 
 		uint32_t d_h, r_h = barrett(t_h, b, b_inv, b_s, d_h);
 		uint32_t d_l, r_l = barrett((uint64_t(r_h) << 29) | t_l, b, b_inv, b_s, d_l);
 		const uint64_t d = (uint64_t(d_h) << 29) | d_l;
 
-		const bool s = int96_is_neg(f);
-		f = int96_set_si(s ? -int64_t(d) : int64_t(d));
+		const bool s = f.is_neg();
+		f = int96(s ? -int64_t(d) : int64_t(d));
 		const int32_t r = s ? -int32_t(r_l) : int32_t(r_l);
 		return r;
 	}
@@ -268,9 +265,10 @@ protected:
 		const Zp1 u13 = (r1 - Zp1(r3.get())) * Zp1(invP3_P1);
 		const Zp2 u23 = (r2 - Zp2(r3.get())) * Zp2(invP3_P2);
 		const Zp1 u123 = (u13 - Zp1(u23.get())) * Zp1(invP2_P1);
-		const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * uint64_t(P3), u123.get()), u23.get() * uint64_t(P3) + r3.get());
-		const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
-		const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
+		const uint64_t t = u23.get() * uint64_t(P3) + r3.get();
+		const uint96 n = uint96::mul_64_32(P2 * uint64_t(P3), u123.get()) + t;
+		const uint96 P1P2P3 = uint96(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96(P1P2P3_2l, P1P2P3_2h);
+		const int96 r = n.is_greater(P1P2P3_2) ? (n - P1P2P3) : n.u2i();
 		return r;
 	}
 
@@ -279,12 +277,12 @@ public:
 		_num_threads(num_threads), _num_regs(num_regs),
 		_mem_size((size_t(1) << n) * (num_regs + 2) * sizeof(RNS)), _cache_size((size_t(1) << n) * sizeof(RNS)),
 		_norm(RNS::norm(uint32_t(1) << n)), _b(b), _b_inv(uint32_t((uint64_t(1) << ((int(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(int(31 - __builtin_clz(b) - 1)),
-		_z(new RNS[(size_t(1) << n) * num_regs]), _wr(new RNS_W[2 * (size_t(1) << n)]), _zp(new RNS[size_t(1) << n])
+		_z(new RNS[(size_t(1) << n) * num_regs]), _wr(new RNS[2 * (size_t(1) << n)]), _zp(new RNS[size_t(1) << n])
 	{
 		const size_t size = (size_t(1) << n);
 
-		RNS_W * const wr = _wr;
-		RNS_W * const wri = &wr[size];
+		RNS * const wr = _wr;
+		RNS * const wri = &wr[size];
 		for (size_t s = 1; s < size; s *= 2)
 		{
 			const size_t m = 4 * s;
@@ -310,7 +308,7 @@ public:
 	size_t getCacheSize() const override { return _cache_size; }
 
 private:
-	static void forward(const size_t n, RNS * const z, const RNS_W * const wr)
+	static void forward(const size_t n, RNS * const z, const RNS * const wr)
 	{
 		for (size_t m = n / 2, s = 1; m >= 1; m /= 2, s *= 2)
 		{
@@ -328,7 +326,7 @@ private:
 		}
 	}
 
-	static void backward(const size_t n, RNS * const z, const RNS_W * const wri)
+	static void backward(const size_t n, RNS * const z, const RNS * const wri)
 	{
 		for (size_t m = 1, s = n / 2; m <= n / 2; m *= 2, s /= 2)
 		{
@@ -357,18 +355,18 @@ private:
 		const uint32_t b = _b, b_inv = _b_inv;
 		const int b_s = _b_s;
 
-		int96 f96 = int96_set_si(0);
+		int96 f96 = int96(0);
 		for (size_t k = 0; k < n; ++k)
 		{
 			const RNS zn = z[k] * norm;
 			int96 l = garner3(zn.r1(), zn.r2(), zn.r3());
-			if (dup) l = int96_add(l, l);
-			f96 = int96_add(f96, l);
+			if (dup) l += l;
+			f96 += l;
 			const int32_t r = reduce96(f96, b, b_inv, b_s);
 			z[k] = RNS(r);
 		}
 
-		int64_t f = int64_t(f96.s0);
+		int64_t f = int64_t(f96.lo());
 
 		while (f != 0)
 		{
@@ -433,7 +431,7 @@ public:
 	void squareDup(const bool dup) override
 	{
 		const size_t size = getSize();
-		const RNS_W * const wr = _wr;
+		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
 		forward(size, z, wr);
@@ -456,7 +454,7 @@ public:
 	void mul() override
 	{
 		const size_t size = getSize();
-		const RNS_W * const wr = _wr;
+		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
 		forward(size, z, wr);

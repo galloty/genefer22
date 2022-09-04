@@ -374,73 +374,89 @@ private:
 		z[0] = s0 + s2; z[2] = RNS(s0 - s2) * wi1; z[1] = s1 + s3; z[3] = RNS(s1 - s3) * wi1;
 	}
 
-	static size_t forward(const size_t n, RNS * const z, const RNS * const wr)
+	finline static void forward2(RNS * const z, const RNS * const wr, const size_t m, const size_t s, const size_t j)
 	{
-		size_t m = n / 4;
-		for (size_t s = (n / 4) / m; m >= 2; m /= 4, s *= 4)
-		{
-			for (size_t j = 0; j < s; ++j)
-			{
-				const RNS w1 = wr[s + j], w2 = wr[2 * (s + j) + 0], w3 = wr[2 * (s + j) + 1];
+		const RNS w1 = wr[s + j];
+		for (size_t i = 0; i < m; ++i) forward_2(m, &z[4 * m * j + i], w1);
+	}
 
-				for (size_t i = 0; i < m; ++i)
-				{
-					forward_4(m, &z[4 * m * j + i], w1, w2, w3);
-				}
+	finline static void forward4(RNS * const z, const RNS * const wr, const size_t m, const size_t s, const size_t j)
+	{
+		const RNS w1 = wr[s + j], w2 = wr[2 * (s + j) + 0], w3 = wr[2 * (s + j) + 1];
+		for (size_t i = 0; i < m; ++i) forward_4(m, &z[4 * m * j + i], w1, w2, w3);
+	}
+
+	finline static void backward4(RNS * const z, const RNS * const wri, const size_t m, const size_t s, const size_t j)
+	{
+		const RNS wi1 = wri[s + j], wi2 = wri[2 * (s + j) + 0], wi3 = wri[2 * (s + j) + 1];
+		for (size_t i = 0; i < m; ++i) backward_4(m, &z[4 * m * j + i], wi1, wi2, wi3);
+	}
+
+	static void square(RNS * const z, const RNS * const wr, const RNS * const wri, const size_t mr, const size_t sr, const size_t jr)
+	{
+		if (mr >= 512)		// 32 KB / sizeof(RNS)
+		{
+			forward4(z, wr, mr, sr, jr);
+			for (size_t l = 0; l < 4; ++l) square(z, wr, wri, mr / 4, 4 * sr, 4 * jr + l);
+			backward4(z, wri, mr, sr, jr);
+		}
+		else
+		{
+			size_t m = mr;
+			for (size_t s = 1; m >= 2; m /= 4, s *= 4)
+			{
+				for (size_t j = 0; j < s; ++j) forward4(z, wr, m, s * sr, s * jr + j);
+			}
+
+			const size_t size_4 = mr * sr;
+			if (m == 0)
+			{
+				for (size_t i = 0, j = mr * jr; i < mr; ++i, ++j) square_22(&z[4 * j], wr[2 * size_4 + j]);
+			}
+			else
+			{
+				for (size_t i = 0, j = mr * jr; i < mr; ++i, ++j) square_4(&z[4 * j], wr[2 * size_4 + j], wr[size_4 + j], wri[size_4 + j]);
+			}
+
+			m = (m == 0) ? 2 : 4;
+			for (size_t s = mr / m; s >= 1; m *= 4, s /= 4)
+			{
+				for (size_t j = 0; j < s; ++j) backward4(z, wri, m, s * sr, s * jr + j);
 			}
 		}
-		return (m == 0) ? 2 : (4 * m);
 	}
 
-	static void backward(const size_t n, RNS * const z, const RNS * const wri, const size_t mi)
+	static void mul(RNS * const z, const RNS * const zp, const RNS * const wr, const RNS * const wri, const size_t mr, const size_t sr, const size_t jr)
 	{
-		for (size_t m = mi, s = (n / 4) / m; m <= n / 2; m *= 4, s /= 4)
+		if (mr >= 512)
 		{
-			for (size_t j = 0; j < s; ++j)
+			forward4(z, wr, mr, sr, jr);
+			for (size_t l = 0; l < 4; ++l) mul(z, zp, wr, wri, mr / 4, 4 * sr, 4 * jr + l);
+			backward4(z, wri, mr, sr, jr);
+		}
+		else
+		{
+			size_t m = mr;
+			for (size_t s = 1; m >= 2; m /= 4, s *= 4)
 			{
-				const RNS wi1 = wri[s + j], wi2 = wri[2 * (s + j) + 0], wi3 = wri[2 * (s + j) + 1];
-
-				for (size_t i = 0; i < m; ++i)
-				{
-					backward_4(m, &z[4 * m * j + i], wi1, wi2, wi3);
-				}
+				for (size_t j = 0; j < s; ++j) forward4(z, wr, m, s * sr, s * jr + j);
 			}
-		}
-	}
 
-	static void square22(const size_t n, RNS * const z, const RNS * const wr)
-	{
-		for (size_t j = 0; j < n / 4; ++j)
-		{
-			square_22(&z[4 * j], wr[n / 2 + j]);
-		}
-	}
+			const size_t size_4 = mr * sr;
+			if (m == 0)
+			{
+				for (size_t i = 0, j = mr * jr; i < mr; ++i, ++j) mul_22(&z[4 * j], &zp[4 * j], wr[2 * size_4 + j]);
+			}
+			else
+			{
+				for (size_t i = 0, j = mr * jr; i < mr; ++i, ++j) mul_4(&z[4 * j], &zp[4 * j], wr[2 * size_4 + j], wr[size_4 + j], wri[size_4 + j]);
+			}
 
-	static void square4(const size_t n, RNS * const z, const RNS * const wr)
-	{
-		const RNS * const wri = &wr[n];
-
-		for (size_t j = 0; j < n / 4; ++j)
-		{
-			square_4(&z[4 * j], wr[n / 2 + j], wr[n / 4 + j], wri[n / 4 + j]);
-		}
-	}
-
-	static void mul22(const size_t n, RNS * const z, const RNS * const zp, const RNS * const wr)
-	{
-		for (size_t j = 0; j < n / 4; ++j)
-		{
-			mul_22(&z[4 * j], &zp[4 * j], wr[n / 2 + j]);
-		}
-	}
-
-	static void mul4(const size_t n, RNS * const z, const RNS * const zp, const RNS * const wr)
-	{
-		const RNS * const wri = &wr[n];
-
-		for (size_t j = 0; j < n / 4; ++j)
-		{
-			mul_4(&z[4 * j], &zp[4 * j], wr[n / 2 + j], wr[n / 4 + j], wri[n / 4 + j]);
+			m = (m == 0) ? 2 : 4;
+			for (size_t s = mr / m; s >= 1; m *= 4, s /= 4)
+			{
+				for (size_t j = 0; j < s; ++j) backward4(z, wri, m, s * sr, s * jr + j);
+			}
 		}
 	}
 
@@ -529,9 +545,7 @@ public:
 		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
-		const size_t m = forward(size, z, wr);
-		if (m == 4) square4(size, z, wr); else square22(size, z, wr);
-		backward(size, z, &wr[size], m);
+		square(z, wr, &wr[size], size / 4, 1, 0);
 		baseMod(size, z, dup);
 	}
 
@@ -544,14 +558,15 @@ public:
 
 		for (size_t k = 0; k < size; ++k) zp[k] = z[k + src * size];
 
-		const size_t m = forward(size, zp, wr);
-
-		if (m == 4)
+		size_t m = size / 4;
+		for (size_t s = 1; m >= 2; m /= 4, s *= 4)
 		{
-			for (size_t j = 0; j < size / 4; ++j)
-			{
-				forward_2(1, &zp[4 * j], wr[size / 4 + j]);
-			}
+			for (size_t j = 0; j < s; ++j) forward4(zp, wr, m, s, j);
+		}
+
+		if (m == 1)
+		{
+			for (size_t j = 0; j < size / 4; ++j) forward2(zp, wr, 1, size / 4, j);
 		}
 	}
 
@@ -561,9 +576,7 @@ public:
 		const RNS * const wr = _wr;
 		RNS * const z = _z;
 
-		const size_t m = forward(size, z, wr);
-		if (m == 4) mul4(size, z, _zp, wr); else mul22(size, z, _zp, wr);
-		backward(size, z, &wr[size], m);
+		mul(z, _zp, wr, &wr[size], size / 4, 1, 0);
 		baseMod(size, z);
 	}
 

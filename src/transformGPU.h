@@ -60,65 +60,64 @@ public:
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
-#define P1		4253024257u		// 507 * 2^23 + 1
-#define P2		4194304001u		// 125 * 2^25 + 1
-#define P3		4076863489u		// 243 * 2^24 + 1
+#define P1_32	4253024257u		// 507 * 2^23 + 1
+#define P2_32	4194304001u		// 125 * 2^25 + 1
+#define P3_32	4076863489u		// 243 * 2^24 + 1
 
-typedef Zp<P1, 5> Zp1;
-typedef Zp<P2, 3> Zp2;
-typedef Zp<P3, 7> Zp3;
+typedef Zp<P1_32, 5> Zp1_32;
+typedef Zp<P2_32, 3> Zp2_32;
+typedef Zp<P3_32, 7> Zp3_32;
 
-class RNS
+template<class Zp1, class Zp2>
+class RNS_T
 {
 private:
 	cl_uint2 r;	// Zp1, Zp2
 
 private:
-	explicit RNS(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.get(); r.s[1] = r2.get(); }
+	explicit RNS_T(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.get(); r.s[1] = r2.get(); }
 
 public:
-	RNS() {}
-	explicit RNS(const int32_t i) { r.s[0] = Zp1(i).get(); r.s[1] = Zp2(i).get(); }
+	RNS_T() {}
+	explicit RNS_T(const int32_t i) { r.s[0] = Zp1(i).get(); r.s[1] = Zp2(i).get(); }
 
 	Zp1 r1() const { Zp1 r1; r1.set(r.s[0]); return r1; }
 	Zp2 r2() const { Zp2 r2; r2.set(r.s[1]); return r2; }
 	void set(const cl_uint r1, const cl_uint r2) { r.s[0] = r1; r.s[1] = r2; }
 
-	RNS operator-() const { return RNS(-r1(), -r2()); }
+	RNS_T operator-() const { return RNS_T(-r1(), -r2()); }
 
-	RNS operator*(const RNS & rhs) const { return RNS(r1() * rhs.r1(), r2() * rhs.r2()); }
+	RNS_T operator*(const RNS_T & rhs) const { return RNS_T(r1() * rhs.r1(), r2() * rhs.r2()); }
 
-	RNS pow(const uint32_t e) const { return RNS(r1().pow(e), r2().pow(e)); }
+	RNS_T pow(const uint32_t e) const { return RNS_T(r1().pow(e), r2().pow(e)); }
 
-	static const RNS prRoot_n(const uint32_t n) { return RNS(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
+	static const RNS_T prRoot_n(const uint32_t n) { return RNS_T(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
 };
 
-class RNSe
+template<class Zp3>
+class RNSe_T
 {
 private:
 	cl_uint r;	// Zp3
 
 private:
-	explicit RNSe(const Zp3 & r3) { r = r3.get(); }
+	explicit RNSe_T(const Zp3 & r3) { r = r3.get(); }
 
 public:
-	RNSe() {}
-	explicit RNSe(const int32_t i) { r = Zp3(i).get(); }
+	RNSe_T() {}
+	explicit RNSe_T(const int32_t i) { r = Zp3(i).get(); }
 
 	Zp3 r3() const { Zp3 _r3; _r3.set(r); return _r3; }
 	void set(const cl_uint r3) { r = r3; }
 
-	RNSe operator-() const { return RNSe(-r3()); }
+	RNSe_T operator-() const { return RNSe_T(-r3()); }
 
-	RNSe operator*(const RNSe & rhs) const { return RNSe(r3() * rhs.r3()); }
+	RNSe_T operator*(const RNSe_T & rhs) const { return RNSe_T(r3() * rhs.r3()); }
 
-	RNSe pow(const uint32_t e) const { return RNSe(r3().pow(e)); }
+	RNSe_T pow(const uint32_t e) const { return RNSe_T(r3().pow(e)); }
 
-	static const RNSe prRoot_n(const uint32_t n) { return RNSe(Zp3::prRoot_n(n)); }
+	static const RNSe_T prRoot_n(const uint32_t n) { return RNSe_T(Zp3::prRoot_n(n)); }
 };
-
-typedef RNS		RNS_W;
-typedef RNSe	RNS_We;
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
@@ -131,7 +130,7 @@ typedef RNSe	RNS_We;
 #define CHUNK256	4
 #define CHUNK1024	2
 
-template<size_t RNS_SIZE>
+template<class RNS, class RNSe, class RNS_W, class RNS_We, size_t RNS_SIZE>
 class engine : public device
 {
 private:
@@ -854,12 +853,17 @@ public:
 template<size_t RNS_SIZE>
 class transformGPU : public transform
 {
+	using RNS = RNS_T<Zp1_32, Zp2_32>;
+	using RNSe = RNSe_T<Zp3_32>;
+	using RNS_W = RNS;
+	using RNS_We = RNSe;
+
 private:
 	const size_t _mem_size;
 	const size_t _num_regs;
 	RNS * const _z;
 	RNSe * const _ze;
-	engine<RNS_SIZE> * _pEngine = nullptr;
+	engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE> * _pEngine = nullptr;
 
 	static size_t bitRev(const size_t i, const size_t n)
 	{
@@ -880,25 +884,29 @@ public:
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine<RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
+		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
 
 		std::ostringstream src;
 
-		src << "#define\tP1\t" << P1 << "u" << std::endl;
-		src << "#define\tP2\t" << P2 << "u" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP3\t" << P3 << "u" << std::endl;
-		src << "#define\tP1_INV\t" << uint64_t(-1) / P1 - (uint64_t(1) << 32) << "u" << std::endl;
-		src << "#define\tP2_INV\t" << uint64_t(-1) / P2 - (uint64_t(1) << 32) << "u" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP3_INV\t" << uint64_t(-1) / P3 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
+		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
+		src << "#define\tP1_INV\t" << uint64_t(-1) / P1_32 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tP2_INV\t" << uint64_t(-1) / P2_32 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tInvP2_P1\t1822724754u" << std::endl;		// 1 / P2 mod P1
-		if (RNS_SIZE == 3) src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
-		if (RNS_SIZE == 3) src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
 		src << "#define\tP1P2\t(P1 * (ulong)P2)" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP1P2P3h\t3942432002u" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
+
+		if (RNS_SIZE == 3)
+		{
+			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
+			src << "#define\tP3_INV\t" << uint64_t(-1) / P3_32 - (uint64_t(1) << 32) << "u" << std::endl;
+			src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
+			src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
+			src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
+			src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
+			src << "#define\tP1P2P3h\t3942432002u" << std::endl;
+			src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
+			src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
+		}
 
 		src << "#define\tBLK32\t" << BLK32 << std::endl;
 		src << "#define\tBLK64\t" << BLK64 << std::endl;

@@ -100,7 +100,7 @@ inline uint _subMod(const uint lhs, const uint rhs, const uint p)
 inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_inv)
 {
 	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
-	const ulong m = lhs * (ulong)(rhs), q = (m >> 32) * p_inv + m;
+	const ulong m = lhs * (ulong)(rhs), q = (uint)(m >> 32) * (ulong)(p_inv) + m;
 	uint r = (uint)m - (1 + (uint)(q >> 32)) * p;
 	if (r > (uint)q) r += p;
 	return (r >= p) ? r - p : r;

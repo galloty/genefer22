@@ -8,10 +8,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#include <immintrin.h>
 
 #include "transform.h"
 
-template <uint32_t p, uint32_t prRoot>
+template <uint32_t p, uint32_t p_inv, uint32_t prRoot>
 class Zp
 {
 private:
@@ -29,8 +30,8 @@ public:
 
 	Zp operator+(const Zp & rhs) const
 	{
-		const uint64_t s = _n + uint64_t(rhs._n);
-		return Zp((s >= p) ? uint32_t(s - p) : uint32_t(s));
+		const uint32_t c = (_n >= p - rhs._n) ? p : 0;
+		return Zp(_n + rhs._n - c);
 	}
 
 	Zp operator-(const Zp & rhs) const
@@ -70,38 +71,79 @@ public:
 #define P1		4253024257u		// 507 * 2^23 + 1
 #define P2		4194304001u		// 125 * 2^25 + 1
 #define P3		4076863489u		// 243 * 2^24 + 1
+#define P1_inv	(uint64_t(-1) / P1 - (uint64_t(1) << 32))
+#define P2_inv	(uint64_t(-1) / P2 - (uint64_t(1) << 32))
+#define P3_inv	(uint64_t(-1) / P3 - (uint64_t(1) << 32))
 
-typedef Zp<P1, 5> Zp1;
-typedef Zp<P2, 3> Zp2;
-typedef Zp<P3, 7> Zp3;
+typedef Zp<P1, P1_inv, 5> Zp1;
+typedef Zp<P2, P2_inv, 3> Zp2;
+typedef Zp<P3, P3_inv, 7> Zp3;
 
 class RNS
 {
 private:
-	Zp1 _r1; Zp2 _r2; Zp3 _r3;
+	__v8su _r123;
+	static constexpr __v8su P123 = { P1, 0, P2, 0, P3, 0, 0, 0 };
+	static constexpr __v8su P123_inv = { P1_inv, 0, P2_inv, 0, P3_inv, 0, 0, 0 };
+	static constexpr __v8su P123_2 = { P1 / 2, 0, P2 / 2, 0, P3 / 2, 0, 0, 0 };
 
 private:
-	explicit RNS(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
+	constexpr explicit RNS(const __v8su & r123) : _r123(r123) {}
+	explicit RNS(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) { _r123[0] = r1.get(); _r123[2] = r2.get(); _r123[4] = r3.get(); }
 
 public:
 	RNS() {}
-	explicit RNS(const int32_t i) { _r1 = Zp1(i); _r2 = Zp2(i); _r3 = Zp3(i); }
+	explicit RNS(const int32_t i)
+	{
+		_r123 = (__v8su)_mm256_set1_epi32(i);
+		_r123 += (__v8su)_mm256_set1_epi32((i < 0) ? -1 : 0) & P123;
+	}
 
-	Zp1 r1() const { return _r1; }
-	Zp2 r2() const { return _r2; }
-	Zp3 r3() const { return _r3; }
+	Zp1 r1() const { return Zp1(_r123[0]); }
+	Zp2 r2() const { return Zp2(_r123[2]); }
+	Zp3 r3() const { return Zp3(_r123[4]); }
 
-	RNS operator-() const { return RNS(-_r1, -_r2, -_r3); }
+	RNS operator-() const { return RNS((_r123 != 0) & (P123 - _r123)); }
 
-	RNS operator+(const RNS & rhs) const { return RNS(_r1 + rhs._r1, _r2 + rhs._r2, _r3 + rhs._r3); }
-	RNS operator-(const RNS & rhs) const { return RNS(_r1 - rhs._r1, _r2 - rhs._r2, _r3 - rhs._r3); }
-	RNS operator*(const RNS & rhs) const { return RNS(_r1 * rhs._r1, _r2 * rhs._r2, _r3 * rhs._r3); }
+	RNS operator+(const RNS & rhs) const
+	{
+		const __v8su c = (_r123 >= P123 - rhs._r123) & P123;
+		return RNS(_r123 + rhs._r123 - c);
+	}
+
+	RNS operator-(const RNS & rhs) const
+	{
+		const __v8su c = (_r123 < rhs._r123) & P123;
+		return RNS(_r123 - rhs._r123 + c);
+	}
+
+	RNS operator*(const RNS & rhs) const
+	{
+		// const uint64_t m = _n * uint64_t(rhs._n)
+		const __v8su m = (__v8su)_mm256_mul_epu32((__m256i)_r123, (__m256i)rhs._r123);
+
+		// uint64_t q = uint32_t(m >> 32) * uint64_t(p_inv) + m;
+		const __v8si mask_32 = { 1, 1, 3, 3, 5, 5, 7, 7 };
+		const __v8su m_32 = __builtin_shuffle(m, mask_32);
+		const __v8su q = (__v8su)_mm256_add_epi64(_mm256_mul_epu32((__m256i)m_32, (__m256i)P123_inv), (__m256i)m);
+
+		// uint32_t r = uint32_t(m) - (1 + uint32_t(q >> 32)) * p;
+		const __v8su q_32 = __builtin_shuffle(q, mask_32);
+		__v8su r = m - q_32 * P123 - P123;
+
+		// if (r > uint32_t(q)) r += p;
+		r += (r > q) & P123;
+		// if (r >= p) r -= p ;
+		r -= (r >= P123) & P123;
+
+		return RNS(r);
+	}
 
 	RNS & operator+=(const RNS & rhs) { *this = *this + rhs; return *this; }
 	RNS & operator-=(const RNS & rhs) { *this = *this - rhs; return *this; }
 	RNS & operator*=(const RNS & rhs) { *this = *this * rhs; return *this; }
 
-	RNS pow(const uint32_t e) const { return RNS(_r1.pow(e), _r2.pow(e), _r3.pow(e)); }
+	RNS pow(const uint32_t e) const { return RNS(r1().pow(e), r2().pow(e), r3().pow(e)); }
 
 	static RNS norm(const uint32_t n) { return RNS(Zp1::norm(n), Zp2::norm(n), Zp3::norm(n)); }
 	static const RNS prRoot_n(const uint32_t n) { return RNS(Zp1::prRoot_n(n), Zp2::prRoot_n(n), Zp3::prRoot_n(n)); }
@@ -263,11 +305,12 @@ private:
 		const uint64_t P1P2P3_2l = 7691796326090014720ull;
 		const uint32_t P1P2P3_2h = 1971216001u;
 
-		const Zp1 u13 = (r1 - Zp1(r3.get())) * Zp1(invP3_P1);
-		const Zp2 u23 = (r2 - Zp2(r3.get())) * Zp2(invP3_P2);
-		const Zp1 u123 = (u13 - Zp1(u23.get())) * Zp1(invP2_P1);
-		const uint64_t t = u23.get() * uint64_t(P3) + r3.get();
-		const uint96 n = uint96::mul_64_32(P2 * uint64_t(P3), u123.get()) + t;
+		const uint32_t r3i = r3.get();
+		const Zp1 u13 = (r1 - Zp1(r3i)) * Zp1(invP3_P1);
+		const Zp2 u23 = (r2 - Zp2(r3i)) * Zp2(invP3_P2);
+		const uint32_t u23i = u23.get();
+		const Zp1 u123 = (u13 - Zp1(u23i)) * Zp1(invP2_P1);
+		const uint96 n = uint96::mul_64_32(P2 * uint64_t(P3), u123.get()) + (u23i * uint64_t(P3) + r3i);
 		const uint96 P1P2P3 = uint96(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96(P1P2P3_2l, P1P2P3_2h);
 		const int96 r = n.is_greater(P1P2P3_2) ? (n - P1P2P3) : n.u2i();
 		return r;
@@ -394,7 +437,7 @@ private:
 
 	static void square(RNS * const z, const RNS * const wr, const RNS * const wri, const size_t mr, const size_t sr, const size_t jr)
 	{
-		if (mr >= 512)		// 32 KB / sizeof(RNS)
+		if (mr >= 256)		// 32 KB / sizeof(RNS)
 		{
 			forward4(z, wr, mr, sr, jr);
 			for (size_t l = 0; l < 4; ++l) square(z, wr, wri, mr / 4, 4 * sr, 4 * jr + l);
@@ -411,7 +454,7 @@ private:
 			const size_t size_4 = mr * sr;
 			if (m == 0)
 			{
-				for (size_t i = 0, j = mr * jr; i < mr; ++i, ++j) square_22(&z[4 * j], wr[2 * size_4 + j]);
+				for (size_t i = 0; i < mr; ++i) square_22(&z[4 * (mr * jr + i)], wr[2 * size_4 + (mr * jr + i)]);
 			}
 			else
 			{
@@ -428,7 +471,7 @@ private:
 
 	static void mul(RNS * const z, const RNS * const zp, const RNS * const wr, const RNS * const wri, const size_t mr, const size_t sr, const size_t jr)
 	{
-		if (mr >= 512)
+		if (mr >= 256)
 		{
 			forward4(z, wr, mr, sr, jr);
 			for (size_t l = 0; l < 4; ++l) mul(z, zp, wr, wri, mr / 4, 4 * sr, 4 * jr + l);

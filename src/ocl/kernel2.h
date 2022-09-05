@@ -36,7 +36,7 @@ static const char * const src_ocl_kernel2 = \
 "inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_inv)\n" \
 "{\n" \
 "	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.\n" \
-"	const ulong m = lhs * (ulong)(rhs), q = (m >> 32) * p_inv + m;\n" \
+"	const ulong m = lhs * (ulong)(rhs), q = (uint)(m >> 32) * (ulong)(p_inv) + m;\n" \
 "	uint r = (uint)m - (1 + (uint)(q >> 32)) * p;\n" \
 "	if (r > (uint)q) r += p;\n" \
 "	return (r >= p) ? r - p : r;\n" \

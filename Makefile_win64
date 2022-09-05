@@ -65,7 +65,8 @@ transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPUf64)
 #	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -c -S $< -o 512.asm
 
 transform_i32.o: $(SRC_DIR)/transform_i32.cpp $(DEPS_TRANSFORM_CPUi32)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c -S $< -o i32.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

@@ -104,10 +104,16 @@ public:
 			pTransform = transform::create_sse2(b, n, num_threads, num_regs);
 			ttype = "sse2";
 		}
-		else
+		else if (__builtin_cpu_supports("avx2") && (impl.empty() || (impl == "i32")))
 		{
 			pTransform = transform::create_i32(b, n, num_threads, num_regs);
 			ttype = "i32";
+		}
+		else
+		{
+			if (impl.empty()) throw std::runtime_error("processor must support sse2");
+			std::ostringstream ss; ss << impl << " is not supported";
+			throw std::runtime_error(ss.str());
 		}
 
 		return pTransform;

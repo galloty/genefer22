@@ -22,7 +22,7 @@ inline int boinc_finish(const int status) { std::cout << "boinc_finish(" << stat
 
 inline int boinc_resolve_filename(const char * const virtual_name, char * const physical_name, const int len)
 {
-	strncpy(physical_name, virtual_name, len - 1);
+	strncpy(physical_name, virtual_name, size_t(len - 1));
 	return 0;
 }
 

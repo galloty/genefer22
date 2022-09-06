@@ -183,7 +183,7 @@ public:
 		bool isZero = true;
 		for (size_t i = 0, size = _size; i < size; ++i)
 		{
-			const uint32_t a_i = d[i];
+			const uint32_t a_i = uint32_t(d[i]);
 			hash += a_i;
 			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * uint64_t(a_i) + 5) % 64);
 			isZero &= (a_i == 0);

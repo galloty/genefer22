@@ -74,7 +74,7 @@ public:
 
 	static fp16_80 sqrt(const uint32_t x)
 	{
-		const uint32_t s = std::lround(std::sqrt(double(x)));
+		const uint32_t s = uint32_t(std::lround(std::sqrt(double(x))));
 		fp16_80 a((s - 1) << 16), b((s + 1) << 16);
 
 		for (size_t i = 0; i < 100; ++i)

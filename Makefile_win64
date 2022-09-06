@@ -14,7 +14,7 @@ BOINC_LIB_DIR = $(BOINC_DIR)/lib_win64
 BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
 BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -ffinite-math-only -frename-registers
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 

@@ -21,7 +21,7 @@ private:
 public:
 	Zp() {}
 	explicit Zp(const uint32_t n) : _n(n) {}
-	explicit Zp(const int32_t i) : _n((i < 0) ? i + p : i) {}
+	explicit Zp(const int32_t i) : _n((i < 0) ? p - uint32_t(-i) : uint32_t(i)) {}
 
 	uint32_t get() const { return _n; }
 	int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
@@ -265,7 +265,7 @@ private:
 	{
 		// 1- t < 2^63 => t_h < 2^34. We must have t_h < 2^29 b => b > 32
 		// 2- t < 2^22 b^2 => t_h < b^2 / 2^7. If 2 <= b < 32 then t_h < 32^2 / 2^7 = 2^8 < 2^29 b
-		const uint64_t t = std::abs(f);
+		const uint64_t t = uint64_t(std::abs(f));
 		const uint64_t t_h = t >> 29;
 		const uint32_t t_l = uint32_t(t) & ((uint32_t(1) << 29) - 1);
 
@@ -512,8 +512,7 @@ private:
 		int96 f96 = int96(0);
 		for (size_t k = 0; k < n; ++k)
 		{
-			const RNS zn = z[k] * norm;
-			int96 l = garner3(zn.r1(), zn.r2(), zn.r3());
+			int96 l = garner3(z[k].r1() * norm.r1(), z[k].r2() * norm.r2(), z[k].r3() * norm.r3());
 			if (dup) l += l;
 			f96 += l;
 			const int32_t r = reduce96(f96, b, b_inv, b_s);

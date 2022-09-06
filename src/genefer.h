@@ -343,7 +343,7 @@ private:
 		for (int i = int(mpz_sizeinbase(e, 2) - 1); i >= 0; --i)
 		{
 			pTransform->squareDup(false);
-			if (mpz_tstbit(e, i) != 0) pTransform->mul();
+			if (mpz_tstbit(e, mp_bitcnt_t(i)) != 0) pTransform->mul();
 		}
 	}
 
@@ -407,7 +407,7 @@ private:
 				else if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
-			pTransform->squareDup(mpz_tstbit(exponent, i) != 0);
+			pTransform->squareDup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
 			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
 			// if (i == 0) pTransform->add1();	// => invalid
 			if ((i % B_GL == 0) && (i / B_GL != 0))
@@ -420,7 +420,7 @@ private:
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
 				pTransform->getInt(gi);
-				file ckptFile(ckptFilename(i / B_PL), "wb", true);
+				file ckptFile(ckptFilename(size_t(i / B_PL)), "wb", true);
 				gi.write(ckptFile);
 				ckptFile.write_crc32();
 			}
@@ -461,9 +461,9 @@ private:
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
 		while (mpz_sgn(e) != 0)
 		{
-			mpz_mod_2exp(t, e, B_GL);
+			mpz_mod_2exp(t, e, (unsigned long int)(B_GL));
 			mpz_add(res, res, t);
-			mpz_div_2exp(e, e, B_GL);
+			mpz_div_2exp(e, e, (unsigned long int)(B_GL));
 		}
 		mpz_clear(e); mpz_clear(t);
 
@@ -474,7 +474,7 @@ private:
 			if (_isBoinc) boincMonitor();
 			if (_quit) { mpz_clear(res); return false; }
 
-			pTransform->squareDup(mpz_tstbit(res, i) != 0);
+			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
 		}
 
 		mpz_clear(res);
@@ -705,9 +705,9 @@ private:
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
 		for (size_t i = 0; i < L; i++)
 		{
-			mpz_mod_2exp(t, e, B);
+			mpz_mod_2exp(t, e, (unsigned long int)(B));
 			mpz_addmul(p2, t, w[i]);
-			mpz_div_2exp(e, e, B);
+			mpz_div_2exp(e, e, (unsigned long int)(B));
 		}
 		mpz_clear(e); mpz_clear(t);
 
@@ -807,7 +807,7 @@ private:
 				else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
-			pTransform->squareDup(mpz_tstbit(p2, i) != 0);
+			pTransform->squareDup(mpz_tstbit(p2, mp_bitcnt_t(i)) != 0);
 		}
 
 		mpz_clear(p2);

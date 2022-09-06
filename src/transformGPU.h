@@ -30,7 +30,7 @@ private:
 
 public:
 	Zp() {}
-	explicit Zp(const int32_t i) : _n(i + ((i < 0) ? p : 0)) {}
+	explicit Zp(const int32_t i) : _n((i < 0) ? p - cl_uint(-i) : cl_uint(i)) {}
 
 	cl_uint get() const { return _n; }
 	int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
@@ -349,7 +349,7 @@ public:
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
-		_pSplit = new splitter(_ln, CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -390,7 +390,8 @@ private:
 	void fb(cl_kernel & kernel, const int lm, const size_t localWorkSize)
 	{
 		const size_t n_4 = _n / 4;
-		const cl_int ilm = cl_int(lm), is = cl_uint(n_4 >> lm);
+		const cl_int ilm = cl_int(lm);
+		const cl_uint is = cl_uint(n_4 >> lm);
 		cl_uint index = (RNS_SIZE == 3) ? 4 : 2;
 		_setKernelArg(kernel, index++, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &is);
@@ -884,7 +885,7 @@ public:
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, n, isBoinc, verbose);
+		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, int(n), isBoinc, verbose);
 
 		std::ostringstream src;
 

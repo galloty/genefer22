@@ -216,7 +216,7 @@ public:
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
 				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				b = std::atoi(bstr.c_str());
+				b = uint32_t(std::atoi(bstr.c_str()));
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
 				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
@@ -224,7 +224,7 @@ public:
 			if (arg.substr(0, 2) == "-n")
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				n = std::atoi(nstr.c_str());
+				n = uint32_t(std::atoi(nstr.c_str()));
 				if (n < 12) throw std::runtime_error("n < 12 is not supported");
 				if (n > 22) throw std::runtime_error("n > 22 is not supported");
 			}
@@ -260,22 +260,22 @@ public:
 			if (arg.substr(0, 2) == "-d")
 			{
 				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				device = std::atoi(dstr.c_str());
+				device = size_t(std::atoi(dstr.c_str()));
 			}
 			if (arg.substr(0, 8) == "--device")
 			{
 				const std::string dstr = ((arg == "--device") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				device = std::atoi(dstr.c_str());
+				device = size_t(std::atoi(dstr.c_str()));
 			}
 			if (arg.substr(0, 2) == "-t")
 			{
 				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				nthreads = std::min(std::atoi(ntstr.c_str()), 64);
+				nthreads = size_t(std::min(std::atoi(ntstr.c_str()), 64));
 			}
 			if (arg.substr(0, 10) == "--nthreads")
 			{
 				const std::string ntstr = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
-				nthreads =  std::min(std::atoi(ntstr.c_str()), 64);
+				nthreads = size_t(std::min(std::atoi(ntstr.c_str()), 64));
 			}
 			if (arg.substr(0, 2) == "-x")
 			{

@@ -360,8 +360,9 @@ static constexpr Complex cs2pi_5_32 = Complex(0.55557023301960222474283081394853
 template<size_t N>
 class Vradix4
 {
-private:
 	using Vc = Vcx<N>;
+
+private:
 	Vc z[4];
 
 public:
@@ -436,8 +437,9 @@ public:
 template<size_t N>
 class Vradix8
 {
-private:
 	using Vc = Vcx<N>;
+
+private:
 	Vc z[8];
 
 public:
@@ -483,8 +485,9 @@ public:
 template<size_t N>
 class Vcx8
 {
-private:
 	using Vc = Vcx<N>;
+
+private:
 	Vc z[8];
 
 private:
@@ -654,12 +657,12 @@ public:
 template<size_t N, size_t VSIZE, bool IBASE>
 class transformCPUf64 : public transform
 {
-private:
 	using Vc = Vcx<VSIZE>;
 	using Vr4 = Vradix4<VSIZE>;
 	using Vr8 = Vradix8<VSIZE>;
 	using Vc8 = Vcx8<VSIZE>;
 
+private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
 	// n_io must be a power of 4, n_io >= 64, n >= 16 * n_io, n >= num_threads * n_io.
 	static const size_t n_io = (N <= (1 << 11)) ? 64 : (N <= (1 << 13)) ? 256 : (N <= (1 << 17)) ? 1024 : 4096;

@@ -28,35 +28,35 @@ private:
 	uint32_t _n;
 
 public:
-	Zp() {}
-	explicit Zp(const uint32_t n) : _n(n) {}
-	explicit Zp(const int32_t i) : _n((i < 0) ? p - uint32_t(-i) : uint32_t(i)) {}
+	finline Zp() {}
+	finline explicit Zp(const uint32_t n) : _n(n) {}
+	finline explicit Zp(const int32_t i) : _n((i < 0) ? p - uint32_t(-i) : uint32_t(i)) {}
 
-	uint32_t get() const { return _n; }
-	int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
+	finline uint32_t get() const { return _n; }
+	finline int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
 
-	Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
+	finline Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
 
-	Zp operator+(const Zp & rhs) const
+	finline Zp operator+(const Zp & rhs) const
 	{
 		const uint32_t c = (_n >= p - rhs._n) ? p : 0;
 		return Zp(_n + rhs._n - c);
 	}
 
-	Zp operator-(const Zp & rhs) const
+	finline Zp operator-(const Zp & rhs) const
 	{
 		const uint32_t c = (_n < rhs._n) ? p : 0;
 		return Zp(_n - rhs._n + c);
 	}
 
-	Zp operator*(const Zp & rhs) const
+	finline Zp operator*(const Zp & rhs) const
 	{
 		return Zp(uint32_t((_n * uint64_t(rhs._n)) % p));
 	}
 
-	Zp & operator+=(const Zp & rhs) { *this = *this + rhs; return *this; }
-	Zp & operator-=(const Zp & rhs) { *this = *this - rhs; return *this; }
-	Zp & operator*=(const Zp & rhs) { *this = *this * rhs; return *this; }
+	finline Zp & operator+=(const Zp & rhs) { *this = *this + rhs; return *this; }
+	finline Zp & operator-=(const Zp & rhs) { *this = *this - rhs; return *this; }
+	finline Zp & operator*=(const Zp & rhs) { *this = *this * rhs; return *this; }
 
 	Zp pow(const uint32_t e) const
 	{
@@ -89,20 +89,19 @@ private:
 	Zp3 _r3;
 
 public:
-	RNS() {}
-	explicit RNS(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
-	explicit RNS(const int32_t i) : _r1(i), _r2(i), _r3(i) {}
+	finline RNS() {}
+	finline explicit RNS(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
+	finline explicit RNS(const int32_t i) : _r1(i), _r2(i), _r3(i) {}
 
-	Zp1 r1() const { return _r1; }
-	Zp2 r2() const { return _r2; }
-	Zp3 r3() const { return _r3; }
+	finline Zp1 r1() const { return _r1; }
+	finline Zp2 r2() const { return _r2; }
+	finline Zp3 r3() const { return _r3; }
 
 	RNS pow(const uint32_t e) const { return RNS(_r1.pow(e), _r2.pow(e), _r3.pow(e)); }
 
 	static RNS norm(const uint32_t n) { return RNS(Zp1::norm(n), Zp2::norm(n), Zp3::norm(n)); }
 	static const RNS prRoot_n(const uint32_t n) { return RNS(Zp1::prRoot_n(n), Zp2::prRoot_n(n), Zp3::prRoot_n(n)); }
 };
-
 
 template <uint32_t p, uint32_t p_inv, uint32_t prRoot>
 class Zp4
@@ -114,33 +113,35 @@ private:
 	static constexpr __v8su p0123 = { p, 0, p, 0, p, 0, p, 0 };
 	static constexpr __v8su p0123_inv = { p_inv, 0, p_inv, 0, p_inv, 0, p_inv, 0 };
 
-private:
-	constexpr explicit Zp4(const __v8su & n0123) : _n0123(n0123) {}
-
 public:
 	Zp4() {}
-	explicit Zp4(const Zpp & z0, const Zpp & z1, const Zpp & z2, const Zpp & z3)
+	finline explicit Zp4(const __v8su & n0123) : _n0123(n0123) {}
+	finline explicit Zp4(const Zpp & z) : _n0123(__v8su(_mm256_set1_epi32(int(z.get())))) {}
+	finline explicit Zp4(const Zpp & z0, const Zpp & z1, const Zpp & z2, const Zpp & z3)
 	{
 		_n0123[0] = z0.get(); _n0123[2] = z1.get(); _n0123[4] = z2.get(); _n0123[6] = z3.get();
 	}
 
+	finline __v8su get32() const { return _n0123; }
+	finline __v4du get64() const { return __v4du(_n0123); }
+
 	finline Zpp operator[](const size_t i) const { return Zpp(_n0123[2 * i]); }
 
-	Zp4 operator-() const { return Zp4((_n0123 != 0) & (p0123 - _n0123)); }
+	finline Zp4 operator-() const { return Zp4((_n0123 != 0) & (p0123 - _n0123)); }
 
-	Zp4 operator+(const Zp4 & rhs) const
+	finline Zp4 operator+(const Zp4 & rhs) const
 	{
 		const __v8su c = (_n0123 >= p0123 - rhs._n0123) & p0123;
 		return Zp4(_n0123 + rhs._n0123 - c);
 	}
 
-	Zp4 operator-(const Zp4 & rhs) const
+	finline Zp4 operator-(const Zp4 & rhs) const
 	{
 		const __v8su c = (_n0123 < rhs._n0123) & p0123;
 		return Zp4(_n0123 - rhs._n0123 + c);
 	}
 
-	Zp4 operator*(const Zp4 & rhs) const
+	finline Zp4 operator*(const Zp4 & rhs) const
 	{
 		// const uint64_t m = _n * uint64_t(rhs._n)
 		const __v8su m = (__v8su)_mm256_mul_epu32((__m256i)_n0123, (__m256i)rhs._n0123);
@@ -162,9 +163,9 @@ public:
 		return Zp4(r);
 	}
 
-	Zp4 & operator+=(const Zp4 & rhs) { *this = *this + rhs; return *this; }
-	Zp4 & operator-=(const Zp4 & rhs) { *this = *this - rhs; return *this; }
-	Zp4 & operator*=(const Zp4 & rhs) { *this = *this * rhs; return *this; }
+	finline Zp4 & operator+=(const Zp4 & rhs) { *this = *this + rhs; return *this; }
+	finline Zp4 & operator-=(const Zp4 & rhs) { *this = *this - rhs; return *this; }
+	finline Zp4 & operator*=(const Zp4 & rhs) { *this = *this * rhs; return *this; }
 
 	finline void forward_4(const Zpp & w1, const Zpp & w2, const Zpp & w3)
 	{
@@ -188,48 +189,111 @@ typedef Zp4<P3, P3_inv, 7> Zp4_3;
 class RNS4
 {
 private:
-	Zp4_1 _z1;
-	Zp4_2 _z2;
-	Zp4_3 _z3;
+	Zp4_1 _r1;
+	Zp4_2 _r2;
+	Zp4_3 _r3;
 
 private:
-	explicit RNS4(const Zp4_1 & z1, const Zp4_2 & z2, const Zp4_3 & z3) : _z1(z1), _z2(z2), _z3(z3) {}
+	finline explicit RNS4(const Zp4_1 & r1, const Zp4_2 & r2, const Zp4_3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
 
 public:
 	finline explicit RNS4() {}
+	finline explicit RNS4(const RNS & s) : _r1(s.r1()), _r2(s.r2()), _r3(s.r3()) {}
 	finline explicit RNS4(const RNS & s0, const RNS & s1, const RNS & s2, const RNS & s3)
-	{
-		_z1 = Zp4_1(s0.r1(), s1.r1(), s2.r1(), s3.r1());
-		_z2 = Zp4_2(s0.r2(), s1.r2(), s2.r2(), s3.r2());
-		_z3 = Zp4_3(s0.r3(), s1.r3(), s2.r3(), s3.r3());
-	}
+		: _r1(s0.r1(), s1.r1(), s2.r1(), s3.r1()), _r2(s0.r2(), s1.r2(), s2.r2(), s3.r2()), _r3(s0.r3(), s1.r3(), s2.r3(), s3.r3()) {}
 
-	finline RNS operator[](const size_t i) const { return RNS(_z1[i], _z2[i], _z3[i]); }
+	finline Zp4_1 r1() const { return _r1; }
+	finline Zp4_2 r2() const { return _r2; }
+	finline Zp4_3 r3() const { return _r3; }
 
-	RNS4 operator-() const { return RNS4(-_z1, -_z2, -_z3); }
+	finline RNS operator[](const size_t i) const { return RNS(_r1[i], _r2[i], _r3[i]); }
 
-	RNS4 operator+(const RNS4 & rhs) const { return RNS4(_z1 + rhs._z1, _z2 + rhs._z2, _z3 + rhs._z3); }
-	RNS4 operator-(const RNS4 & rhs) const { return RNS4(_z1 - rhs._z1, _z2 - rhs._z2, _z3 - rhs._z3); }
-	RNS4 operator*(const RNS4 & rhs) const { return RNS4(_z1 * rhs._z1, _z2 * rhs._z2, _z3 * rhs._z3); }
+	finline RNS4 operator-() const { return RNS4(-_r1, -_r2, -_r3); }
 
-	RNS4 & operator+=(const RNS4 & rhs) { *this = *this + rhs; return *this; }
-	RNS4 & operator-=(const RNS4 & rhs) { *this = *this - rhs; return *this; }
-	RNS4 & operator*=(const RNS4 & rhs) { *this = *this * rhs; return *this; }
+	finline RNS4 operator+(const RNS4 & rhs) const { return RNS4(_r1 + rhs._r1, _r2 + rhs._r2, _r3 + rhs._r3); }
+	finline RNS4 operator-(const RNS4 & rhs) const { return RNS4(_r1 - rhs._r1, _r2 - rhs._r2, _r3 - rhs._r3); }
+	finline RNS4 operator*(const RNS4 & rhs) const { return RNS4(_r1 * rhs._r1, _r2 * rhs._r2, _r3 * rhs._r3); }
+
+	finline RNS4 & operator+=(const RNS4 & rhs) { *this = *this + rhs; return *this; }
+	finline RNS4 & operator-=(const RNS4 & rhs) { *this = *this - rhs; return *this; }
+	finline RNS4 & operator*=(const RNS4 & rhs) { *this = *this * rhs; return *this; }
 
 	finline void forward_4(const RNS & w1, const RNS & w2, const RNS & w3)
 	{
-		_z1.forward_4(w1.r1(), w2.r1(), w3.r1());
-		_z2.forward_4(w1.r2(), w2.r2(), w3.r2());
-		_z3.forward_4(w1.r3(), w2.r3(), w3.r3());
+		_r1.forward_4(w1.r1(), w2.r1(), w3.r1());
+		_r2.forward_4(w1.r2(), w2.r2(), w3.r2());
+		_r3.forward_4(w1.r3(), w2.r3(), w3.r3());
 	}
 
 	finline void backward_4(const RNS & wi1, const RNS & wi2, const RNS & wi3)
 	{
-		_z1.backward_4(wi1.r1(), wi2.r1(), wi3.r1());
-		_z2.backward_4(wi1.r2(), wi2.r2(), wi3.r2());
-		_z3.backward_4(wi1.r3(), wi2.r3(), wi3.r3());
+		_r1.backward_4(wi1.r1(), wi2.r1(), wi3.r1());
+		_r2.backward_4(wi1.r2(), wi2.r2(), wi3.r2());
+		_r3.backward_4(wi1.r3(), wi2.r3(), wi3.r3());
 	}
 };
+
+class int64_4
+{
+private:
+	__v4di _n0123;
+
+public:
+	int64_4() {}
+	finline explicit int64_4(const __v4di & n0123) : _n0123(n0123) {}
+	finline explicit int64_4(const int64_t n) : _n0123(__v4di(_mm256_set1_epi64x((long long)(n)))) {}
+	finline explicit int64_4(const int64_t n0, const int64_t n1, const int64_t n2, const int64_t n3)
+	{
+		_n0123[0] = n0; _n0123[1] = n1; _n0123[2] = n2; _n0123[3] = n3;
+	}
+
+	finline int64_t operator[](const size_t i) const { return int64_t(_n0123[i]); }
+
+	finline int64_4 operator+(const int64_4 & rhs) const { return int64_4(_n0123 + rhs._n0123); }
+};
+
+class uint64_4
+{
+private:
+	__v4du _n0123;
+	static constexpr __v8su mask32 = { (unsigned int)(-1), 0, (unsigned int)(-1), 0, (unsigned int)(-1), 0, (unsigned int)(-1), 0 };
+
+public:
+	uint64_4() {}
+	finline explicit uint64_4(const __v4du & n0123) : _n0123(n0123) {}
+	finline explicit uint64_4(const uint32_t n) : _n0123(__v4du(_mm256_set1_epi64x((long long)(n)))) {}
+	finline explicit uint64_4(const uint64_t n) : _n0123(__v4du(_mm256_set1_epi64x((long long)(n)))) {}
+	finline explicit uint64_4(const __v8su & n0123) : _n0123(__v4du(_mm256_and_si256(__m256i(n0123), __m256i(mask32)))) {}
+	finline explicit uint64_4(const uint64_t n0, const uint64_t n1, const uint64_t n2, const uint64_t n3)
+	{
+		_n0123[0] = n0; _n0123[1] = n1; _n0123[2] = n2; _n0123[3] = n3;
+	}
+
+	finline uint64_t operator[](const size_t i) const { return uint64_t(_n0123[i]); }
+
+	finline int64_4 u2i() const { return int64_4(__v4di(_n0123)); }
+
+	finline uint64_4 cast32() const { return uint64_4(__v4du(_mm256_and_si256(__m256i(_n0123), __m256i(mask32)))); }
+
+	finline uint64_4 operator==(const uint64_4 & rhs) const { return uint64_4(__v4du(_n0123 == rhs._n0123)); }
+	finline uint64_4 operator<(const uint64_4 & rhs) const { return uint64_4(__v4du(_n0123 < rhs._n0123)); }
+	finline uint64_4 operator>(const uint64_4 & rhs) const { return uint64_4(__v4du(_n0123 > rhs._n0123)); }
+
+	finline uint64_4 operator&(const uint64_4 & rhs) const { return uint64_4(_n0123 & rhs._n0123); }
+	finline uint64_4 operator|(const uint64_4 & rhs) const { return uint64_4(_n0123 | rhs._n0123); }
+
+	finline uint64_4 operator+(const uint64_4 & rhs) const { return uint64_4(_n0123 + rhs._n0123); }
+	finline uint64_4 operator-(const uint64_4 & rhs) const { return uint64_4(_n0123 - rhs._n0123); }
+
+	finline uint64_4 operator*(const uint64_4 & rhs) const
+	{
+		return uint64_4(__v4du(_mm256_mul_epu32(__m256i(_n0123), __m256i(rhs._n0123))));
+	}
+
+	finline uint64_4 operator>>(const int s) const { return uint64_4(_n0123 >> s); }
+	finline uint64_4 operator<<(const int s) const { return uint64_4(_n0123 << s); }
+};
+
 
 
 class int96
@@ -239,22 +303,22 @@ private:
 	int32_t  _hi;
 
 public:
-	int96() {}
-	int96(const uint64_t lo, const int32_t hi) : _lo(lo), _hi(hi) {}
-	int96(const int64_t n) : _lo(uint64_t(n)), _hi((n < 0) ? -1 : 0) {}
+	finline int96() {}
+	finline int96(const uint64_t lo, const int32_t hi) : _lo(lo), _hi(hi) {}
+	finline int96(const int64_t n) : _lo(uint64_t(n)), _hi((n < 0) ? -1 : 0) {}
 
-	uint64_t lo() const { return _lo; }
-	int32_t hi() const { return _hi; }
+	finline uint64_t lo() const { return _lo; }
+	finline int32_t hi() const { return _hi; }
 
-	bool is_neg() const { return (_hi < 0); }
+	finline bool is_neg() const { return (_hi < 0); }
 
-	int96 operator-() const
+	finline int96 operator-() const
 	{
 		const int32_t c = (_lo != 0) ? 1 : 0;
 		return int96(-_lo, -_hi - c);
 	}
 
-	int96 & operator+=(const int96 & rhs)
+	finline int96 & operator+=(const int96 & rhs)
 	{
 		const uint64_t lo = _lo + rhs._lo;
 		const int32_t c = (lo < rhs._lo) ? 1 : 0;
@@ -270,36 +334,36 @@ private:
 	uint32_t _hi;
 
 public:
-	uint96(const uint64_t lo, const uint32_t hi) : _lo(lo), _hi(hi) {}
-	uint96(const int96 & rhs) : _lo(rhs.lo()), _hi(uint32_t(rhs.hi())) {}
+	finline uint96(const uint64_t lo, const uint32_t hi) : _lo(lo), _hi(hi) {}
+	finline uint96(const int96 & rhs) : _lo(rhs.lo()), _hi(uint32_t(rhs.hi())) {}
 
-	uint64_t lo() const { return _lo; }
-	uint32_t hi() const { return _hi; }
+	finline uint64_t lo() const { return _lo; }
+	finline uint32_t hi() const { return _hi; }
 
-	int96 u2i() const { return int96(_lo, int32_t(_hi)); }
+	finline int96 u2i() const { return int96(_lo, int32_t(_hi)); }
 
-	bool is_greater(const uint96 & rhs) const { return (_hi > rhs._hi) || ((_hi == rhs._hi) && (_lo > rhs._lo)); }
+	finline bool is_greater(const uint96 & rhs) const { return (_hi > rhs._hi) || ((_hi == rhs._hi) && (_lo > rhs._lo)); }
 
-	uint96 operator+(const uint64_t & rhs) const
+	finline uint96 operator+(const uint64_t & rhs) const
 	{
 		const uint64_t lo = _lo + rhs;
 		const uint32_t c = (lo < rhs) ? 1 : 0;
 		return uint96(lo, _hi + c);
 	}
 
-	int96 operator-(const uint96 & rhs) const
+	finline int96 operator-(const uint96 & rhs) const
 	{
 		const uint32_t c = (_lo < rhs._lo) ? 1 : 0;
 		return int96(_lo - rhs._lo, int32_t(_hi - rhs._hi - c));
 	}
 
-	static uint96 mul_64_32(const uint64_t x, const uint32_t y)
+	finline static uint96 mul_64_32(const uint64_t x, const uint32_t y)
 	{
 		const uint64_t l = uint64_t(uint32_t(x)) * y, h = (x >> 32) * y + (l >> 32);
 		return uint96((h << 32) | uint32_t(l), uint32_t(h >> 32));
 	}
 
-	static uint96 abs(const int96 & rhs)
+	finline static uint96 abs(const int96 & rhs)
 	{
 		return uint96(rhs.is_neg() ? -rhs : rhs);
 	}
@@ -308,38 +372,64 @@ public:
 class int96_4
 {
 private:
-	int96 _n[4];
+	uint64_4 _lo;
+	int64_4 _hi;
+	// int96 _n[4];
 
 public:
-	// int96_4() {}
-	// int96(const uint64_t lo, const int32_t hi) : _lo(lo), _hi(hi) {}
-
 	finline explicit int96_4(const int96 & n0, const int96 & n1, const int96 & n2, const int96 & n3)
 	{
-		_n[0] = n0; _n[1] = n1; _n[2] = n2; _n[3] = n3;
+		_lo = uint64_4(n0.lo(), n1.lo(), n2.lo(), n3.lo());
+		_hi = int64_4(n0.hi(), n1.hi(), n2.hi(), n3.hi());
 	}
-	int96_4(const int64_t n)
+	finline int96_4(const uint64_4 & lo, const int64_4 & hi) : _lo(lo), _hi(hi) {}
+	finline int96_4(const int64_t n) : _lo(uint64_t(n)), _hi((n < 0) ? int64_t(-1) : int64_t(0)) {}
+
+	finline int96 operator[](const size_t i) const { return int96(_lo[i], int32_t(_hi[i])); }
+
+	finline int96_4 operator+(const int96_4 & rhs) const
 	{
-		for (size_t i = 0; i < 4; ++i) _n[i] = int96(n);
+		const uint64_4 lo = _lo + rhs._lo;
+		const uint64_4 c = (lo < _lo) & uint64_4(1u);
+		return int96_4(lo, _hi + rhs._hi + c.u2i());
 	}
 
-	// uint64_t lo() const { return _lo; }
-	// int32_t hi() const { return _hi; }
+	finline int96_4 & operator+=(const int96_4 & rhs) { *this = *this + rhs; return *this; }
+};
 
-	finline int96 & operator[](const size_t i) { return _n[i]; }
+class uint96_4
+{
+private:
+	uint64_4 _lo, _hi;
 
-	// bool is_neg() const { return (_hi < 0); }
+public:
+	finline uint96_4(const uint64_4 & lo, const uint64_4 & hi) : _lo(lo), _hi(hi) {}
 
-	// int96 operator-() const
-	// {
-	// 	const int32_t c = (_lo != 0) ? 1 : 0;
-	// 	return int96(-_lo, -_hi - c);
-	// }
+	finline uint96 operator[](const size_t i) const { return uint96(_lo[i], uint32_t(_hi[i])); }
 
-	int96_4 & operator+=(const int96_4 & rhs)
+	finline int96_4 u2i() const { return int96_4(_lo, _hi.u2i()); }
+
+	finline uint64_4 is_greater(const uint96_4 & rhs) const { return (_hi > rhs._hi) | ((_hi == rhs._hi) & (_lo > rhs._lo)); }
+
+	finline uint96_4 operator&(const uint64_4 & mask) const { return uint96_4(_lo & mask, _hi & mask); }
+
+	finline uint96_4 operator+(const uint64_4 & rhs) const
 	{
-		for (size_t i = 0; i < 4; ++i) _n[i] += rhs._n[i];
-		return *this;
+		const uint64_4 lo = _lo + rhs;
+		const uint64_4 c = (lo < rhs) & uint64_4(1u);
+		return uint96_4(lo, _hi + c);
+	}
+
+	finline uint96_4 operator-(const uint96_4 & rhs) const
+	{
+		const uint64_4 c = (_lo < rhs._lo) & uint64_4(1u);
+		return uint96_4(_lo - rhs._lo, _hi - rhs._hi - c);
+	}
+
+	finline static uint96_4 mul_64_32(const uint64_4 & x, const uint64_4 & y)
+	{
+		const uint64_4 l = x * y, h = (x >> 32) * y + (l >> 32);
+		return uint96_4((h << 32) | l.cast32(), h >> 32);
 	}
 };
 
@@ -415,25 +505,24 @@ private:
 		return r;
 	}
 
-	finline static int96 garner3(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3)
+	finline static int96_4 garner3(const RNS4 & s)
 	{
-		const uint32_t invP2_P1	= 1822724754u;		// 1 / P2 mod P1
-		const uint32_t invP3_P1	= 607574918u;		// 1 / P3 mod P1
-		const uint32_t invP3_P2	= 2995931465u;		// 1 / P3 mod P2
-		const uint64_t P1P2P3l = 15383592652180029441ull;
-		const uint32_t P1P2P3h = 3942432002u;
-		const uint64_t P1P2P3_2l = 7691796326090014720ull;
-		const uint32_t P1P2P3_2h = 1971216001u;
+		const Zp1 invP2_P1 = Zp1(1822724754u);		// 1 / P2 mod P1
+		const Zp1 invP3_P1 = Zp1(607574918u);		// 1 / P3 mod P1
+		const Zp2 invP3_P2 = Zp2(2995931465u);		// 1 / P3 mod P2
+		const uint96_4 P1P2P3 = uint96_4(uint64_4(15383592652180029441ull), uint64_4(3942432002u));
+		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(7691796326090014720ull), uint64_4(1971216001u));
 
-		const uint32_t r3i = r3.get();
-		const Zp1 u13 = (r1 - Zp1(r3i)) * Zp1(invP3_P1);
-		const Zp2 u23 = (r2 - Zp2(r3i)) * Zp2(invP3_P2);
-		const uint32_t u23i = u23.get();
-		const Zp1 u123 = (u13 - Zp1(u23i)) * Zp1(invP2_P1);
-		const uint96 n = uint96::mul_64_32(P2 * uint64_t(P3), u123.get()) + (u23i * uint64_t(P3) + r3i);
-		const uint96 P1P2P3 = uint96(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96(P1P2P3_2l, P1P2P3_2h);
-		const int96 r = n.is_greater(P1P2P3_2) ? (n - P1P2P3) : n.u2i();
-		return r;
+		const auto r3 = s.r3().get32();
+		const Zp4_1 u13 = (s.r1() - Zp4_1(r3)) * Zp4_1(invP3_P1);
+		const Zp4_2 u23 = (s.r2() - Zp4_2(r3)) * Zp4_2(invP3_P2);
+		const Zp4_1 u123 = (u13 - Zp4_1(u23.get32())) * Zp4_1(invP2_P1);
+
+		const uint64_4 t = uint64_4(u23.get32()) * uint64_4(P3) + uint64_4(r3);
+		const uint96_4 n = uint96_4::mul_64_32(uint64_4(P2 * uint64_t(P3)), uint64_4(u123.get32())) + t;
+
+		const uint96_4 r = n - (P1P2P3 & n.is_greater(P1P2P3_2));
+		return r.u2i();
 	}
 
 public:
@@ -686,17 +775,14 @@ private:
 
 		for (size_t k = 0; k < n; ++k)
 		{
-			RNS zk[4]; for (size_t i = 0; i < 4; ++i) zk[i] = z[k][i];
-			int96_4 l = int96_4(
-				garner3(zk[0].r1() * norm.r1(), zk[0].r2() * norm.r2(), zk[0].r3() * norm.r3()),
-				garner3(zk[1].r1() * norm.r1(), zk[1].r2() * norm.r2(), zk[1].r3() * norm.r3()),
-				garner3(zk[2].r1() * norm.r1(), zk[2].r2() * norm.r2(), zk[2].r3() * norm.r3()),
-				garner3(zk[3].r1() * norm.r1(), zk[3].r2() * norm.r2(), zk[3].r3() * norm.r3())
-			);
+			RNS4 zk = z[k] * RNS4(norm);
+			RNS _zk[4]; for (size_t i = 0; i < 4; ++i) _zk[i] = zk[i];
+			int96_4 l = garner3(zk);
 			if (dup) l += l;
 			f96 += l;
-			int32_t r[4];
-			for (size_t i = 0; i < 4; ++i) r[i] = reduce96(f96[i], b, b_inv, b_s);
+			int32_t r[4]; int96 f[4];
+			for (size_t i = 0; i < 4; ++i) { f[i] = f96[i]; r[i] = reduce96(f[i], b, b_inv, b_s); }
+			f96 = int96_4(f[0], f[1], f[2], f[3]);
 			z[k] = RNS4(RNS(r[0]), RNS(r[1]), RNS(r[2]), RNS(r[3]));
 		}
 

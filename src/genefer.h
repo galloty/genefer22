@@ -62,6 +62,7 @@ private:
 	gint * _gi = nullptr;
 	std::string _mainFilename;
 	int _print_range = 0, _print_i = 0;
+	bool _print_sr = true;
 
 public:
 	void quit() { _quit = true; }
@@ -267,6 +268,16 @@ private:
 		return true;
 	}
 
+	void printState(const bool suspended)
+	{
+		if (_print_sr)
+		{
+			std::ostringstream ss_s; ss_s << "Boinc client is " << (suspended ? "suspended." : "resumed.") << std::endl;
+			pio::print(ss_s.str());
+		}
+		if (!suspended) _print_sr = false;
+	}
+
 	void boincMonitor()
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
@@ -275,18 +286,14 @@ private:
 			
 		if (status.suspended != 0)
 		{
-			std::ostringstream ss_s; ss_s << "Boinc client is suspended." << std::endl;
-			pio::print(ss_s.str());
-
+			printState(true);
 			while (status.suspended != 0)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
 				if (boincQuitRequest(status)) { quit(); return; }
 			}
-
-			std::ostringstream ss_r; ss_r << "Boinc client is resumed." << std::endl;
-			pio::print(ss_r.str());
+			printState(false);
 		}
 	}
 
@@ -301,18 +308,14 @@ private:
 			
 		if (status.suspended != 0)
 		{
-			std::ostringstream ss_s; ss_s << "Boinc client is suspended." << std::endl;
-			pio::print(ss_s.str());
-
+			printState(true);
 			while (status.suspended != 0)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
 				if (boincQuitRequest(status)) { quit(); return true; }
 			}
-
-			std::ostringstream ss_r; ss_r << "Boinc client is resumed." << std::endl;
-			pio::print(ss_r.str());
+			printState(false);
 		}
 
 		if (boinc_time_to_checkpoint() != 0)
@@ -942,7 +945,7 @@ private:
 	}
 
 public:
-	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth)
+	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth, const bool oldfashion = false)
 	{
 		const bool emptyMainFilename = _mainFilename.empty();
 		if (emptyMainFilename)
@@ -1013,15 +1016,39 @@ public:
 				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				clearline();
-				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, 0, res64, old64, testTime + validTime);
-				else if (!_quit) ss << ": validation failed!";
-				else ss << ": terminated.";
-				ss << std::endl; pio::print(ss.str());
-				if (success)
+				if (oldfashion)
 				{
-					pio::result(ss.str());
-					if (!_isBoinc) clearContext();
+					std::ostringstream ss; ss << b << "^" << (1 << n) << "+1";
+					if (success) ss << " is complete, time = " << timer::formatTime(testTime + validTime) << ".";
+					else if (!_quit) ss << ": validation failed!";
+					else ss << ": terminated.";
+					ss << std::endl; pio::print(ss.str());
+					pio::result(ss.str(), "genefer.log");
+					if (success)
+					{
+						std::ostringstream ssres; ssres << std::hex << std::setfill('0') << std::setw(16) << old64;
+						std::ostringstream ssr; ssr << b << "^" << (1 << n) << "+1 is ";
+						if (isPrp) ssr << "a probable prime."; else ssr << "composite. (RES=" << ssres.str() << ")";
+						ssr << " (" << uint32_t((1 << n) * log(double(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
+							<< timer::formatTime(testTime + validTime) << ") ";
+						time_t ltime; time(&ltime);
+						ssr << std::string(asctime(localtime(&ltime))).substr(11, 8) << std::endl;
+						pio::result(ssr.str(), "out");
+						if (!_isBoinc) clearContext();
+					}
+				}
+				else
+				{
+					std::ostringstream ss; ss << gfn(b, n);
+					if (success) ss << gfnStatus(isPrp, 0, res64, old64, testTime + validTime);
+					else if (!_quit) ss << ": validation failed!";
+					else ss << ": terminated.";
+					ss << std::endl; pio::print(ss.str());
+					if (success)
+					{
+						pio::result(ss.str());
+						if (!_isBoinc) clearContext();
+					}
 				}
 			}
 			else if (mode == EMode::Proof)

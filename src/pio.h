@@ -79,17 +79,18 @@ private:
 
 private:
 	// result: normal: 'results.txt' file
-	bool _result(const std::string & str) const
+	bool _result(const std::string & str, const std::string & filename) const
 	{
+		const char * const file_name = filename.empty() ? "results.txt" : filename.c_str();
 		if (_isBoinc)
 		{
-			FILE * const out_file = _open("results.txt", "a");
+			FILE * const out_file = _open(file_name, "a");
 			if (out_file == nullptr) throw std::runtime_error("Cannot write 'results.txt' file");
 			std::fprintf(out_file, "%s", str.c_str());
 			std::fclose(out_file);
 			return true;
 		}
-		std::ofstream resFile("results.txt", std::ios::app);
+		std::ofstream resFile(file_name, std::ios::app);
 		if (!resFile.is_open()) return false;
 		resFile << str;
 		resFile.close();
@@ -112,7 +113,7 @@ public:
 	static void print(const std::string & str) { getInstance()._print(str); }
 	static void display(const std::string & str) { getInstance()._display(str); }
 	static void error(const std::string & str, const bool fatal = false) { getInstance()._error(str, fatal); }
-	static bool result(const std::string & str) { return getInstance()._result(str); }
+	static bool result(const std::string & str, const std::string & filename = "") { return getInstance()._result(str, filename); }
 
 	static FILE * open(const char * const filename, const char * const mode) { return getInstance()._open(filename, mode); }
 };

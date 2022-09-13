@@ -93,9 +93,9 @@ public:
 	finline explicit RNS(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
 	finline explicit RNS(const int32_t i) : _r1(i), _r2(i), _r3(i) {}
 
-	finline Zp1 r1() const { return _r1; }
-	finline Zp2 r2() const { return _r2; }
-	finline Zp3 r3() const { return _r3; }
+	finline const Zp1 & r1() const { return _r1; }
+	finline const Zp2 & r2() const { return _r2; }
+	finline const Zp3 & r3() const { return _r3; }
 
 	RNS pow(const uint32_t e) const { return RNS(_r1.pow(e), _r2.pow(e), _r3.pow(e)); }
 
@@ -116,7 +116,7 @@ private:
 public:
 	Zp4() {}
 	finline explicit Zp4(const __v8su & n0123) : _n0123(n0123) {}
-	finline explicit Zp4(const Zpp & z) : _n0123(__v8su(_mm256_set1_epi32(int(z.get())))) {}
+	finline explicit Zp4(const uint32_t n) : _n0123(__v8su{ n, n, n, n, n, n, n, n }) {}
 	finline explicit Zp4(const __v4di & n0123) : _n0123(__v8su(n0123) + (__v8su(n0123 < __v4di{0, 0, 0, 0}) & p0123)) {}
 	finline explicit Zp4(const Zpp & z0, const Zpp & z1, const Zpp & z2, const Zpp & z3)
 	{
@@ -148,12 +148,10 @@ public:
 		const __v4du m = __v4du(_mm256_mul_epu32(__m256i(_n0123), __m256i(rhs._n0123)));
 
 		// uint64_t q = uint32_t(m >> 32) * uint64_t(p_inv) + m;
-		const __v8su m_32 = __v8su(_mm256_bsrli_epi128(__m256i(m), 4));
-		const __v4du q = __v4du(_mm256_add_epi64(_mm256_mul_epu32(__m256i(m_32), __m256i(p0123_inv)), __m256i(m)));
+		const __v4du q = __v4du(_mm256_mul_epu32(__m256i(m >> 32), __m256i(p0123_inv))) + m;
 
 		// uint32_t r = uint32_t(m) - (1 + uint32_t(q >> 32)) * p;
-		const __v8su q_32 = __v8su(_mm256_bsrli_epi128(__m256i(q), 4));
-		__v8su r = __v8su(m) - q_32 * p0123 - p0123;
+		__v8su r = __v8su(m) - __v8su(q >> 32) * p0123 - p0123;
 
 		// if (r > uint32_t(q)) r += p;
 		r += (r > __v8su(q)) & p0123;
@@ -195,14 +193,14 @@ private:
 
 public:
 	finline explicit RNS4() {}
-	finline explicit RNS4(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
+	finline explicit RNS4(const Zp1 & r1, const Zp2 & r2, const Zp3 & r3) : _r1(r1.get()), _r2(r2.get()), _r3(r3.get()) {}
 	finline explicit RNS4(const Zp4_1 & r1, const Zp4_2 & r2, const Zp4_3 & r3) : _r1(r1), _r2(r2), _r3(r3) {}
 	finline explicit RNS4(const RNS & s0, const RNS & s1, const RNS & s2, const RNS & s3)
 		: _r1(s0.r1(), s1.r1(), s2.r1(), s3.r1()), _r2(s0.r2(), s1.r2(), s2.r2(), s3.r2()), _r3(s0.r3(), s1.r3(), s2.r3(), s3.r3()) {}
 
-	finline Zp4_1 r1() const { return _r1; }
-	finline Zp4_2 r2() const { return _r2; }
-	finline Zp4_3 r3() const { return _r3; }
+	finline const Zp4_1 & r1() const { return _r1; }
+	finline const Zp4_2 & r2() const { return _r2; }
+	finline const Zp4_3 & r3() const { return _r3; }
 
 	finline RNS4 operator-() const { return RNS4(-_r1, -_r2, -_r3); }
 
@@ -237,8 +235,8 @@ private:
 public:
 	int64_4() {}
 	finline explicit int64_4(const __v4di & n0123) : _n0123(n0123) {}
-	finline explicit int64_4(const int64_t n) : _n0123(__v4di(_mm256_set1_epi64x((long long)(n)))) {}
-	finline explicit int64_4(const __v8si & n0123) : _n0123(__v4di(_mm256_setr_epi64x(n0123[0], n0123[2], n0123[4], n0123[6]))) {}
+	finline explicit int64_4(const int64_t n) : _n0123(__v4di{n, n, n, n}) {}
+	finline explicit int64_4(const __v8si & n0123) : _n0123(__v4di{n0123[0], n0123[2], n0123[4], n0123[6]}) {}
 
 	finline __v4di get() const { return _n0123; }
 
@@ -263,21 +261,22 @@ public:
 
 	finline int64_4 & operator+=(const int64_4 & rhs) { *this = *this + rhs; return *this; }
 
-	finline void rotate() { _n0123 = __v4di(_mm256_setr_epi64x(-_n0123[3], _n0123[0], _n0123[1], _n0123[2])); }
+	finline void rotate() { _n0123 = __v4di{-_n0123[3], _n0123[0], _n0123[1], _n0123[2]}; }
 };
 
 class uint64_4
 {
 private:
 	__v4du _n0123;
-	static constexpr __v8su mask32 = { (unsigned int)(-1), 0, (unsigned int)(-1), 0, (unsigned int)(-1), 0, (unsigned int)(-1), 0 };
+	static constexpr unsigned long long l32 = ((unsigned long long)(1) << 32) - 1;
+	static constexpr __v4du mask32 = { l32, l32, l32, l32 };
 
 public:
 	uint64_4() {}
 	finline explicit uint64_4(const __v4du & n0123) : _n0123(n0123) {}
-	finline explicit uint64_4(const uint32_t n) : _n0123(__v4du(_mm256_set1_epi64x((long long)(n)))) {}
-	finline explicit uint64_4(const uint64_t n) : _n0123(__v4du(_mm256_set1_epi64x((long long)(n)))) {}
-	finline explicit uint64_4(const __v8su & n0123) : _n0123(__v4du(_mm256_and_si256(__m256i(n0123), __m256i(mask32)))) {}
+	finline explicit uint64_4(const uint32_t n) : _n0123(__v4du{n, n, n, n}) {}
+	finline explicit uint64_4(const uint64_t n) : _n0123(__v4du{n, n, n, n}) {}
+	finline explicit uint64_4(const __v8su & n0123) : _n0123(__v4du(n0123) & mask32) {}
 	finline explicit uint64_4(const int64_4 & rhs) : _n0123(__v4du(rhs.get())) {}
 
 	finline __v4du get() const { return _n0123; }
@@ -289,7 +288,7 @@ public:
 
 	finline int64_4 u2i() const { return int64_4(__v4di(_n0123)); }
 
-	finline uint64_4 cast32() const { return uint64_4(__v4du(_mm256_and_si256(__m256i(_n0123), __m256i(mask32)))); }
+	finline uint64_4 cast32() const { return uint64_4(_n0123 & mask32); }
 
 	finline uint64_4 operator==(const uint64_4 & rhs) const { return uint64_4(__v4du(_n0123 == rhs._n0123)); }
 	finline uint64_4 operator!=(const uint64_4 & rhs) const { return uint64_4(__v4du(_n0123 != rhs._n0123)); }
@@ -481,9 +480,9 @@ private:
 
 	finline static int96_4 garner3(const RNS4 & s)
 	{
-		const Zp1 invP2_P1 = Zp1(1822724754u);		// 1 / P2 mod P1
-		const Zp1 invP3_P1 = Zp1(607574918u);		// 1 / P3 mod P1
-		const Zp2 invP3_P2 = Zp2(2995931465u);		// 1 / P3 mod P2
+		const uint32_t invP2_P1 = 1822724754u;		// 1 / P2 mod P1
+		const uint32_t invP3_P1 = 607574918u;		// 1 / P3 mod P1
+		const uint32_t invP3_P2 = 2995931465u;		// 1 / P3 mod P2
 		const uint96_4 P1P2P3 = uint96_4(uint64_4(15383592652180029441ull), uint64_4(3942432002u));
 		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(7691796326090014720ull), uint64_4(1971216001u));
 
@@ -630,18 +629,14 @@ private:
 
 	finline static void forward4(RNS4 * const z, const RNS4 * const wr, const size_t m, const size_t s_4, const size_t j)
 	{
-		for (size_t i = 0; i < m; ++i)
-		{
-			forward_4(z, 4 * m * j + i, m, wr[s_4 + j], wr[2 * (s_4 + j) + 0], wr[2 * (s_4 + j) + 1]);
-		}
+		const RNS4 w1 = wr[s_4 + j], w2 = wr[2 * (s_4 + j) + 0], w3 = wr[2 * (s_4 + j) + 1];
+		for (size_t i = 0; i < m; ++i) forward_4(z, 4 * m * j + i, m, w1, w2, w3);
 	}
 
 	finline static void backward4(RNS4 * const z, const RNS4 * const wri, const size_t m, const size_t s_4, const size_t j)
 	{
-		for (size_t i = 0; i < m; ++i)
-		{
-			backward_4(z, 4 * m * j + i, m, wri[s_4 + j], wri[2 * (s_4 + j) + 0], wri[2 * (s_4 + j) + 1]);
-		}
+		const RNS4 wi1 = wri[s_4 + j], wi2 = wri[2 * (s_4 + j) + 0], wi3 = wri[2 * (s_4 + j) + 1];
+		for (size_t i = 0; i < m; ++i) backward_4(z, 4 * m * j + i, m, wi1, wi2, wi3);
 	}
 
 	finline static void forward2(RNS4 * const z, const RNS4 * const wr, const size_t m, const size_t s_4, const size_t j0)

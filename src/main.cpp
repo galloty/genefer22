@@ -103,7 +103,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " 0.9.1 " << sysver << ssc.str() << std::endl;
+		ss << "genefer22" << ext << " 0.9.2 " << sysver << ssc.str() << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -204,6 +204,7 @@ public:
 
 		uint32_t b = 0, n = 0;
 		genefer::EMode mode = genefer::EMode::None;
+		bool oldfashion = false;
 		size_t device = 0, nthreads = 1;
 		std::string mainFilename = "", impl = "";
 		const int depth = 7;
@@ -230,6 +231,25 @@ public:
 			}
 			if (arg.substr(0, 2) == "-q")
 			{
+				const std::string qstr = ((arg == "-q") && (i + 1 < size)) ? args[i + 1] : arg.substr(2);
+				const auto flex = qstr.find('^');
+				if (flex != std::string::npos)
+				{
+					const auto end = qstr.find('+');
+					if (end != std::string::npos)
+					{
+						const uint32_t c = uint32_t(std::atoi(qstr.substr(0, flex).c_str()));
+						const uint32_t m = uint32_t(std::atoi(qstr.substr(flex + 1, end - (flex + 1)).c_str()));
+						for (uint32_t lm = 12; lm <= 22; ++lm)
+						{
+							if (m == (uint32_t(1) << lm))
+							{
+								b = c; n = lm; oldfashion = true;
+								if ((arg == "-q") && (i + 1 < size)) ++i;
+							}
+						}
+					}
+				}
 				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
 				mode = genefer::EMode::Quick;
 			}
@@ -339,7 +359,7 @@ public:
 			return;
 		}
 
-		g.check(b, n, mode, device, nthreads, impl, depth);
+		g.check(b, n, mode, device, nthreads, impl, depth, oldfashion);
 
 		if (bBoinc) boinc_finish(EXIT_SUCCESS);
 	}

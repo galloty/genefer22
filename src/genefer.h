@@ -93,7 +93,7 @@ private:
 	}
 #else
 	void createTransformCPU(const uint32_t b, const uint32_t n, const size_t nthreads, const std::string & impl, const size_t num_regs,
-							const bool verbose = true, const bool full = true)
+							const bool checkError, const bool verbose = true, const bool full = true)
 	{
 		deleteTransform();
 
@@ -109,7 +109,7 @@ private:
 		}
 
 		std::string ttype;
-		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, ttype);
+		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, checkError, ttype);
 		if (verbose)
 		{
 			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)";
@@ -153,11 +153,12 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfnStatus(const bool isPrp, const uint64_t pkey, const uint64_t res64, const uint64_t old64, const double time)
+	static std::string gfnStatus(const bool isPrp, const uint64_t pkey, const uint64_t res64, const uint64_t old64, const double error, const double time)
 	{
 		std::ostringstream ss; ss << " is ";
 		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
 		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
+		if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 		ss << ", time = " << timer::formatTime(time) << ".";
 		return ss.str();
 	}
@@ -847,7 +848,7 @@ private:
 		createTransformGPU(b, n, device, num_regs, m == 12, false);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, m == 12, false);
+		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 12, false);
 #endif
 
 		transform * const pTransform = _transform;
@@ -915,7 +916,7 @@ private:
 			createTransformGPU(b, n, device, num_regs, false);
 #else
 			(void)device;
-			createTransformCPU(b, n, nthreads, impl, num_regs, false);
+			createTransformCPU(b, n, nthreads, impl, num_regs, false, false);
 #endif
 
 			_gi = new gint(1 << n, b);
@@ -968,17 +969,19 @@ public:
 		(void)nthreads; (void)impl;
 		createTransformGPU(b, n, device, num_regs);
 #else
-		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs);
-
+		static constexpr uint32_t bm[22 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31 };
+		bool checkError = false;
 		if (impl != "i32")
 		{
-			static constexpr uint32_t bm[22 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31 };
-			if (b > bm[n - 12] * 1000000)
-			{
-				std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
-				pio::print(ss.str());
-			}
+			if (b > bm[n - 12] * 1000000) checkError = true;
+		}
+		(void)device;
+		createTransformCPU(b, n, nthreads, impl, num_regs, checkError);
+
+		if (checkError)
+		{
+			std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
+			pio::print(ss.str());
 		}
 #endif
 
@@ -990,6 +993,7 @@ public:
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
+			const double error = _transform->getError();
 			// if (success)
 			// {
 			// 	file ckeyFile(ckeyFilename(), "w", false);
@@ -997,7 +1001,12 @@ public:
 			// }
 			clearline();
 			std::ostringstream ss; ss << gfn(b, n);
-			if (success) ss << " is checked, ckey = " << uint64toString(ckey) << ", time = " << timer::formatTime(time) << ".";
+			if (success)
+			{
+				ss << " is checked, ckey = " << uint64toString(ckey);
+				if (error != 0) ss << ", error = " << std::setprecision(4) << error;
+				ss << ", time = " << timer::formatTime(time) << ".";
+			}
 			else if (!_quit) ss << ": check failed!";
 			else ss << ": terminated.";
 			ss << std::endl; pio::print(ss.str());
@@ -1015,11 +1024,17 @@ public:
 			{
 				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
+				const double error = _transform->getError();
 				clearline();
 				if (oldfashion)
 				{
 					std::ostringstream ss; ss << b << "^" << (1 << n) << "+1";
-					if (success) ss << " is complete, time = " << timer::formatTime(testTime + validTime) << ".";
+					if (success)
+					{
+						ss << " is complete";
+						if (error != 0) ss << ", err = " << std::setprecision(4) << error;
+						ss << ", time = " << timer::formatTime(testTime + validTime) << ".";
+					}
 					else if (!_quit) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
@@ -1040,7 +1055,7 @@ public:
 				else
 				{
 					std::ostringstream ss; ss << gfn(b, n);
-					if (success) ss << gfnStatus(isPrp, 0, res64, old64, testTime + validTime);
+					if (success) ss << gfnStatus(isPrp, 0, res64, old64, error, testTime + validTime);
 					else if (!_quit) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
@@ -1055,16 +1070,22 @@ public:
 			{
 				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
 				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64, old64);
+				const double error = _transform->getError();
 				const double time = testTime + validTime + proofTime;
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n) << ": ";
-				if (success) ss << "proof file is generated, time = " << timer::formatTime(time) << ".";
+				if (success)
+				{
+					ss << "proof file is generated";
+					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
+					ss << ", time = " << timer::formatTime(time) << ".";
+				}
 				else if (!_quit) ss << "validation failed!";
 				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
 				if (success)
 				{
-					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, res64, old64, time) << std::endl;
+					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, res64, old64, error, time) << std::endl;
 					pio::result(ssr.str());
 					if (!_isBoinc)
 					{
@@ -1077,13 +1098,14 @@ public:
 			{
 				double time = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
 				success = server(exponent, time, isPrp, pkey, res64, old64);
+				const double error = _transform->getError();
 				// if (success)
 				// {
 				// 	file skeyFile(skeyFilename(), "w", false);
 				// 	skeyFile.print(uint64toString(pkey).c_str());
 				// }
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, pkey, res64, old64, time);
+				if (success) ss << gfnStatus(isPrp, pkey, res64, old64, error, time);
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

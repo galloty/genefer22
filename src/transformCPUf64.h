@@ -75,6 +75,10 @@ public:
 
 	Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::round(r[i]); return vd; }
 
+	Vd abs() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::fabs(r[i]); return vd; }
+	Vd & max(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = std::max(r[i], rhs.r[i]); return *this; }
+	double max() const { double m = r[0]; for (size_t i = 1; i < N; ++i) m = std::max(m, r[i]); return m; }
+
 	void shift(const double f) { for (size_t i = N - 1; i > 0; --i) r[i] = r[i - 1]; r[0] = f; }
 
 	static void transpose(Vd vd[N])
@@ -139,6 +143,10 @@ public:
 
 	finline Vd round() const { return Vd(round_pd(r)); } 
 
+	finline Vd abs() const { return Vd(_mm_andnot_pd(_mm_set1_pd(-0.0), r)); }
+	finline Vd & max(const Vd & rhs) { r = _mm_max_pd(r, rhs.r); return *this; }
+	finline double max() const { return std::max(r[0], r[1]); }
+
 	finline void shift(const double f) { r = _mm_set_pd(r[0], f); }
 
 	finline static void transpose(Vd vd[2])
@@ -183,6 +191,10 @@ public:
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
 	finline Vd round() const { return Vd(_mm256_round_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
+
+	finline Vd abs() const { return Vd(_mm256_andnot_pd(_mm256_set1_pd(-0.0), r)); }
+	finline Vd & max(const Vd & rhs) { r = _mm256_max_pd(r, rhs.r); return *this; }
+	finline double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
 
 	finline void shift(const double f) { r = _mm256_set_pd(r[2], r[1], r[0], f); }
 
@@ -237,6 +249,10 @@ public:
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
 	finline Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
+
+	finline Vd abs() const { return Vd(_mm512_abs_pd(r)); }
+	finline Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
+	finline double max() const { return _mm512_reduce_max_pd(r); }
 
 	finline void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
 
@@ -307,6 +323,10 @@ public:
 	finline Vcx mulWconj(const Vcx & rhs) const { return Vcx((re + im * rhs.im) * rhs.re, (im - re * rhs.im) * rhs.re); }
 
 	finline Vcx round() const { return Vcx(re.round(), im.round()); }
+
+	finline Vcx abs() const { return Vcx(re.abs(), im.abs()); }
+	finline Vcx & max(const Vcx & rhs) { re.max(rhs.re); im.max(rhs.im); return *this; }
+	finline double max() const { return std::max(re.max(), im.max()); }
 
 	finline void shift(const Vcx & rhs, const bool rotate)
 	{
@@ -573,7 +593,26 @@ public:
 		for (size_t i = 0; i < 8; ++i)
 		{
 			Vc & zi = z[i];
-			const Vc o = Vc(zi * t2_n).round();
+			const Vc of = zi * t2_n, o = of.round();
+			const Vc o_b = Vc(o * b_inv).round();
+			const Vc f_i = f + (o - o_b * b) * g;
+			const Vc f_b = Vc(f_i * b_inv).round();
+			f = f_b + o_b * g;
+			zi = f_i - f_b * b;
+		}
+
+		return f;
+	}
+
+	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n, Vc & err)
+	{
+		Vc f = f_prev;
+
+		for (size_t i = 0; i < 8; ++i)
+		{
+			Vc & zi = z[i];
+			const Vc of = zi * t2_n, o = of.round();
+			err.max(Vc(of - o).abs());
 			const Vc o_b = Vc(o * b_inv).round();
 			const Vc f_i = f + (o - o_b * b) * g;
 			const Vc f_b = Vc(f_i * b_inv).round();
@@ -599,7 +638,31 @@ public:
 			// const Vc r = f_i - f_b * b;
 			// f = f_b;
 
-			const Vc o = Vc((z0 + z1 * sb) * t2_n).round();
+			const Vc of = (z0 + z1 * sb) * t2_n, o = of.round();
+			const Vc o_b = Vc(o * b_inv).round();
+			const Vc f_i = f + (o - o_b * b) * g;
+			const Vc f_b = Vc(f_i * b_inv).round();
+			const Vc r = f_i - f_b * b;
+			f = f_b + o_b * g;
+
+			const Vc irh = Vc(r * sb_inv).round();
+			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
+		}
+
+		return f;
+	}
+
+	finline Vc mul_carry_i(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
+						   const double sb, const double sb_inv, const double isb, const double fsb, Vc & err)
+	{
+		Vc f = f_prev;
+
+		for (size_t i = 0; i < 4; ++i)
+		{
+			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
+
+			const Vc of = (z0 + z1 * sb) * t2_n, o = of.round();
+			err.max(Vc(of - o).abs());
 			const Vc o_b = Vc(o * b_inv).round();
 			const Vc f_i = f + (o - o_b * b) * g;
 			const Vc f_b = Vc(f_i * b_inv).round();
@@ -689,6 +752,8 @@ private:
 	const size_t _num_threads;
 	const double _b, _b_inv, _sb, _sb_inv, _isb, _fsb;
 	const size_t _mem_size, _cache_size;
+	bool _checkError;
+	double _error;
 	char * const _mem;
 	Vc * const _z_copy;
 
@@ -1223,12 +1288,15 @@ private:
 		}
 	}
 
-	void pass2_0(const size_t thread_id, const bool dup)
+	double pass2_0(const size_t thread_id, const bool dup)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
 		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, isb = _isb, fsb = _fsb, g = dup ? 2.0 : 1.0;
+		const bool checkError = _checkError;
+
+		Vc err = Vc(0.0);
 
 		const size_t num_threads = _num_threads;
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
@@ -1245,8 +1313,16 @@ private:
 				z8.transpose_in();
 
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
-				if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
-				else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N);
+				if (!checkError)
+				{
+					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
+					else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N);
+				}
+				else
+				{
+					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
+					else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, err);
+				}
 
 				if (lh != l_min) z8.transpose_out();
 				z8.store(zj, index(n_io));	// transposed if lh = l_min
@@ -1254,6 +1330,8 @@ private:
 
 			if (lh != l_min) forward_out(zl, w122i);
 		}
+
+		return err.max();
 	}
 
 	void pass2_1(const size_t thread_id)
@@ -1286,13 +1364,13 @@ private:
 	}
 
 public:
-	transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
+	transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 		: transform(N, n, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
 								   : ((VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8))),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads),
 		_b(b), _b_inv(1.0 / b), _sb(double(sqrtl(b))), _sb_inv(double(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
-		_cache_size(wSize + wsSize + zSize + fcSize),
+		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
 		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),
 		_z_copy((Vc *)_mm_malloc(zSize, 1024))
 	{
@@ -1432,6 +1510,8 @@ public:
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(getKind())) return false;
 
+		if (!cFile.read(reinterpret_cast<char *>(&_error), sizeof(_error))) return false;
+
 		Vc * const z = (Vc *)&_mem[zOffset];
 		if (!cFile.read(reinterpret_cast<char *>(z), zSize)) return false;
 		if (num_regs > 1)
@@ -1447,6 +1527,8 @@ public:
 	{
 		const int kind = int(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
+
+		if (!cFile.write(reinterpret_cast<const char *>(&_error), sizeof(_error))) return;
 
 		const Vc * const z = (Vc *)&_mem[zOffset];
 		if (!cFile.write(reinterpret_cast<const char *>(z), zSize)) return;
@@ -1472,7 +1554,10 @@ public:
 
 	void squareDup(const bool dup) override
 	{
-		if (_num_threads > 1)
+		const size_t num_threads = _num_threads;
+		double e[num_threads];
+
+		if (num_threads > 1)
 		{
 #pragma omp parallel
 			{
@@ -1480,7 +1565,7 @@ public:
 
 				pass1(thread_id);
 #pragma omp barrier
-				pass2_0(thread_id, dup);
+				e[thread_id] = pass2_0(thread_id, dup);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -1488,9 +1573,13 @@ public:
 		else
 		{
 			pass1(0);
-			pass2_0(0, dup);
+			e[0] = pass2_0(0, dup);
 			pass2_1(0);
 		}
+
+		double err = 0;
+		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
+		_error = std::max(_error, err);
 	}
 
 	void initMultiplicand(const size_t src) override
@@ -1515,7 +1604,10 @@ public:
 
 	void mul() override
 	{
-		if (_num_threads > 1)
+		const size_t num_threads = _num_threads;
+		double e[num_threads];
+
+		if (num_threads > 1)
 		{
 #pragma omp parallel
 			{
@@ -1523,7 +1615,7 @@ public:
 
 				pass1mul(thread_id);
 #pragma omp barrier
-				pass2_0(thread_id, false);
+				e[thread_id] = pass2_0(thread_id, false);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -1531,9 +1623,13 @@ public:
 		else
 		{
 			pass1mul(0);
-			pass2_0(0, false);
+			e[0] = pass2_0(0, false);
 			pass2_1(0);
 		}
+
+		double err = 0;
+		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
+		_error = std::max(_error, err);
 	}
 
 	void copy(const size_t dst, const size_t src) const override
@@ -1542,10 +1638,12 @@ public:
 		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zrOffset + (dst - 1) * zSize];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
 	}
+
+	double getError() const override { return _error; }
 };
 
 template<size_t VSIZE>
-inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs)
+inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 {
 	const uint32_t b12 = 4200000, b13 = 3500000, b14 = 2800000, b15 = 2300000, b16 = 1900000,
 				   b17 = 1600000, b18 = 1300000, b19 = 1100000, b20 = 880000, b21 = 730000, b22 = 600000;
@@ -1553,58 +1651,58 @@ inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, co
 	transform * pTransform = nullptr;
 	if (n == 12)
 	{
-		if (b <= b12) pTransform = new transformCPUf64<(1 << 11), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 12), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b12) pTransform = new transformCPUf64<(1 << 11), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 12), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 13)
 	{
-		if (b <= b13) pTransform = new transformCPUf64<(1 << 12), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 13), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b13) pTransform = new transformCPUf64<(1 << 12), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 13), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 14)
 	{
-		if (b <= b14) pTransform = new transformCPUf64<(1 << 13), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 14), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b14) pTransform = new transformCPUf64<(1 << 13), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 14), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 15)
 	{
-		if (b <= b15) pTransform = new transformCPUf64<(1 << 14), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 15), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b15) pTransform = new transformCPUf64<(1 << 14), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 15), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 16)
 	{
-		if (b <= b16) pTransform = new transformCPUf64<(1 << 15), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 16), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b16) pTransform = new transformCPUf64<(1 << 15), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 16), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 17)
 	{
-		if (b <= b17) pTransform = new transformCPUf64<(1 << 16), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 17), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b17) pTransform = new transformCPUf64<(1 << 16), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 17), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 18)
 	{
-		if (b <= b18) pTransform = new transformCPUf64<(1 << 17), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 18), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b18) pTransform = new transformCPUf64<(1 << 17), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 18), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 19)
 	{
-		if (b <= b19) pTransform = new transformCPUf64<(1 << 18), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 19), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b19) pTransform = new transformCPUf64<(1 << 18), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 19), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 20)
 	{
-		if (b <= b20) pTransform = new transformCPUf64<(1 << 19), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 20), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b20) pTransform = new transformCPUf64<(1 << 19), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 20), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 21)
 	{
-		if (b <= b21) pTransform = new transformCPUf64<(1 << 20), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 21), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b21) pTransform = new transformCPUf64<(1 << 20), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 21), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	else if (n == 22)
 	{
-		if (b <= b22) pTransform = new transformCPUf64<(1 << 21), VSIZE, false>(b, n, num_threads, num_regs);
-		else		  pTransform = new transformCPUf64<(1 << 22), VSIZE, true>(b, n, num_threads, num_regs);
+		if (b <= b22) pTransform = new transformCPUf64<(1 << 21), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 22), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 

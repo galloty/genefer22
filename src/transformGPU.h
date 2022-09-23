@@ -1029,13 +1029,13 @@ protected:
 	}
 
 public:
-	bool readContext(file & cFile, const size_t num_regs) override
+	bool readContext(file & cFile, const size_t nregs) override
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
 		if (kind != int(getKind())) return false;
 
-		const size_t size = getSize();
+		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
 		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(RNS) * size * num_regs)) return false;
 		_pEngine->writeMemory_z(_z, num_regs);
@@ -1049,12 +1049,13 @@ public:
 		return true;
 	}
 
-	void saveContext(file & cFile, const size_t num_regs) const override
+	void saveContext(file & cFile, const size_t nregs) const override
 	{
 		const int kind = int(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
-		const size_t size = getSize();
+		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
+
 		_pEngine->readMemory_z(_z, num_regs);
 		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(RNS) * size * num_regs)) return;
 

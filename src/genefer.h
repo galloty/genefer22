@@ -188,7 +188,7 @@ private:
 
 	static void clearline() { pio::display("                                                \r"); }
 
-	int readContext(const int where, int & i, double & elapsedTime)
+	int readContext(const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
 	{
 		std::string ctxFile = contextFilename();
 		struct stat s;
@@ -208,13 +208,12 @@ private:
 		if (rwhere != where) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
-		const size_t num_regs = 2;
-		if (!_transform->readContext(contextFile, num_regs)) return -2;
+		if (!_transform->readContext(contextFile, fast_checkpoints ? 0 : 2)) return -2;
 		if (!contextFile.check_crc32()) return -2;
 		return 0;
 	}
 
-	void saveContext(const int where, const int i, const double elapsedTime) const
+	void saveContext(const int where, const bool fast_checkpoints, const int i, const double elapsedTime) const
 	{
 		const std::string ctxFile = contextFilename(), oldCtxFile = ctxFile + ".old", newCtxFile = ctxFile + ".new";
 
@@ -230,8 +229,7 @@ private:
 			if (!contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
-			const size_t num_regs = 2;
-			_transform->saveContext(contextFile, num_regs);
+			_transform->saveContext(contextFile, fast_checkpoints ? 0 : 2);
 			contextFile.write_crc32();
 		}
 
@@ -298,13 +296,13 @@ private:
 		}
 	}
 
-	bool boincMonitor(const int where, const int i, watch & chrono)
+	bool boincMonitor(const int where, const bool fast_checkpoints, const int i, watch & chrono)
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
 		const bool bQuit = boincQuitRequest(status);
 		if (bQuit) quit();
 
-		if (bQuit || (status.suspended != 0)) saveContext(where, i, chrono.getElapsedTime());
+		if (bQuit || (status.suspended != 0)) saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
 		if (bQuit) return true;
 			
 		if (status.suspended != 0)
@@ -321,7 +319,7 @@ private:
 
 		if (boinc_time_to_checkpoint() != 0)
 		{
-			saveContext(where, i, chrono.getElapsedTime());
+			saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
 			boinc_checkpoint_completed();
 		}
 		return false;
@@ -363,13 +361,13 @@ private:
 	}
 
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
-	bool prp(const mpz_t & exponent, const int B_GL, const int B_PL, double & testTime)
+	bool prp(const mpz_t & exponent, const int B_GL, const int B_PL, const bool fast_checkpoints, double & testTime)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const int error = readContext(0, ri, restoredTime);
+		const int error = readContext(0, fast_checkpoints, ri, restoredTime);
 		const bool found = (error == 0);
 		if (error < -1) pio::error("invalid context");
 
@@ -398,7 +396,7 @@ private:
 		{
 			if (_quit)
 			{
-				saveContext(0, i, chrono.getElapsedTime());
+				saveContext(0, fast_checkpoints, i, chrono.getElapsedTime());
 				return false;
 			}
 
@@ -407,8 +405,8 @@ private:
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 
-				if (_isBoinc) { if (boincMonitor(0, i, chrono)) return false; }
-				else if (chrono.getRecordTime() > 600) { saveContext(0, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				if (_isBoinc) { if (boincMonitor(0, fast_checkpoints ,i, chrono)) return false; }
+				else if (chrono.getRecordTime() > 600) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
@@ -423,15 +421,19 @@ private:
 			}
 			if ((B_PL != 0) && (i % B_PL == 0))
 			{
-				pTransform->getInt(gi);
-				file ckptFile(ckptFilename(size_t(i / B_PL)), "wb", true);
-				gi.write(ckptFile);
-				ckptFile.write_crc32();
+				if (fast_checkpoints) pTransform->copy(3 + size_t(i / B_PL), 0);
+				else
+				{
+					pTransform->getInt(gi);
+					file ckptFile(ckptFilename(size_t(i / B_PL)), "wb", true);
+					gi.write(ckptFile);
+					ckptFile.write_crc32();
+				}
 			}
 		}
 
 		testTime = chrono.getElapsedTime();
-		saveContext(0, -1, testTime);
+		saveContext(0, fast_checkpoints, -1, testTime);
 		return true;
 	}
 
@@ -502,7 +504,7 @@ private:
 	// (Pietrzak-Li proof generation
 	// in: ckpt[i]
 	// out: proof file, proof key
-	bool PL(const int depth, double & proofTime, uint64_t & pkey)
+	bool PL(const int depth, const bool fast_checkpoints, double & proofTime, uint64_t & pkey)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -517,6 +519,12 @@ private:
 		proofFile.write(reinterpret_cast<const char *>(&depth), sizeof(depth));
 
 		// mu[0] = ckpt[0]
+		if (fast_checkpoints)
+		{
+			pTransform->copy(0, 3 + 0);
+			pTransform->getInt(gi);
+		}
+		else
 		{
 			file ckptFile(ckptFilename(0), "rb", true);
 			gi.read(ckptFile);
@@ -541,6 +549,8 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 
 			// mu[k] = ckpt[i]^w[0]
+			if (fast_checkpoints) pTransform->copy(0, 3 + i);
+			else
 			{
 				file ckptFile(ckptFilename(i), "rb", true);
 				gi.read(ckptFile);
@@ -554,6 +564,8 @@ private:
 			for (size_t j = i; j < L / 2; j += i)
 			{
 				// mu[k] *= ckpt[i + 2 * j]^w[j]
+				if (fast_checkpoints) pTransform->copy(0, 3 + i + 2 * j);
+				else
 				{
 					file ckptFile(ckptFilename(i + 2 * j), "rb", true);
 					gi.read(ckptFile);
@@ -614,7 +626,7 @@ private:
 	{
 		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
 
-		if (!prp(exponent, B_GL, 0, testTime)) return false;
+		if (!prp(exponent, B_GL, 0, false, testTime)) return false;
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
@@ -624,20 +636,20 @@ private:
 		return true;
 	}
 
-	bool proof(const mpz_t & exponent, const int depth, double & testTime, double & validTime, double & proofTime,
+	bool proof(const mpz_t & exponent, const int depth, const bool fast_checkpoints, double & testTime, double & validTime, double & proofTime,
 			   bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
-		if (!prp(exponent, B_GL, B_PL, testTime)) return false;
+		if (!prp(exponent, B_GL, B_PL, fast_checkpoints, testTime)) return false;
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
 			isPrp = gi.isOne(res64, old64);
 		}
 		if (!GL(exponent, B_GL, validTime)) return false;
-		if (!PL(depth, proofTime, pkey)) return false;
+		if (!PL(depth, fast_checkpoints, proofTime, pkey)) return false;
 		return true;
 	}
 
@@ -740,7 +752,7 @@ private:
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const int error = readContext(1, ri, restoredTime);
+		const int error = readContext(1, false, ri, restoredTime);
 		const bool found = (error == 0);
 		if (error < -1) pio::error("invalid context");
 		if (found)
@@ -774,7 +786,7 @@ private:
 			{
 				if (_quit)
 				{
-					saveContext(1, i, chrono.getElapsedTime());
+					saveContext(1, false, i, chrono.getElapsedTime());
 					mpz_clear(p2);
 					return false;
 				}
@@ -783,8 +795,8 @@ private:
 				{
 					chrono.read(); const double displayTime = chrono.getDisplayTime();
 					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-					if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
-					else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+					if (_isBoinc) { if (boincMonitor(1, false, i, chrono)) return false; }
+					else if (chrono.getRecordTime() > 600) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
 				pTransform->squareDup(false);
@@ -798,7 +810,7 @@ private:
 		{
 			if (_quit)
 			{
-				saveContext(1, i, chrono.getElapsedTime());
+				saveContext(1, false, i, chrono.getElapsedTime());
 				mpz_clear(p2);
 				return false;
 			}
@@ -807,8 +819,8 @@ private:
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-				if (_isBoinc) { if (boincMonitor(1, i, chrono)) return false; }
-				else if (chrono.getRecordTime() > 600) { saveContext(1, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				if (_isBoinc) { if (boincMonitor(1, false, i, chrono)) return false; }
+				else if (chrono.getRecordTime() > 600) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(p2, mp_bitcnt_t(i)) != 0);
@@ -958,9 +970,15 @@ public:
 		if (mode == EMode::Bench) return bench(n, device, nthreads, impl);
 		if (mode == EMode::Limit) return check_limit(n, device, nthreads, impl);
 
+		bool fast_checkpoints =
+#if defined(GPU)
+			(n <= 17);
+#else
+			false;
+#endif
 		size_t num_regs;
 		if (mode == EMode::Quick) num_regs = 3;
-		else if (mode == EMode::Proof) num_regs = 3;
+		else if (mode == EMode::Proof) num_regs = fast_checkpoints ? 3 + (size_t(1) << depth) : 3;
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 2;
 		else return false;
@@ -1069,7 +1087,7 @@ public:
 			else if (mode == EMode::Proof)
 			{
 				double testTime = 0, validTime = 0, proofTime = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
-				success = proof(exponent, depth, testTime, validTime, proofTime, isPrp, pkey, res64, old64);
+				success = proof(exponent, depth, fast_checkpoints, testTime, validTime, proofTime, isPrp, pkey, res64, old64);
 				const double error = _transform->getError();
 				const double time = testTime + validTime + proofTime;
 				clearline();

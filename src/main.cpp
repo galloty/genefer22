@@ -336,12 +336,12 @@ public:
 													169277952, 114340846, 15913772, 4896418, 1951734 };
 #endif
 
-			if (!g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5)) return;
-			if (!g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5)) return;
-			if (!g.check(1999997802, 11, genefer::EMode::Server, device, nthreads, "i32", 5)) return;
-			if (!g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5)) return;
-			if (!g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6)) return;
-			return;
+			// if (!g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5)) return;
+			// if (!g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5)) return;
+			// if (!g.check(1999997802, 11, genefer::EMode::Server, device, nthreads, "i32", 5)) return;
+			// if (!g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5)) return;
+			// if (!g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6)) return;
+			// return;
 			for (size_t i = 0; i < count; ++i)
 			{
 				// if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;

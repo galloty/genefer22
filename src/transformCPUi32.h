@@ -483,8 +483,8 @@ private:
 		const uint32_t invP2_P1 = 1822724754u;		// 1 / P2 mod P1
 		const uint32_t invP3_P1 = 607574918u;		// 1 / P3 mod P1
 		const uint32_t invP3_P2 = 2995931465u;		// 1 / P3 mod P2
-		const uint96_4 P1P2P3 = uint96_4(uint64_4(15383592652180029441ull), uint64_4(3942432002u));
-		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(7691796326090014720ull), uint64_4(1971216001u));
+		const uint96_4 P1P2P3 = uint96_4(uint64_4(uint64_t(15383592652180029441ull)), uint64_4(uint32_t(3942432002u)));
+		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(uint64_t(7691796326090014720ull)), uint64_4(uint32_t(1971216001u)));
 
 		const auto r3 = s.r3().get();
 		const Zp4_1 u13 = (s.r1() - Zp4_1(r3)) * Zp4_1(invP3_P1);

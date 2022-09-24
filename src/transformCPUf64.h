@@ -56,8 +56,6 @@ public:
 		return vd;
 	}
 
-	void interleave(Vd & rhs) { for (size_t i = 0; i < N / 2; ++i) { std::swap(r[i + N / 2], rhs.r[i]); } }	// N = 8
-
 	double operator[](const size_t i) const { return r[i]; }
 	void set(const size_t i, const double & f) { r[i] = f; }
 
@@ -73,13 +71,15 @@ public:
 	Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
+	void shift(const double f) { for (size_t i = N - 1; i > 0; --i) r[i] = r[i - 1]; r[0] = f; }
+
 	Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::round(r[i]); return vd; }
 
 	Vd abs() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::fabs(r[i]); return vd; }
 	Vd & max(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = std::max(r[i], rhs.r[i]); return *this; }
 	double max() const { double m = r[0]; for (size_t i = 1; i < N; ++i) m = std::max(m, r[i]); return m; }
 
-	void shift(const double f) { for (size_t i = N - 1; i > 0; --i) r[i] = r[i - 1]; r[0] = f; }
+	void interleave(Vd & rhs) { for (size_t i = 0; i < N / 2; ++i) { std::swap(r[i + N / 2], rhs.r[i]); } }	// N = 8
 
 	static void transpose(Vd vd[N])
 	{
@@ -126,8 +126,6 @@ public:
 	finline static Vd broadcast(const double & f) { return Vd(_mm_set1_pd(f)); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
-	finline void interleave(Vd &) {}	// unused
-
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
@@ -141,13 +139,15 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
+	finline void shift(const double f) { r = _mm_set_pd(r[0], f); }
+
 	finline Vd round() const { return Vd(round_pd(r)); } 
 
 	finline Vd abs() const { return Vd(_mm_andnot_pd(_mm_set1_pd(-0.0), r)); }
 	finline Vd & max(const Vd & rhs) { r = _mm_max_pd(r, rhs.r); return *this; }
 	finline double max() const { return std::max(r[0], r[1]); }
 
-	finline void shift(const double f) { r = _mm_set_pd(r[0], f); }
+	finline void interleave(Vd &) {}	// unused
 
 	finline static void transpose(Vd vd[2])
 	{
@@ -175,8 +175,6 @@ public:
 	finline static Vd broadcast(const double & f) { return Vd(_mm256_set1_pd(f)); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
-	finline void interleave(Vd &) {}	// unused
-
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
@@ -190,13 +188,15 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
+	finline void shift(const double f) { r = _mm256_set_pd(r[2], r[1], r[0], f); }
+
 	finline Vd round() const { return Vd(_mm256_round_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
 
 	finline Vd abs() const { return Vd(_mm256_andnot_pd(_mm256_set1_pd(-0.0), r)); }
 	finline Vd & max(const Vd & rhs) { r = _mm256_max_pd(r, rhs.r); return *this; }
 	finline double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
 
-	finline void shift(const double f) { r = _mm256_set_pd(r[2], r[1], r[0], f); }
+	finline void interleave(Vd &) {}	// unused
 
 	finline static void transpose(Vd vd[4])
 	{
@@ -229,12 +229,6 @@ public:
 	finline static Vd broadcast(const double & f) { return Vd(_mm512_set1_pd(f)); }
 	finline static Vd broadcast(const double & f_l, const double & f_h) { return Vd(_mm512_set_pd(f_h, f_h, f_h, f_h, f_l, f_l, f_l, f_l)); }
 
-	finline void interleave(Vd & rhs)
-	{
-		const __m512d t = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(2, 3, 2, 3));
-		r = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(0, 1, 0, 1)); rhs.r = t;
-	}
-
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
@@ -248,13 +242,23 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
+	finline void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+
 	finline Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
 
 	finline Vd abs() const { return Vd(_mm512_abs_pd(r)); }
 	finline Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
 	finline double max() const { return _mm512_reduce_max_pd(r); }
 
-	finline void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
+	finline void interleave(Vd & rhs)
+	{
+		const __m512d t = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(2, 3, 2, 3));
+		r = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(0, 1, 0, 1)); rhs.r = t;
+	}
 
 	finline static void transpose(Vd vd[8])
 	{
@@ -271,6 +275,8 @@ public:
 		vd[2].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(2, 0, 2, 0)); vd[6].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(3, 1, 3, 1));
 		vd[3].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(2, 0, 2, 0)); vd[7].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(3, 1, 3, 1));
 	}
+
+#pragma GCC diagnostic pop
 };
 #endif
 
@@ -292,8 +298,6 @@ public:
 	{
 		return Vcx(Vd<N>::broadcast(z_l.real, z_h.real), Vd<N>::broadcast(z_l.imag, z_h.imag));
 	}
-
-	finline void interleave(Vcx & rhs) { re.interleave(rhs.re); im.interleave(rhs.im); }
 
 	finline Complex operator[](const size_t i) const { return Complex(re[i], im[i]); }
 	finline void set(const size_t i, const Complex & z) { re.set(i, z.real); im.set(i, z.imag); }
@@ -322,18 +326,20 @@ public:
 	finline Vcx mulW(const Vcx & rhs) const { return Vcx((re - im * rhs.im) * rhs.re, (im + re * rhs.im) * rhs.re); }
 	finline Vcx mulWconj(const Vcx & rhs) const { return Vcx((re + im * rhs.im) * rhs.re, (im - re * rhs.im) * rhs.re); }
 
-	finline Vcx round() const { return Vcx(re.round(), im.round()); }
-
-	finline Vcx abs() const { return Vcx(re.abs(), im.abs()); }
-	finline Vcx & max(const Vcx & rhs) { re.max(rhs.re); im.max(rhs.im); return *this; }
-	finline double max() const { return std::max(re.max(), im.max()); }
-
 	finline void shift(const Vcx & rhs, const bool rotate)
 	{
 		// f x^n = -f
 		re.shift(rotate ? -rhs.im[N - 1] : rhs.re[N - 1]);
 		im.shift(rotate ?  rhs.re[N - 1] : rhs.im[N - 1]);
 	}
+
+	finline Vcx round() const { return Vcx(re.round(), im.round()); }
+
+	finline Vcx abs() const { return Vcx(re.abs(), im.abs()); }
+	finline Vcx & max(const Vcx & rhs) { re.max(rhs.re); im.max(rhs.im); return *this; }
+	finline double max() const { return std::max(re.max(), im.max()); }
+
+	finline void interleave(Vcx & rhs) { re.interleave(rhs.re); im.interleave(rhs.im); }
 
 	finline static void transpose(Vcx z[N])
 	{

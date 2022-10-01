@@ -60,13 +60,15 @@ public:
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
-#define P1_32	4253024257u		// 507 * 2^23 + 1
-#define P2_32	4194304001u		// 125 * 2^25 + 1
-#define P3_32	4076863489u		// 243 * 2^24 + 1
+// #define P0_32	4253024257u		// 507 * 2^23 + 1
+#define P1_32	4194304001u		// 125 * 2^25 + 1
+#define P2_32	4076863489u		// 243 * 2^24 + 1
+#define P3_32	3942645761u		// 235 * 2^24 + 1
 
-typedef Zp<P1_32, 5> Zp1_32;
-typedef Zp<P2_32, 3> Zp2_32;
-typedef Zp<P3_32, 7> Zp3_32;
+// typedef Zp<P0_32, 5> Zp0_32;
+typedef Zp<P1_32, 3> Zp1_32;
+typedef Zp<P2_32, 7> Zp2_32;
+typedef Zp<P3_32, 3> Zp3_32;
 
 template<class Zp1, class Zp2>
 class RNS_T
@@ -893,20 +895,26 @@ public:
 		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
 		src << "#define\tP1_INV\t" << uint64_t(-1) / P1_32 - (uint64_t(1) << 32) << "u" << std::endl;
 		src << "#define\tP2_INV\t" << uint64_t(-1) / P2_32 - (uint64_t(1) << 32) << "u" << std::endl;
-		src << "#define\tInvP2_P1\t1822724754u" << std::endl;		// 1 / P2 mod P1
-		src << "#define\tP1P2\t(P1 * (ulong)P2)" << std::endl;
+		Zp1_32 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
+		src << "#define\tInvP2_P1\t" << invP2modP1.get() << "u" << std::endl;
+		src << "#define\tP1P2\t" << P1_32 * uint64_t(P2_32) << "ul" << std::endl;
 
 		if (RNS_SIZE == 3)
 		{
 			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
 			src << "#define\tP3_INV\t" << uint64_t(-1) / P3_32 - (uint64_t(1) << 32) << "u" << std::endl;
-			src << "#define\tInvP3_P1\t607574918u" << std::endl;		// 1 / P3 mod P1
-			src << "#define\tInvP3_P2\t2995931465u" << std::endl;		// 1 / P3 mod P2
-			src << "#define\tP2P3\t(P2 * (ulong)P3)" << std::endl;
-			src << "#define\tP1P2P3l\t15383592652180029441ul" << std::endl;
-			src << "#define\tP1P2P3h\t3942432002u" << std::endl;
-			src << "#define\tP1P2P3_2l\t7691796326090014720ul" << std::endl;
-			src << "#define\tP1P2P3_2h\t1971216001u" << std::endl << std::endl;
+			Zp1_32 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
+			src << "#define\tInvP3_P1\t" << invP3modP1.get() << "u" << std::endl;
+			Zp2_32 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
+			src << "#define\tInvP3_P2\t" << invP3modP2.get() << "u" << std::endl;
+			src << "#define\tP2P3\t" << P2_32 * uint64_t(P3_32) << "ul" << std::endl;
+			const uint64_t P1P2 = P1_32 * uint64_t(P2_32);
+			const uint64_t l123 = uint32_t(P1P2) * uint64_t(P3_32), h123 = (P1P2 >> 32) * P3_32 + (l123 >> 32);
+			const uint64_t P1P2P3l = (h123 << 32) | uint32_t(l123); const uint32_t P1P2P3h = uint32_t(h123 >> 32);
+			src << "#define\tP1P2P3l\t" << P1P2P3l << "ul" << std::endl;
+			src << "#define\tP1P2P3h\t" << P1P2P3h << "u" << std::endl;
+			src << "#define\tP1P2P3_2l\t" << ((P1P2P3l >> 1) | (uint64_t(P1P2P3h) << 63)) << "ul" << std::endl;
+			src << "#define\tP1P2P3_2h\t" << (P1P2P3h >> 1) << "u" << std::endl << std::endl;
 		}
 
 		src << "#define\tBLK32\t" << BLK32 << std::endl;

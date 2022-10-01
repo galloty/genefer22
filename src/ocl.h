@@ -480,7 +480,7 @@ public:
 		std::vector<char> binary(binSize);
 		clGetProgramInfo(_program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
 		std::ofstream fileOut("pgm.bin", std::ios::binary);
-		fileOut.write(binary.data(), binSize);
+		fileOut.write(binary.data(), std::streamsize(binSize));
 		fileOut.close();
 #endif	
 	}

@@ -1651,8 +1651,8 @@ public:
 template<size_t VSIZE>
 inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 {
-	const uint32_t b12 = 4200000, b13 = 3500000, b14 = 2800000, b15 = 2300000, b16 = 1900000,
-				   b17 = 1600000, b18 = 1300000, b19 = 1100000, b20 = 880000, b21 = 730000, b22 = 600000;
+	const uint32_t b12 = 4200000, b13 = 3500000, b14 = 2800000, b15 = 2300000, b16 = 1900000, b17 = 1600000,
+				   b18 = 1300000, b19 = 1100000, b20 = 880000, b21 = 730000, b22 = 600000, b23 = 510000;
 
 	transform * pTransform = nullptr;
 	if (n == 12)
@@ -1709,6 +1709,11 @@ inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, co
 	{
 		if (b <= b22) pTransform = new transformCPUf64<(1 << 21), VSIZE, false>(b, n, num_threads, num_regs, checkError);
 		else		  pTransform = new transformCPUf64<(1 << 22), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	}
+	else if (n == 23)
+	{
+		if (b <= b23) pTransform = new transformCPUf64<(1 << 22), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+		else		  pTransform = new transformCPUf64<(1 << 23), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 

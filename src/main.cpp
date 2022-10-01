@@ -130,11 +130,7 @@ private:
 #endif
 		std::ostringstream ss;
 		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
-#if defined(GPU)
 		ss << "  -n <n>                        the exponent of the GFN (12 <= n <= 23)" << std::endl;
-#else
-		ss << "  -n <n>                        the exponent of the GFN (12 <= n <= 22)" << std::endl;
-#endif
 		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                            quick test" << std::endl;
 		ss << "  -p                            full test: a proof is generated" << std::endl;
@@ -231,11 +227,7 @@ public:
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				n = uint32_t(std::atoi(nstr.c_str()));
 				if (n < 12) throw std::runtime_error("n < 12 is not supported");
-#if defined(GPU)
 				if (n > 23) throw std::runtime_error("n > 23 is not supported");
-#else
-				if (n > 22) throw std::runtime_error("n > 22 is not supported");
-#endif
 			}
 			if (arg.substr(0, 2) == "-q")
 			{

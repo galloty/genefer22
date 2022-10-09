@@ -112,24 +112,24 @@ template<>
 class Vd<2>
 {
 private:
-	__m128d r;
+	__v2df r;
 
 private:
-	constexpr explicit Vd(const __m128d & _r) : r(_r) {}
+	constexpr explicit Vd(const __v2df & _r) : r(_r) {}
 
 public:
 	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : r(_mm_set_pd(0.0, f)) {}
+	finline explicit Vd(const double & f) : r(__v2df(_mm_set_pd(0.0, f))) {}
 	finline Vd(const Vd & rhs) : r(rhs.r) {}
 	finline Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	finline static Vd broadcast(const double & f) { return Vd(_mm_set1_pd(f)); }
+	finline static Vd broadcast(const double & f) { return Vd(__v2df(_mm_set1_pd(f))); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
-	finline bool isZero() const { return (_mm_movemask_pd(_mm_cmpneq_pd(r, _mm_setzero_pd())) == 0); }
+	finline bool isZero() const { return (_mm_movemask_pd(_mm_cmpneq_pd(__m128d(r), _mm_setzero_pd())) == 0); }
 
 	finline Vd & operator+=(const Vd & rhs) { r += rhs.r; return *this; }
 	finline Vd & operator-=(const Vd & rhs) { r -= rhs.r; return *this; }
@@ -139,20 +139,20 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline void shift(const double f) { r = _mm_set_pd(r[0], f); }
+	finline void shift(const double f) { r = __v2df(_mm_set_pd(r[0], f)); }
 
-	finline Vd round() const { return Vd(round_pd(r)); } 
+	finline Vd round() const { return Vd(__v2df(round_pd(__m128d(r)))); } 
 
-	finline Vd abs() const { return Vd(_mm_andnot_pd(_mm_set1_pd(-0.0), r)); }
-	finline Vd & max(const Vd & rhs) { r = _mm_max_pd(r, rhs.r); return *this; }
+	finline Vd abs() const { return Vd(__v2df(_mm_andnot_pd(_mm_set1_pd(-0.0), __m128d(r)))); }
+	finline Vd & max(const Vd & rhs) { r = __v2df(_mm_max_pd(__m128d(r), __m128d(rhs.r))); return *this; }
 	finline double max() const { return std::max(r[0], r[1]); }
 
 	finline void interleave(Vd &) {}	// unused
 
 	finline static void transpose(Vd vd[2])
 	{
-		const __m128d t = _mm_unpackhi_pd(vd[0].r, vd[1].r);
-		vd[0].r = _mm_unpacklo_pd(vd[0].r, vd[1].r); vd[1].r = t;
+		const __v2df t = __v2df(_mm_unpackhi_pd(vd[0].r, vd[1].r));
+		vd[0].r = __v2df(_mm_unpacklo_pd(vd[0].r, vd[1].r)); vd[1].r = t;
 	}
 };
 

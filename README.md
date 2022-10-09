@@ -22,3 +22,4 @@ This version is compiled with gcc 11 and 12 and was tested on Windows and Linux 
 
 ## TODO
 
+ - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).

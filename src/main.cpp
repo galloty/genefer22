@@ -86,10 +86,10 @@ private:
 #endif
 
 		std::ostringstream ssc;
-#if defined(__GNUC__)
-		ssc << " gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
-#elif defined(__clang__)
+#if defined(__clang__)
 		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+#elif defined(__GNUC__)
+		ssc << " gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
 #endif
 
 #if defined(BOINC)

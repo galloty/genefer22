@@ -85,6 +85,7 @@ public:
 		transform * pTransform = nullptr;
 
 #if defined(__aarch64__)
+		(void)impl;
 		pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
 		ttype = "neon";
 #else

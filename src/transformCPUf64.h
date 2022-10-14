@@ -1356,6 +1356,23 @@ private:
 		forward_out(zl, w122i);
 	}
 
+protected:
+	static void * alignNew(const size_t size, const size_t alignment, const size_t offset = 0)
+	{
+		char * const allocPtr = new char[size + alignment + offset + sizeof(size_t)];
+		const size_t addr = size_t(allocPtr) + alignment + sizeof(size_t);
+		size_t * const ptr = (size_t *)(addr - addr % alignment + offset);
+		ptr[-1] = size_t(allocPtr);
+		return (void *)(ptr);
+	}
+
+protected: 
+	static void alignDelete(void * const ptr)
+	{
+		char * const allocPtr = (char *)((size_t *)(ptr))[-1];
+		delete[] allocPtr;
+	}
+
 public:
 	transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 		: transform(N, n, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
@@ -1364,8 +1381,7 @@ public:
 		_b(b), _b_inv(1.0 / b), _sb(double(sqrtl(b))), _sb_inv(double(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
-		_mem((char *)_mm_malloc(_mem_size, 2 * 1024 * 1024)),
-		_z_copy((Vc *)_mm_malloc(zSize, 1024))
+		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -1392,8 +1408,8 @@ public:
 
 	virtual ~transformCPUf64()
 	{
-		_mm_free((void *)_mem);
-		_mm_free((void *)_z_copy);
+		alignDelete((void *)_mem);
+		alignDelete((void *)_z_copy);
 	}
 
 	size_t getMemSize() const override { return _mem_size; }

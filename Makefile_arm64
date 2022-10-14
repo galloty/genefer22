@@ -15,7 +15,7 @@ BOINC_LIB_OCL = -lboinc_opencl
 
 #CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
 CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
-FLAGS_CPU = -O3 -fopenmp -mfpu=neon
+FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_neon.o

@@ -1498,7 +1498,7 @@ protected:
 				Vc vc;
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const Complex zc(double(zi[k + i + 0 * N]), double(zi[k + i + 1 * N]));
+					const Complex zc((double(zi[k + i + 0 * N])), double(zi[k + i + 1 * N]));
 					vc.set(i, zc);
 				}
 				z[index(k) / VSIZE] = vc;

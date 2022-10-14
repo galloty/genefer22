@@ -8,12 +8,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
-#include <immintrin.h>
 
 #include <omp.h>
 
 #include "transform.h"
 #include "fp16_80.h"
+#include "simd128d.h"
 
 namespace transformCPU_namespace
 {
@@ -95,41 +95,28 @@ public:
 
 #define finline	__attribute__((always_inline))
 
-inline __m128d round_pd(const __m128d rhs)
-{
-#if defined(__SSE4_1__)
-	return _mm_round_pd(rhs, _MM_FROUND_TO_NEAREST_INT);
-#else // SSE2
-	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
-	const __m128d ar = _mm_andnot_pd(signMask, rhs);
-	const __m128d ir = _mm_or_pd(_mm_sub_pd(_mm_add_pd(ar, C52), C52), _mm_and_pd(signMask, rhs));
-	const __m128d mr = _mm_cmpge_pd(ar, C52);
-	return _mm_or_pd(_mm_and_pd(mr, rhs), _mm_andnot_pd(mr, ir));
-#endif
-}
-
 template<>
 class Vd<2>
 {
 private:
-	__v2df r;
+	simd128d r;
 
 private:
-	constexpr explicit Vd(const __v2df & _r) : r(_r) {}
+	constexpr explicit Vd(const simd128d & _r) : r(_r) {}
 
 public:
 	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : r(__v2df(_mm_set_pd(0.0, f))) {}
+	finline explicit Vd(const double & f) : r(set_pd(0.0, f)) {}
 	finline Vd(const Vd & rhs) : r(rhs.r) {}
 	finline Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	finline static Vd broadcast(const double & f) { return Vd(__v2df(_mm_set1_pd(f))); }
+	finline static Vd broadcast(const double & f) { return Vd(set1_pd(f)); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
-	finline bool isZero() const { return (_mm_movemask_pd(_mm_cmpneq_pd(__m128d(r), _mm_setzero_pd())) == 0); }
+	finline bool isZero() const { return is_zero_pd(r); }
 
 	finline Vd & operator+=(const Vd & rhs) { r += rhs.r; return *this; }
 	finline Vd & operator-=(const Vd & rhs) { r -= rhs.r; return *this; }
@@ -139,20 +126,20 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline void shift(const double f) { r = __v2df(_mm_set_pd(r[0], f)); }
+	finline void shift(const double f) { r = set_pd(r[0], f); }
 
-	finline Vd round() const { return Vd(__v2df(round_pd(__m128d(r)))); } 
+	finline Vd round() const { return Vd(round_pd(r)); } 
 
-	finline Vd abs() const { return Vd(__v2df(_mm_andnot_pd(_mm_set1_pd(-0.0), __m128d(r)))); }
-	finline Vd & max(const Vd & rhs) { r = __v2df(_mm_max_pd(__m128d(r), __m128d(rhs.r))); return *this; }
+	finline Vd abs() const { return Vd(abs_pd(r)); }
+	finline Vd & max(const Vd & rhs) { r = max_pd(r, rhs.r); return *this; }
 	finline double max() const { return std::max(r[0], r[1]); }
 
 	finline void interleave(Vd &) {}	// unused
 
 	finline static void transpose(Vd vd[2])
 	{
-		const __v2df t = __v2df(_mm_unpackhi_pd(vd[0].r, vd[1].r));
-		vd[0].r = __v2df(_mm_unpacklo_pd(vd[0].r, vd[1].r)); vd[1].r = t;
+		const simd128d t = unpackhi_pd(vd[0].r, vd[1].r);
+		vd[0].r = unpacklo_pd(vd[0].r, vd[1].r); vd[1].r = t;
 	}
 };
 

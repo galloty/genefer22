@@ -49,6 +49,8 @@ private:
 #if defined(GPU)
 	static transform * create_ocl(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose);
+#elif defined(__aarch64__)
+	static transform * create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 #else
 	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -82,6 +84,10 @@ public:
 	{
 		transform * pTransform = nullptr;
 
+#if defined(__aarch64__)
+		pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
+		ttype = "neon";
+#else
 		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
 		{
 			pTransform = transform::create_512(b, n, num_threads, num_regs, checkError);
@@ -118,6 +124,7 @@ public:
 			std::ostringstream ss; ss << impl << " is not supported";
 			throw std::runtime_error(ss.str());
 		}
+#endif
 
 		return pTransform;
 	}

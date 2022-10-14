@@ -1,4 +1,4 @@
-# Compiler: GCC 11
+# Compiler: GCC 11/12
 CC = g++ -m32 -march=i686 -std=c++17
 RM = del
 

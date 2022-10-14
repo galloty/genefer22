@@ -9,15 +9,20 @@ SRC_DIR = src
 OCL_INC = -IKhronos
 OCL_LIB = -framework OpenCL
 
+GMP_INC = -I/opt/homebrew/opt/gmp/include
+GMP_LIB = -L/opt/homebrew/opt/gmp/lib -lgmp
+OMP_INC = -I/opt/homebrew/opt/libomp/include
+OMP_LIB = -L/opt/homebrew/opt/libomp/lib -lomp
+
 BOINC_DIR = ../boinc
 BOINC_INC = -I$(BOINC_DIR)/mac_build/build/Deployment
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 
-#CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
-CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib
-FLAGS_CPU = -O3 -fopenmp -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include
-FLAGS_GPU = -O3 -DGPU -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib
+#CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only
+CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only
+FLAGS_CPU = -O3 -fopenmp
+FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_neon.o
 OBJS_GPU = maing.o transform_ocl.o
@@ -39,19 +44,19 @@ clean_obj:
 rebuild: clean_obj all
 
 main.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) $(GMP_INC) -c $< -o $@
 
 maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(GMP_INC) $(OCL_INC) -c $< -o $@
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) $(GMP_INC) -fprefetch-loop-arrays -c $< -o $@
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(GMP_INC) $(OCL_INC) -c $< -o $@
 
 $(EXEC_CPU): $(OBJS_CPU)
-	$(CC) $(FLAGS_CPU) $^ -lgmp $(BOINC_LIB) -o $@
+	$(CC) $(FLAGS_CPU) $^ $(GMP_INC) $(GMP_LIB) $(BOINC_LIB) -o $@
 
 $(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) $^ -lgmp $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@
+	$(CC) $(FLAGS_GPU) $^ $(GMP_INC) $(GMP_LIB) $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@

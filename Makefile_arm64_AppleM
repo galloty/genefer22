@@ -16,7 +16,7 @@ OMP_INC = -I/opt/homebrew/opt/libomp/include
 OMP_LIB = -L/opt/homebrew/opt/llvm/lib/ -lomp
 
 BOINC_DIR = ../boinc
-BOINC_INC = -I$(BOINC_DIR)/mac_build/build/Deployment
+BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 

@@ -1,7 +1,8 @@
 # Compiler: llvm/clang 15
 # Use llvm/clang installed from homebrew (brew install llvm), Apple-shipped clang will not correctly link OpenMP
 CC = /opt/homebrew/opt/llvm/bin/clang++ -std=c++17
-RM = rm
+RM = rm -f
+INSTALL_NAME_TOOL = install_name_tool
 
 BIN_DIR = bin
 SRC_DIR = src
@@ -9,15 +10,20 @@ SRC_DIR = src
 OCL_INC = -IKhronos
 OCL_LIB = -framework OpenCL
 
+GMP_INC = -I/opt/homebrew/opt/gmp/include
+GMP_LIB = -L/opt/homebrew/opt/gmp/lib -lgmp
+OMP_INC = -I/opt/homebrew/opt/libomp/include
+OMP_LIB = -L/opt/homebrew/opt/llvm/lib/ -lomp
+
 BOINC_DIR = ../boinc
 BOINC_INC = -I$(BOINC_DIR)/mac_build/build/Deployment
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 
-#CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
-CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib
-FLAGS_CPU = -O3 -fopenmp -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib -L/opt/homebrew/opt/libomp/lib -I/opt/homebrew/opt/libomp/include
-FLAGS_GPU = -O3 -DGPU -I/opt/homebrew/opt/gmp/include -L/opt/homebrew/opt/gmp/lib
+#CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only
+CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only
+FLAGS_CPU = -O3 -fopenmp
+FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_neon.o
 OBJS_GPU = maing.o transform_ocl.o
@@ -26,32 +32,43 @@ DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
 DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
+INTERMEDIATE_EXEC_CPU = genefer22_arm64_AppleM.tmp
+INTERMEDIATE_EXEC_GPU = genefer22g_arm64_AppleM.tmp
 EXEC_CPU = $(BIN_DIR)/genefer22_arm64_AppleM
 EXEC_GPU = $(BIN_DIR)/genefer22g_arm64_AppleM
 
-.PHONY: all clean_obj rebuild
+.PHONY: all clean_obj clean_bin rebuild
 
 all: $(EXEC_CPU) $(EXEC_GPU)
 
 clean_obj:
-	$(RM) $(OBJS_CPU) $(OBJS_GPU)
+	$(RM) $(OBJS_CPU) $(OBJS_GPU) $(INTERMEDIATE_EXEC_CPU) $(INTERMEDIATE_EXEC_GPU)
 
-rebuild: clean_obj all
+clean_bin:
+	$(RM) $(EXEC_CPU) $(EXEC_GPU)
+
+rebuild: clean_obj clean_bin all
 
 main.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) $(GMP_INC) -c $< -o $@
 
 maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(GMP_INC) $(OCL_INC) -c $< -o $@
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) $(GMP_INC) -fprefetch-loop-arrays -c $< -o $@
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
-	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(GMP_INC) $(OCL_INC) -c $< -o $@
 
-$(EXEC_CPU): $(OBJS_CPU)
-	$(CC) $(FLAGS_CPU) $^ -lgmp $(BOINC_LIB) -o $@
+$(INTERMEDIATE_EXEC_CPU): $(OBJS_CPU)
+	$(CC) $(FLAGS_CPU) $^ $(GMP_INC) $(GMP_LIB) $(BOINC_LIB) -o $@
 
-$(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) $^ -lgmp $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@
+$(INTERMEDIATE_EXEC_GPU): $(OBJS_GPU)
+	$(CC) $(FLAGS_GPU) $^ $(GMP_INC) $(GMP_LIB) $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@
+
+# Use install_name_tool to allow executable to look for dynamic load libraries in the same directory as the executable
+$(EXEC_CPU): $(INTERMEDIATE_EXEC_CPU)
+	$(INSTALL_NAME_TOOL) -change '/opt/homebrew/opt/llvm/lib/libomp.dylib' '@executable_path/libomp.dylib' -change '/opt/homebrew/opt/gmp/lib/libgmp.10.dylib' '@executable_path/libgmp.10.dylib' $^ && cp $^ $@
+$(EXEC_GPU): $(INTERMEDIATE_EXEC_GPU)
+	$(INSTALL_NAME_TOOL) -change '/opt/homebrew/opt/gmp/lib/libgmp.10.dylib' '@executable_path/libgmp.10.dylib' $^ && cp $^ $@

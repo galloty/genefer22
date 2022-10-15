@@ -23,8 +23,8 @@ inline simd128d set1_pd(const double f) { return vdupq_n_f64(f); }
 
 inline bool is_zero_pd(const simd128d v)
 {
-    const uint32x2_t tmp = vorr_u32(vget_low_f64(v), vget_high_u32(v));
-    return vget_lane_u32(vpmax_u32(tmp, tmp), 0) == 0;
+	const uint64x2_t mask = vceqzq_f64(v);
+	return ((vgetq_lane_u64(mask, 0) & vgetq_lane_u64(mask, 1)) != 0);
 }
 
 inline simd128d abs_pd(const simd128d v) { return vabsq_f64(v); }

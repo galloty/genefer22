@@ -16,8 +16,7 @@ BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 
-#CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
-CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
@@ -25,7 +24,7 @@ OBJS_CPU = main.o transform_neon.o
 OBJS_GPU = maing.o transform_ocl.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
-DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(SRC_DIR)/simd128d.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
 EXEC_CPU = $(BIN_DIR)/genefer22

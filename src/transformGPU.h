@@ -26,14 +26,14 @@ private:
 private:
 	explicit Zp(const cl_uint n) : _n(n) {}
 
-	Zp _mulMod(const Zp & rhs) const { return Zp(cl_uint((_n * cl_ulong(rhs._n)) % p)); }
+	Zp _mulMod(const Zp & rhs) const { return Zp(static_cast<cl_uint>((_n * cl_ulong(rhs._n)) % p)); }
 
 public:
 	Zp() {}
-	explicit Zp(const int32_t i) : _n((i < 0) ? p - cl_uint(-i) : cl_uint(i)) {}
+	explicit Zp(const int32_t i) : _n((i < 0) ? p - static_cast<cl_uint>(-i) : static_cast<cl_uint>(i)) {}
 
 	cl_uint get() const { return _n; }
-	int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
+	int32_t getInt() const { return (_n > p / 2) ? static_cast<int32_t>(_n - p) : static_cast<int32_t>(_n); }
 
 	void set(const cl_uint n) { _n = n; }
 
@@ -327,10 +327,10 @@ public:
 		_square1024 = createTransformKernel("square1024");
 		_square2048 = createTransformKernel("square2048");
 
-		const cl_int b_s = cl_int(31 - __builtin_clz(b) - 1);
-		const cl_uint b_inv = cl_uint((uint64_t(1) << (b_s + 32)) / b);
-		_normalize1 = createNormalizeKernel("normalize1", cl_uint(b), b_inv, b_s);
-		_normalize2 = createNormalizeKernel("normalize2", cl_uint(b), b_inv, b_s);
+		const cl_int b_s = static_cast<cl_int>(31 - __builtin_clz(b) - 1);
+		const cl_uint b_inv = static_cast<cl_uint>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
+		_normalize1 = createNormalizeKernel("normalize1", static_cast<cl_uint>(b), b_inv, b_s);
+		_normalize2 = createNormalizeKernel("normalize2", static_cast<cl_uint>(b), b_inv, b_s);
 
 		_fwd32p = createTransformKernel("fwd32p", false);
 		_fwd64p = createTransformKernel("fwd64p", false);
@@ -392,8 +392,8 @@ private:
 	void fb(cl_kernel & kernel, const int lm, const size_t localWorkSize)
 	{
 		const size_t n_4 = _n / 4;
-		const cl_int ilm = cl_int(lm);
-		const cl_uint is = cl_uint(n_4 >> lm);
+		const cl_int ilm = static_cast<cl_int>(lm);
+		const cl_uint is = static_cast<cl_uint>(n_4 >> lm);
 		cl_uint index = (RNS_SIZE == 3) ? 4 : 2;
 		_setKernelArg(kernel, index++, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &is);
@@ -586,7 +586,7 @@ private:
 public:
 	void initMultiplicand(const size_t src)
 	{
-		const cl_uint isrc = cl_uint(src * _n);
+		const cl_uint isrc = static_cast<cl_uint>(src * _n);
 		_setKernelArg(_copyp, (RNS_SIZE == 3) ? 4 : 2, sizeof(cl_uint), &isrc);
 		_executeKernel(_copyp, _n);
 
@@ -688,7 +688,7 @@ public:
 
 	void copy(const size_t dst, const size_t src)
 	{
-		const cl_uint idst = cl_uint(dst * _n), isrc = cl_uint(src * _n);
+		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
 		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &idst);
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &isrc);
@@ -698,10 +698,10 @@ public:
 public:
 	void baseMod(const bool dup)
 	{
-		const cl_uint blk = cl_uint(_baseModBlk);
-		const cl_int sblk = dup ? -cl_int(blk) : cl_int(blk);
+		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
+		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
 		const size_t size = _n / blk;
-		const cl_int ln = cl_int(_ln);
+		const cl_int ln = static_cast<cl_int>(_ln);
 
 		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
 		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
@@ -716,10 +716,10 @@ public:
 private:
 	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const RNS * const Z, const RNSe * const Ze)
 	{
-		const cl_uint cblk = cl_uint(blk);
-		const cl_int sblk = cl_int(blk);
+		const cl_uint cblk = static_cast<cl_uint>(blk);
+		const cl_int sblk = static_cast<cl_int>(blk);
 		const size_t size = _n / blk;
-		const cl_int ln = cl_int(_ln);
+		const cl_int ln = static_cast<cl_int>(_ln);
 
 		for (size_t i = 0; i != count; ++i)
 		{
@@ -744,10 +744,10 @@ public:
 
 		RNS * const Z = new RNS[n];
 		RNSe * const Ze = (RNS_SIZE == 3) ? new RNSe[n] : nullptr;
-		const double maxSqr = n * (base * double(base));
+		const double maxSqr = n * (base * static_cast<double>(base));
 		for (size_t i = 0; i != n; ++i)
 		{
-			const int v = int(maxSqr * cos(double(i)));
+			const int v = static_cast<int>(maxSqr * cos(static_cast<double>(i)));
 			Z[i] = RNS(v); if (RNS_SIZE == 3) Ze[i] = RNSe(v);
 		}
 
@@ -762,12 +762,12 @@ public:
 		cl_ulong minT = cl_ulong(-1);
 
 		size_t bMin = 4;
-		while (bMin < log(n * double(base + 2)) / log(double(base))) bMin *= 2;
+		while (bMin < log(n * static_cast<double>(base + 2)) / log(static_cast<double>(base))) bMin *= 2;
 
 		for (size_t b = bMin; b <= 64; b *= 2)
 		{
 			// Check convergence
-			if (log(maxSqr) >= base * log(double(b))) continue;
+			if (log(maxSqr) >= base * log(static_cast<double>(b))) continue;
 
 			resetProfiles();
 			baseModTune(count, b, 0, 0, Z, Ze);
@@ -887,33 +887,33 @@ public:
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, int(n), isBoinc, verbose);
+		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, verbose);
 
 		std::ostringstream src;
 
 		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
 		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
-		src << "#define\tP1_INV\t" << uint64_t(-1) / P1_32 - (uint64_t(1) << 32) << "u" << std::endl;
-		src << "#define\tP2_INV\t" << uint64_t(-1) / P2_32 - (uint64_t(1) << 32) << "u" << std::endl;
+		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
+		src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
 		Zp1_32 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
 		src << "#define\tInvP2_P1\t" << invP2modP1.get() << "u" << std::endl;
-		src << "#define\tP1P2\t" << P1_32 * uint64_t(P2_32) << "ul" << std::endl;
+		src << "#define\tP1P2\t" << P1_32 * static_cast<uint64_t>(P2_32) << "ul" << std::endl;
 
 		if (RNS_SIZE == 3)
 		{
 			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
-			src << "#define\tP3_INV\t" << uint64_t(-1) / P3_32 - (uint64_t(1) << 32) << "u" << std::endl;
+			src << "#define\tP3_INV\t" << static_cast<uint64_t>(-1) / P3_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
 			Zp1_32 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
 			src << "#define\tInvP3_P1\t" << invP3modP1.get() << "u" << std::endl;
 			Zp2_32 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
 			src << "#define\tInvP3_P2\t" << invP3modP2.get() << "u" << std::endl;
-			src << "#define\tP2P3\t" << P2_32 * uint64_t(P3_32) << "ul" << std::endl;
-			const uint64_t P1P2 = P1_32 * uint64_t(P2_32);
-			const uint64_t l123 = uint32_t(P1P2) * uint64_t(P3_32), h123 = (P1P2 >> 32) * P3_32 + (l123 >> 32);
-			const uint64_t P1P2P3l = (h123 << 32) | uint32_t(l123); const uint32_t P1P2P3h = uint32_t(h123 >> 32);
+			src << "#define\tP2P3\t" << P2_32 * static_cast<uint64_t>(P3_32) << "ul" << std::endl;
+			const uint64_t P1P2 = P1_32 * static_cast<uint64_t>(P2_32);
+			const uint64_t l123 = static_cast<uint32_t>(P1P2) * static_cast<uint64_t>(P3_32), h123 = (P1P2 >> 32) * P3_32 + (l123 >> 32);
+			const uint64_t P1P2P3l = (h123 << 32) | static_cast<uint32_t>(l123); const uint32_t P1P2P3h = static_cast<uint32_t>(h123 >> 32);
 			src << "#define\tP1P2P3l\t" << P1P2P3l << "ul" << std::endl;
 			src << "#define\tP1P2P3h\t" << P1P2P3h << "u" << std::endl;
-			src << "#define\tP1P2P3_2l\t" << ((P1P2P3l >> 1) | (uint64_t(P1P2P3h) << 63)) << "ul" << std::endl;
+			src << "#define\tP1P2P3_2l\t" << ((P1P2P3l >> 1) | (static_cast<uint64_t>(P1P2P3h) << 63)) << "ul" << std::endl;
 			src << "#define\tP1P2P3_2h\t" << (P1P2P3h >> 1) << "u" << std::endl << std::endl;
 		}
 
@@ -944,21 +944,21 @@ public:
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
-			const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+			const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
 			for (size_t i = 0; i < s; ++i)
 			{
 				const size_t e = bitRev(i, 2 * s) + 1;
-				const RNS wrsi = prRoot_m.pow(uint32_t(e));
+				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(e));
 				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
 			}
 		}
 
 		const size_t m = 4 * size / 2;
-		const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+		const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
 		for (size_t i = 0; i != size / 4; ++i)
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-			wr[size / 2 + i] = prRoot_m.pow(uint32_t(e));
+			wr[size / 2 + i] = prRoot_m.pow(static_cast<uint32_t>(e));
 		}
 
 		_pEngine->writeMemory_w(wr);
@@ -971,21 +971,21 @@ public:
 			for (size_t s = 1; s < size / 2; s *= 2)
 			{
 				const size_t m = 4 * s;
-				const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
+				const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
 				for (size_t i = 0; i < s; ++i)
 				{
 					const size_t e = bitRev(i, 2 * s) + 1;
-					const RNSe wrsie = prRoot_me.pow(uint32_t(e));
+					const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(e));
 					wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
 				}
 			}
 
 			const size_t m = 4 * size / 2;
-			const RNSe prRoot_me = RNSe::prRoot_n(uint32_t(m));
+			const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
 			for (size_t i = 0; i != size / 4; ++i)
 			{
 				const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-				wre[size / 2 + i] = prRoot_me.pow(uint32_t(e));
+				wre[size / 2 + i] = prRoot_me.pow(static_cast<uint32_t>(e));
 			}
 
 			_pEngine->writeMemory_we(wre);
@@ -1041,7 +1041,7 @@ public:
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != int(getKind())) return false;
+		if (kind != static_cast<int>(getKind())) return false;
 
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
@@ -1059,7 +1059,7 @@ public:
 
 	void saveContext(file & cFile, const size_t nregs) const override
 	{
-		const int kind = int(getKind());
+		const int kind = static_cast<int>(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;

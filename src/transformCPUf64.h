@@ -1378,7 +1378,7 @@ public:
 		: transform(N, n, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
 								   : ((VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8))),
 		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads),
-		_b(b), _b_inv(1.0 / b), _sb(double(sqrtl(b))), _sb_inv(double(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
+		_b(b), _b_inv(1.0 / b), _sb(static_cast<double>(sqrtl(b))), _sb_inv(static_cast<double>(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
 		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
@@ -1429,7 +1429,7 @@ protected:
 			backward_out(&z_copy[2 * 4 / VSIZE * lh], w122i);
 		}
 
-		const double n_io_N = double(n_io) / N;
+		const double n_io_N = static_cast<double>(n_io) / N;
 
 		if (IBASE)
 		{
@@ -1474,8 +1474,8 @@ protected:
 				Vd<VSIZE> r;
 				for (size_t i = 0; i < VSIZE / 2; ++i)
 				{
-					r.set(2 * i + 0, double(zi[k + i + 0 * N / 2]));
-					r.set(2 * i + 1, double(zi[k + i + 1 * N / 2]));
+					r.set(2 * i + 0, static_cast<double>(zi[k + i + 0 * N / 2]));
+					r.set(2 * i + 1, static_cast<double>(zi[k + i + 1 * N / 2]));
 				}
 
 				const Vd<VSIZE> irh = Vd<VSIZE>(r * sb_inv).round();
@@ -1498,7 +1498,7 @@ protected:
 				Vc vc;
 				for (size_t i = 0; i < VSIZE; ++i)
 				{
-					const Complex zc((double(zi[k + i + 0 * N])), double(zi[k + i + 1 * N]));
+					const Complex zc(static_cast<double>(zi[k + i + 0 * N]), static_cast<double>(zi[k + i + 1 * N]));
 					vc.set(i, zc);
 				}
 				z[index(k) / VSIZE] = vc;
@@ -1517,7 +1517,7 @@ public:
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != int(getKind())) return false;
+		if (kind != static_cast<int>(getKind())) return false;
 
 		if (!cFile.read(reinterpret_cast<char *>(&_error), sizeof(_error))) return false;
 
@@ -1534,7 +1534,7 @@ public:
 
 	void saveContext(file & cFile, const size_t num_regs) const override
 	{
-		const int kind = int(getKind());
+		const int kind = static_cast<int>(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
 		if (!cFile.write(reinterpret_cast<const char *>(&_error), sizeof(_error))) return;

@@ -43,14 +43,14 @@ public:
 		_state = EState::Unbalanced;
 
 		const size_t size = _size;
-		const int32_t base = int32_t(_base);
+		const int32_t base = static_cast<int32_t>(_base);
 		int32_t * const d = _d;
 
 		int64_t f = 0;
 		for (size_t i = 0; i < size; ++i)
 		{
 			f += d[i];
-			int32_t r = int32_t(f % base);
+			int32_t r = static_cast<int32_t>(f % base);
 			if (r < 0) r += base;
 			d[i] = r;
 			f -= r;
@@ -64,7 +64,7 @@ public:
 			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
-				int32_t r = int32_t(f % base);
+				int32_t r = static_cast<int32_t>(f % base);
 				if (r < 0) r += base;
 				d[i] = r;
 				f -= r;
@@ -99,14 +99,14 @@ public:
 		_state = EState::Balanced;
 
 		const size_t size = _size;
-		const int32_t base = int32_t(_base);
+		const int32_t base = static_cast<int32_t>(_base);
 		int32_t * const d = _d;
 
 		int64_t f = 0;
 		for (size_t i = 0; i < size; ++i)
 		{
 			f += d[i];
-			int32_t r = int32_t(f % base);
+			int32_t r = static_cast<int32_t>(f % base);
 			if (r > base / 2) r -= base;
 			if (r <= -base / 2) r += base;
 			d[i] = r;
@@ -121,7 +121,7 @@ public:
 			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
-				int32_t r = int32_t(f % base);
+				int32_t r = static_cast<int32_t>(f % base);
 				if (r > base / 2) r -= base;
 				if (r <= -base / 2) r += base;
 				d[i] = r;
@@ -144,7 +144,7 @@ public:
 	void write(file & cFile)
 	{
 		unbalance();
-		const uint32_t size = uint32_t(_size);
+		const uint32_t size = static_cast<uint32_t>(_size);
 		cFile.write(reinterpret_cast<const char *>(&size), sizeof(size));
 		cFile.write(reinterpret_cast<const char *>(&_base), sizeof(_base));
 		cFile.write(reinterpret_cast<const char *>(_d), _size * sizeof(int32_t));
@@ -163,13 +163,13 @@ public:
 		uint64_t r64 = 0, b = 1;
 		for (size_t i = 0; i < size; ++i)
 		{
-			r64 += uint32_t(d[i]) * b;
+			r64 += static_cast<uint32_t>(d[i]) * b;
 			b *= base;
 		}
 		res64 = r64;
 
 		uint64_t old = 0;
-		for (size_t i = 8; i != 0; --i) old = (old << 8) | uint8_t(d[size - i]);
+		for (size_t i = 8; i != 0; --i) old = (old << 8) | static_cast<uint8_t>(d[size - i]);
 		old64 = old;
 
 		return bOne;
@@ -183,9 +183,9 @@ public:
 		bool isZero = true;
 		for (size_t i = 0, size = _size; i < size; ++i)
 		{
-			const uint32_t a_i = uint32_t(d[i]);
+			const uint32_t a_i = static_cast<uint32_t>(d[i]);
 			hash += a_i;
-			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * uint64_t(a_i) + 5) % 64);
+			hash ^= rotl64(a_i + 0xc39d8a0552b073e8ull, (17 * static_cast<uint64_t>(a_i) + 5) % 64);
 			isZero &= (a_i == 0);
 		}
 		if (isZero) pio::error("value is zero", true);
@@ -195,6 +195,6 @@ public:
 	uint32_t gethash32()
 	{
 		const uint64_t hash = gethash64();
-		return std::max(uint32_t(2), uint32_t(hash) ^ uint32_t(hash >> 32));
+		return std::max(static_cast<uint32_t>(2), static_cast<uint32_t>(hash) ^ static_cast<uint32_t>(hash >> 32));
 	}
 };

@@ -64,7 +64,7 @@ private:
 		if ((5 <= m) && (m <= mMax))
 		{
 			for (size_t k = 0; k < i; ++k) part[size].p[k] = p.p[k];
-			part[size].p[i] = uint32_t(m);
+			part[size].p[i] = static_cast<uint32_t>(m);
 			part[size].size = i + 1;
 			size++;
 		}

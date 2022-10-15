@@ -17,9 +17,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define P1		4253024257u		// 507 * 2^23 + 1
 #define P2		4194304001u		// 125 * 2^25 + 1
 #define P3		4076863489u		// 243 * 2^24 + 1
-#define P1_inv	(uint64_t(-1) / P1 - (uint64_t(1) << 32))
-#define P2_inv	(uint64_t(-1) / P2 - (uint64_t(1) << 32))
-#define P3_inv	(uint64_t(-1) / P3 - (uint64_t(1) << 32))
+#define P1_inv	(static_cast<uint64_t>(-1) / P1 - (static_cast<uint64_t>(1) << 32))
+#define P2_inv	(static_cast<uint64_t>(-1) / P2 - (static_cast<uint64_t>(1) << 32))
+#define P3_inv	(static_cast<uint64_t>(-1) / P3 - (static_cast<uint64_t>(1) << 32))
 
 template <uint32_t p, uint32_t p_inv, uint32_t prRoot>
 class Zp
@@ -30,10 +30,10 @@ private:
 public:
 	finline Zp() {}
 	finline explicit Zp(const uint32_t n) : _n(n) {}
-	finline explicit Zp(const int32_t i) : _n((i < 0) ? p - uint32_t(-i) : uint32_t(i)) {}
+	finline explicit Zp(const int32_t i) : _n((i < 0) ? p - static_cast<uint32_t>(-i) : static_cast<uint32_t>(i)) {}
 
 	finline uint32_t get() const { return _n; }
-	finline int32_t getInt() const { return (_n > p / 2) ? int32_t(_n - p) : int32_t(_n); }
+	finline int32_t getInt() const { return (_n > p / 2) ? static_cast<int32_t>(_n - p) : static_cast<int32_t>(_n); }
 
 	finline Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
 
@@ -51,7 +51,7 @@ public:
 
 	finline Zp operator*(const Zp & rhs) const
 	{
-		return Zp(uint32_t((_n * uint64_t(rhs._n)) % p));
+		return Zp(static_cast<uint32_t>((_n * static_cast<uint64_t>(rhs._n)) % p));
 	}
 
 	finline Zp & operator+=(const Zp & rhs) { *this = *this + rhs; return *this; }
@@ -144,16 +144,16 @@ public:
 
 	finline Zp4 operator*(const Zp4 & rhs) const
 	{
-		// const uint64_t m = _n * uint64_t(rhs._n)
+		// const uint64_t m = _n * static_cast<uint64_t>(rhs._n)
 		const __v4du m = __v4du(_mm256_mul_epu32(__m256i(_n0123), __m256i(rhs._n0123)));
 
-		// uint64_t q = uint32_t(m >> 32) * uint64_t(p_inv) + m;
+		// uint64_t q = static_cast<uint32_t>(m >> 32) * static_cast<uint64_t>(p_inv) + m;
 		const __v4du q = __v4du(_mm256_mul_epu32(__m256i(m >> 32), __m256i(p0123_inv))) + m;
 
-		// uint32_t r = uint32_t(m) - (1 + uint32_t(q >> 32)) * p;
+		// uint32_t r = static_cast<uint32_t>(m) - (1 + static_cast<uint32_t>(q >> 32)) * p;
 		__v8su r = __v8su(m) - __v8su(q >> 32) * p0123 - p0123;
 
-		// if (r > uint32_t(q)) r += p;
+		// if (r > static_cast<uint32_t>(q)) r += p;
 		r += (r > __v8su(q)) & p0123;
 		// if (r >= p) r -= p ;
 		r -= (r >= p0123) & p0123;
@@ -327,7 +327,7 @@ private:
 
 public:
 	finline int96_4(const uint64_4 & lo, const int64_4 & hi) : _lo(lo), _hi(hi) {}
-	finline int96_4(const int64_t n) : _lo(uint64_t(n)), _hi((n < 0) ? int64_t(-1) : int64_t(0)) {}
+	finline int96_4(const int64_t n) : _lo(static_cast<uint64_t>(n)), _hi((n < 0) ? static_cast<int64_t>(-1) : static_cast<int64_t>(0)) {}
 	finline int96_4(const int64_4 & n) : _lo(uint64_4(n)), _hi(n.sign()) {}
 
 	finline uint64_4 lo() const { return _lo; }
@@ -448,7 +448,7 @@ private:
 
 		__v4du s; const uint64_4 t = uint64_4::abs(f, s);
 		const uint64_4 t_h = t >> 29;
-		const uint64_4 t_l = t & uint64_4((uint32_t(1) << 29) - 1);
+		const uint64_4 t_l = t & uint64_4((static_cast<uint32_t>(1) << 29) - 1);
 
 		uint64_4 d_h, r_h = barrett(t_h, b, b_inv, b_s, d_h);
 		uint64_4 d_l, r_l = barrett((r_h << 29) | t_l, b, b_inv, b_s, d_l);
@@ -465,7 +465,7 @@ private:
 	{
 		__v4du s; const uint96_4 t = uint96_4::abs(f, s);
 		const uint64_4 t_h = (t.hi() << (64 - 29)) | (t.lo() >> 29);
-		const uint64_4 t_l = t.lo() & uint64_4((uint32_t(1) << 29) - 1);
+		const uint64_4 t_l = t.lo() & uint64_4((static_cast<uint32_t>(1) << 29) - 1);
 
 		uint64_4 d_h, r_h = barrett(t_h, b, b_inv, b_s, d_h);
 		uint64_4 d_l, r_l = barrett((r_h << 29) | t_l, b, b_inv, b_s, d_l);
@@ -483,8 +483,8 @@ private:
 		const uint32_t invP2_P1 = 1822724754u;		// 1 / P2 mod P1
 		const uint32_t invP3_P1 = 607574918u;		// 1 / P3 mod P1
 		const uint32_t invP3_P2 = 2995931465u;		// 1 / P3 mod P2
-		const uint96_4 P1P2P3 = uint96_4(uint64_4(uint64_t(15383592652180029441ull)), uint64_4(uint32_t(3942432002u)));
-		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(uint64_t(7691796326090014720ull)), uint64_4(uint32_t(1971216001u)));
+		const uint96_4 P1P2P3 = uint96_4(uint64_4(static_cast<uint64_t>(15383592652180029441ull)), uint64_4(static_cast<uint32_t>(3942432002u)));
+		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(static_cast<uint64_t>(7691796326090014720ull)), uint64_4(static_cast<uint32_t>(1971216001u)));
 
 		const auto r3 = s.r3().get();
 		const Zp4_1 u13 = (s.r1() - Zp4_1(r3)) * Zp4_1(invP3_P1);
@@ -492,7 +492,7 @@ private:
 		const Zp4_1 u123 = (u13 - Zp4_1(u23.get())) * Zp4_1(invP2_P1);
 
 		const uint64_4 t = uint64_4(u23.get()) * uint64_4(P3) + uint64_4(r3);
-		const uint96_4 n = uint96_4::mul_64_32(uint64_4(P2 * uint64_t(P3)), uint64_4(u123.get())) + t;
+		const uint96_4 n = uint96_4::mul_64_32(uint64_4(P2 * static_cast<uint64_t>(P3)), uint64_4(u123.get())) + t;
 
 		const uint96_4 r = n - (P1P2P3 & n.is_greater(P1P2P3_2));
 		return r.u2i();
@@ -502,8 +502,8 @@ public:
 	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs) : transform(1 << n, n, b, EKind::NTT3cpu),
 		_num_threads(num_threads), _num_regs(num_regs),
 		_mem_size((size_t(1) << n) / 4 * (num_regs + 2) * sizeof(RNS4)), _cache_size((size_t(1) << n) / 4 * sizeof(RNS4)),
-		_norm(Zp1::norm(uint32_t(1) << (n - 1)), Zp2::norm(uint32_t(1) << (n - 1)), Zp3::norm(uint32_t(1) << (n - 1))),
-		_b(b), _b_inv(uint32_t((uint64_t(1) << ((int(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(int(31 - __builtin_clz(b) - 1)),
+		_norm(Zp1::norm(static_cast<uint32_t>(1) << (n - 1)), Zp2::norm(static_cast<uint32_t>(1) << (n - 1)), Zp3::norm(static_cast<uint32_t>(1) << (n - 1))),
+		_b(b), _b_inv(static_cast<uint32_t>((static_cast<uint64_t>(1) << ((static_cast<int>(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(static_cast<int>(31 - __builtin_clz(b) - 1)),
 		_z(new RNS4[(size_t(1) << n) / 4 * num_regs]), _wr(new RNS4[2 * (size_t(1) << n) / 4]), _zp(new RNS4[(size_t(1) << n) / 4])
 	{
 		const size_t size_4 = (size_t(1) << n) / 4;
@@ -513,23 +513,23 @@ public:
 		for (size_t s_4 = 1; s_4 < size_4 / 2; s_4 *= 2)
 		{
 			const size_t s = 4 * s_4, m = 4 * s;
-			const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+			const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
 
 			for (size_t i = 0; i < s_4; ++i)
 			{
 				size_t e[4]; for (size_t j = 0; j < 4; ++j) e[j] = bitRev(i + j * s_4, 2 * s) + 1;
-				RNS wrsi[4]; for (size_t j = 0; j < 4; ++j) wrsi[j] = prRoot_m.pow(uint32_t(e[j]));
+				RNS wrsi[4]; for (size_t j = 0; j < 4; ++j) wrsi[j] = prRoot_m.pow(static_cast<uint32_t>(e[j]));
 				wr[s_4 + i] = RNS4(wrsi[0], wrsi[1], wrsi[2], wrsi[3]);
 				wri[s_4 + (s_4 - i - 1)] = -RNS4(wrsi[3], wrsi[2], wrsi[1], wrsi[0]);
 			}
 		}
 
 		const size_t s_4 = size_4 / 4, s = 4 * s_4, m = 4 * (2 * s);
-		const RNS prRoot_m = RNS::prRoot_n(uint32_t(m));
+		const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
 		for (size_t i = 0; i < s_4; ++i)
 		{
 			size_t e[4]; for (size_t j = 0; j < 4; ++j) e[j] = bitRev(i + j * s_4, 2 * s) + 1;
-			RNS wrsi[4]; for (size_t j = 0; j < 4; ++j) wrsi[j] = prRoot_m.pow(uint32_t(e[j]));
+			RNS wrsi[4]; for (size_t j = 0; j < 4; ++j) wrsi[j] = prRoot_m.pow(static_cast<uint32_t>(e[j]));
 			wr[2 * s_4 + i] = RNS4(wrsi[0], wrsi[1], wrsi[2], wrsi[3]);
 		}
 	}
@@ -799,7 +799,7 @@ public:
 	{
 		int kind = 0;
 		if (!cFile.read(reinterpret_cast<char *>(&kind), sizeof(kind))) return false;
-		if (kind != int(getKind())) return false;
+		if (kind != static_cast<int>(getKind())) return false;
 
 		const size_t size_4 = getSize() / 4;
 		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(RNS4) * size_4 * num_regs)) return false;
@@ -808,7 +808,7 @@ public:
 
 	void saveContext(file & cFile, const size_t num_regs) const override
 	{
-		const int kind = int(getKind());
+		const int kind = static_cast<int>(getKind());
 		if (!cFile.write(reinterpret_cast<const char *>(&kind), sizeof(kind))) return;
 
 		const size_t size_4 = getSize() / 4;

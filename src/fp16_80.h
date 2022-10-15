@@ -33,8 +33,8 @@ public:
 		return true;
 	}
 
-	double hi() const { return std::ldexp(double(a[size - 1]), -16); }
-	double lo() const { return std::ldexp(double((uint64_t(a[size - 2]) << 32) | a[size - 3]), -80); }
+	double hi() const { return std::ldexp(static_cast<double>(a[size - 1]), -16); }
+	double lo() const { return std::ldexp(static_cast<double>((static_cast<uint64_t>(a[size - 2]) << 32) | a[size - 3]), -80); }
 
 	uint32_t square_hi() const
 	{
@@ -44,15 +44,15 @@ public:
 		{
 			for (size_t i = 0; i < size; ++i)
 			{
-				const uint64_t p = a[j] * uint64_t(a[i]);
-				r[j + i] += uint32_t(p);
-				r[j + i + 1] += uint32_t(p >> 32);
+				const uint64_t p = a[j] * static_cast<uint64_t>(a[i]);
+				r[j + i] += static_cast<uint32_t>(p);
+				r[j + i + 1] += static_cast<uint32_t>(p >> 32);
 			}
 		}
 
 		uint64_t l = 0;
 		for (size_t k = 0; k < 2 * size - 1; ++k) l = r[k] + (l >> 32);
-		return uint32_t(r[2 * size - 1] + (l >> 32));
+		return static_cast<uint32_t>(r[2 * size - 1] + (l >> 32));
 	}
 
 	static fp16_80 hadd(const fp16_80 & x, const fp16_80 & y)
@@ -61,8 +61,8 @@ public:
 		uint64_t l = 0;
 		for (size_t k = 0; k < size; ++k)
 		{
-			l = x.a[k] + uint64_t(y.a[k]) + (l >> 32);
-			z.a[k] = uint32_t(l);
+			l = x.a[k] + static_cast<uint64_t>(y.a[k]) + (l >> 32);
+			z.a[k] = static_cast<uint32_t>(l);
 		}
 		for (size_t k = 0; k < size - 1; ++k)
 		{
@@ -74,7 +74,7 @@ public:
 
 	static fp16_80 sqrt(const uint32_t x)
 	{
-		const uint32_t s = uint32_t(std::lround(std::sqrt(double(x))));
+		const uint32_t s = static_cast<uint32_t>(std::lround(std::sqrt(static_cast<double>(x))));
 		fp16_80 a((s - 1) << 16), b((s + 1) << 16);
 
 		for (size_t i = 0; i < 100; ++i)

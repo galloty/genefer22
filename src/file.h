@@ -79,7 +79,7 @@ public:
 			// Calculate CRC table
 			for (size_t i = 0; i < 256; ++i)
 			{
-				uint32_t rem = uint32_t(i);  // remainder from polynomial division
+				uint32_t rem = static_cast<uint32_t>(i);  // remainder from polynomial division
 				for (size_t j = 0; j < 8; ++j)
 				{
 					if (rem & 1)
@@ -97,7 +97,7 @@ public:
 		uint32_t crc = ~crc32;
 		for (size_t i = 0; i < len; ++i)
 		{
-			const uint8_t octet = uint8_t(buf[i]);  // Cast to unsigned octet
+			const uint8_t octet = static_cast<uint8_t>(buf[i]);  // Cast to unsigned octet
 			crc = (crc >> 8) ^ table[(crc & 0xff) ^ octet];
 		}
 		return ~crc;
@@ -126,7 +126,7 @@ public:
 	bool read(mpz_t & z)
 	{
 		if (mpz_inp_raw(z, _cFile) != 0) return true;
-		_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
+		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
 		std::fclose(_cFile);
 		error("failure of a read operation");
 		return false;
@@ -135,7 +135,7 @@ public:
 	bool write(const mpz_t & z)
 	{
 		if (mpz_out_raw(_cFile, z) != 0) return true;
-		_crc32 = _crc32 ^ uint32_t(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
+		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
 		std::fclose(_cFile);
 		error("failure of a write operation");
 		return false;

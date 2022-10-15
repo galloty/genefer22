@@ -103,7 +103,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " 0.9.4 " << sysver << ssc.str() << std::endl;
+		ss << "genefer22" << ext << " 0.9.5 " << sysver << ssc.str() << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -217,7 +217,7 @@ public:
 			if ((arg.substr(0, 2) == "-b") && (arg.substr(0, 3) != "-bo"))
 			{
 				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				b = uint32_t(std::atoi(bstr.c_str()));
+				b = static_cast<uint32_t>(std::atoi(bstr.c_str()));
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
 				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
@@ -225,7 +225,7 @@ public:
 			if (arg.substr(0, 2) == "-n")
 			{
 				const std::string nstr = ((arg == "-n") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				n = uint32_t(std::atoi(nstr.c_str()));
+				n = static_cast<uint32_t>(std::atoi(nstr.c_str()));
 				if (n < 12) throw std::runtime_error("n < 12 is not supported");
 				if (n > 23) throw std::runtime_error("n > 23 is not supported");
 			}
@@ -238,11 +238,11 @@ public:
 					const auto end = qstr.find('+');
 					if (end != std::string::npos)
 					{
-						const uint32_t c = uint32_t(std::atoi(qstr.substr(0, flex).c_str()));
-						const uint32_t m = uint32_t(std::atoi(qstr.substr(flex + 1, end - (flex + 1)).c_str()));
+						const uint32_t c = static_cast<uint32_t>(std::atoi(qstr.substr(0, flex).c_str()));
+						const uint32_t m = static_cast<uint32_t>(std::atoi(qstr.substr(flex + 1, end - (flex + 1)).c_str()));
 						for (uint32_t lm = 12; lm <= 22; ++lm)
 						{
-							if (m == (uint32_t(1) << lm))
+							if (m == (static_cast<uint32_t>(1) << lm))
 							{
 								b = c; n = lm; oldfashion = true;
 								if ((arg == "-q") && (i + 1 < size)) ++i;

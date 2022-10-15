@@ -97,7 +97,7 @@ private:
 	{
 		deleteTransform();
 
-		if (nthreads > 1) omp_set_num_threads(int(nthreads));
+		if (nthreads > 1) omp_set_num_threads(static_cast<int>(nthreads));
 		size_t num_threads = 1;
 		if (nthreads != 1)
 		{
@@ -166,15 +166,15 @@ private:
 	void initPrintProgress(const int i0, const int i_start)
 	{
 		_print_range = i0; _print_i = i_start;
-		if (_isBoinc) boinc_fraction_done((i0 > i_start) ? double(i0 - i_start) / i0 : 0.0);
+		if (_isBoinc) boinc_fraction_done((i0 > i_start) ? static_cast<double>(i0 - i_start) / i0 : 0.0);
 	}
 
 	int printProgress(const double displayTime, const int i)
 	{
 		if (_print_i == i) return 1;
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
-		const double percent = double(_print_range - i) / _print_range;
-		const int dcount = std::max(int(1.0 / mulTime), 2);
+		const double percent = static_cast<double>(_print_range - i) / _print_range;
+		const int dcount = std::max(static_cast<int>(1.0 / mulTime), 2);
 		if (_isBoinc) boinc_fraction_done(percent);
 		else
 		{
@@ -333,7 +333,7 @@ private:
 		for (int i = ilog2_32(e); i >= 0; --i)
 		{
 			pTransform->squareDup(false);
-			if ((e & (uint32_t(1) << i)) != 0) pTransform->mul();
+			if ((e & (static_cast<uint32_t>(1) << i)) != 0) pTransform->mul();
 		}
 	}
 
@@ -342,7 +342,7 @@ private:
 		transform * const pTransform = _transform;
 		pTransform->initMultiplicand(reg);
 		pTransform->set(1);
-		for (int i = int(mpz_sizeinbase(e, 2) - 1); i >= 0; --i)
+		for (int i = static_cast<int>(mpz_sizeinbase(e, 2) - 1); i >= 0; --i)
 		{
 			pTransform->squareDup(false);
 			if (mpz_tstbit(e, mp_bitcnt_t(i)) != 0) pTransform->mul();
@@ -351,13 +351,13 @@ private:
 
 	static int B_GerbiczLi(const size_t esize)
 	{
-		const size_t L = (2 << (ilog2_32(uint32_t(esize)) / 2));
-		return int((esize - 1) / L) + 1;
+		const size_t L = (2 << (ilog2_32(static_cast<uint32_t>(esize)) / 2));
+		return static_cast<int>((esize - 1) / L) + 1;
 	}
 
 	static int B_PietrzakLi(const size_t esize, const int depth)
 	{
-		return int((esize - 1) >> depth) + 1;
+		return static_cast<int>((esize - 1) >> depth) + 1;
 	}
 
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
@@ -388,7 +388,7 @@ private:
 		}
 
 		watch chrono(found ? restoredTime : 0);
-		const int i0 = int(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
+		const int i0 = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
 		initPrintProgress(i0, i_start);
 		int dcount = 100;
 
@@ -410,7 +410,7 @@ private:
 			}
 
 			pTransform->squareDup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
-			// if (i == int(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
+			// if (i == static_cast<int>(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
 			// if (i == 0) pTransform->add1();	// => invalid
 			if ((i % B_GL == 0) && (i / B_GL != 0))
 			{
@@ -475,7 +475,7 @@ private:
 
 		// 2^res
 		pTransform->set(1);
-		for (int i = int(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
+		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
 			if (_quit) { mpz_clear(res); return false; }
@@ -771,7 +771,7 @@ private:
 			certFile.read(p2);
 			certFile.check_crc32();
 		}
-		const int p2size = int(mpz_sizeinbase(p2, 2));
+		const int p2size = static_cast<int>(mpz_sizeinbase(p2, 2));
 
 		watch chrono(found ? restoredTime : 0);
 		const int i0 = p2size + B - 1;
@@ -1062,7 +1062,7 @@ public:
 						std::ostringstream ssres; ssres << std::hex << std::setfill('0') << std::setw(16) << old64;
 						std::ostringstream ssr; ssr << b << "^" << (1 << n) << "+1 is ";
 						if (isPrp) ssr << "a probable prime."; else ssr << "composite. (RES=" << ssres.str() << ")";
-						ssr << " (" << uint32_t((1 << n) * log(double(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
+						ssr << " (" << static_cast<uint32_t>((1 << n) * log(static_cast<double>(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
 							<< timer::formatTime(testTime + validTime) << ") ";
 						time_t ltime; time(&ltime);
 						ssr << std::string(asctime(localtime(&ltime))).substr(11, 8) << std::endl;

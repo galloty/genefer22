@@ -28,7 +28,7 @@ struct timer
 
 	static std::string formatTime(const double time)
 	{
-		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
+		uint64_t seconds = static_cast<uint64_t>(time), minutes = seconds / 60, hours = minutes / 60;
 		seconds -= minutes * 60; minutes -= hours * 60;
 
 		std::stringstream ss;

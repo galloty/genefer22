@@ -12,6 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 transform * transform::create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 {
-	// return transformCPU_neon::create_transformCPUf64<2>(b, n, num_threads, num_regs, checkError);
-	return transformCPU_neon::create_transformCPUf64<4>(b, n, num_threads, num_regs, checkError);
+	return transformCPU_neon::create_transformCPUf64<2>(b, n, num_threads, num_regs, checkError);
+	// Vect 2 are faster on Apple M1/M2
+	// return transformCPU_neon::create_transformCPUf64<4>(b, n, num_threads, num_regs, checkError);
 }

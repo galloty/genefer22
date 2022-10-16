@@ -47,6 +47,7 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c -S $< -o neon.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

@@ -195,6 +195,64 @@ public:
 		vd[3].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 3, 0, 1));
 	}
 };
+#else
+template<>
+class Vd<4>
+{
+private:
+	simd128d rl, rh;
+
+private:
+	constexpr explicit Vd(const simd128d & _rl, const simd128d & _rh) : rl(_rl), rh(_rh) {}
+
+public:
+	finline explicit Vd() {}
+	finline explicit Vd(const double & f) : rl(set_pd(0.0, f)), rh(set1_pd(0.0)) {}
+	finline Vd(const Vd & rhs) : rl(rhs.rl), rh(rhs.rh) {}
+	finline Vd & operator=(const Vd & rhs) { rl = rhs.rl; rh = rhs.rh; return *this; }
+
+	finline static Vd broadcast(const double & f) { return Vd(set1_pd(f), set1_pd(f)); }
+	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
+
+	finline double operator[](const size_t i) const { return (i <= 1) ? rl[i] : rh[i - 2]; }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+	finline void set(const size_t i, const double & f) { if (i <= 1) rl[i] = f; else rh[i - 2] = f; }
+#pragma GCC diagnostic pop
+
+	finline bool isZero() const { return (is_zero_pd(rl) & is_zero_pd(rh)); }
+
+	finline Vd & operator+=(const Vd & rhs) { rl += rhs.rl; rh += rhs.rh; return *this; }
+	finline Vd & operator-=(const Vd & rhs) { rl -= rhs.rl; rh -= rhs.rh; return *this; }
+	finline Vd & operator*=(const Vd & rhs) { rl *= rhs.rl; rh *= rhs.rh; return *this; }
+
+	finline Vd operator+(const Vd & rhs) const { Vd vd = *this; vd += rhs; return vd; }
+	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
+	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
+
+	finline void shift(const double f) { rh = set_pd(rh[0], rl[1]); rl = set_pd(rl[0], f); }
+
+	finline Vd round() const { return Vd(round_pd(rl), round_pd(rh)); } 
+
+	finline Vd abs() const { return Vd(abs_pd(rl), abs_pd(rh)); }
+	finline Vd & max(const Vd & rhs) { rl = max_pd(rl, rhs.rl); rh = max_pd(rh, rhs.rh); return *this; }
+	finline double max() const { const double m02 = std::max(rl[0], rh[0]), m13 = std::max(rl[1], rh[1]); return std::max(m02, m13); }
+
+	finline void interleave(Vd &) {}	// unused
+
+	finline static void transpose(Vd vd[4])
+	{
+		const simd128d a_00_10 = unpacklo_pd(vd[0].rl, vd[1].rl), a_01_11 = unpackhi_pd(vd[0].rl, vd[1].rl);
+		const simd128d a_02_12 = unpacklo_pd(vd[0].rh, vd[1].rh), a_03_13 = unpackhi_pd(vd[0].rh, vd[1].rh);
+		const simd128d a_20_30 = unpacklo_pd(vd[2].rl, vd[3].rl), a_21_31 = unpackhi_pd(vd[2].rl, vd[3].rl);
+		const simd128d a_22_32 = unpacklo_pd(vd[2].rh, vd[3].rh), a_23_33 = unpackhi_pd(vd[2].rh, vd[3].rh);
+		vd[0].rl = a_00_10; vd[0].rh = a_20_30;
+		vd[1].rl = a_01_11; vd[1].rh = a_21_31;
+		vd[2].rl = a_02_12; vd[2].rh = a_22_32;
+		vd[3].rl = a_03_13; vd[3].rh = a_23_33;
+	}
+};
 #endif
 
 #if defined(__AVX512F__)

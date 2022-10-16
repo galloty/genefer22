@@ -18,7 +18,11 @@ On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (
 
 The stage of development of *genefer22* is Release Candidate.  
 
-This version is compiled with gcc 11 and 12 and was tested on Windows and Linux (Ubuntu).  
+This version was tested on:  
+ - Windows x86/x64 (gcc 12)  
+ - Ubuntu x64 (gcc 11)  
+ - MacOS Apple M1 (clang 15)  
+ - Linux arm64 (gcc 11)  
 
 ## TODO
 

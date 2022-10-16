@@ -75,9 +75,11 @@ private:
 			"win32";
 #elif defined(__linux__)
 #if defined(__x86_64)
-			"linux64";
+			"linux x64";
+#elif defined(__aarch64__)
+			"linux arm64";
 #else
-			"linux32";
+			"linux x86";
 #endif
 #elif defined(__APPLE__)
 			"macOS";

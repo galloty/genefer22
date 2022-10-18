@@ -22,7 +22,7 @@ This version was tested on:
  - Windows x86/x64 (gcc 12)  
  - Ubuntu x64 (gcc 11)  
  - MacOS Apple M1 (clang 15)  
- - Linux arm64 (gcc 11)  
+ - Ubuntu arm64 (gcc 11)  
 
 ## TODO
 

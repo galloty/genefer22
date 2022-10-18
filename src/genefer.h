@@ -1139,4 +1139,10 @@ public:
 
 		return success;
 	}
+
+	void displaySupportedImplementations()
+	{
+		const std::string impls = transform::implementations();
+		pio::print(std::string("Supported implementations:") + impls);
+	}
 };

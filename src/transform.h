@@ -57,7 +57,9 @@ private:
 	static transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_fma(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+#if defined(__x86_64)
 	static transform * create_512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+#endif	
 #endif
 
 public:
@@ -89,12 +91,15 @@ public:
 		pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
 		ttype = "neon";
 #else
+#if defined(__x86_64)
 		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
 		{
 			pTransform = transform::create_512(b, n, num_threads, num_regs, checkError);
 			ttype = "512";
 		}
-		else if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
+		else
+#endif
+		     if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
 		{
 			pTransform = transform::create_fma(b, n, num_threads, num_regs, checkError);
 			ttype = "fma";
@@ -126,10 +131,27 @@ public:
 			throw std::runtime_error(ss.str());
 		}
 #endif
-
 		return pTransform;
 	}
 #endif
+
+	static std::string implementations()
+	{
+		std::string impls;
+#if defined(__aarch64__)
+		impls += " neon"
+#else
+#if defined(__x86_64)
+		if (__builtin_cpu_supports("avx512f")) impls += " 512";
+#endif
+		if (__builtin_cpu_supports("fma")) impls += " fma";
+		if (__builtin_cpu_supports("avx")) impls += " avx";
+		if (__builtin_cpu_supports("sse4.1")) impls += " sse4";
+		if (__builtin_cpu_supports("sse2")) impls += " sse2";
+		if (__builtin_cpu_supports("avx2")) impls += " i32";
+#endif
+		return impls;
+	}
 
 	void mul(const size_t src)
 	{

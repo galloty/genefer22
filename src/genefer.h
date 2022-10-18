@@ -351,7 +351,7 @@ private:
 
 	static int B_GerbiczLi(const size_t esize)
 	{
-		const size_t L = (2 << (ilog2_32(static_cast<uint32_t>(esize)) / 2));
+		const size_t L = (size_t(2) << (ilog2_32(static_cast<uint32_t>(esize)) / 2));
 		return static_cast<int>((esize - 1) / L) + 1;
 	}
 
@@ -865,7 +865,7 @@ private:
 
 		transform * const pTransform = _transform;
 
-		_gi = new gint(1 << n, b);
+		_gi = new gint(size_t(1) << n, b);
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
@@ -902,7 +902,7 @@ private:
 			_transform->getCacheSize();
 #endif
 
-			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (1 << n);
+			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (size_t(1) << n);
 			ss << ": " << timer::formatTime(estimatedTime) << std::setprecision(3) << ", " << mulTime * 1e3 << " ms/bit, ";
 			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
 		}
@@ -931,7 +931,7 @@ private:
 			createTransformCPU(b, n, nthreads, impl, num_regs, false, false);
 #endif
 
-			_gi = new gint(1 << n, b);
+			_gi = new gint(size_t(1) << n, b);
 
 			double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 			const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
@@ -1003,7 +1003,7 @@ public:
 		}
 #endif
 
-		_gi = new gint(1 << n, b);
+		_gi = new gint(size_t(1) << n, b);
 
 		bool success = false;
 
@@ -1036,7 +1036,7 @@ public:
 		}
 		else
 		{
-			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, 1 << n);
+			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, size_t(1) << n);
 
 			if (mode == EMode::Quick)
 			{
@@ -1046,7 +1046,7 @@ public:
 				clearline();
 				if (oldfashion)
 				{
-					std::ostringstream ss; ss << b << "^" << (1 << n) << "+1";
+					std::ostringstream ss; ss << b << "^" << (size_t(1) << n) << "+1";
 					if (success)
 					{
 						ss << " is complete";
@@ -1060,9 +1060,9 @@ public:
 					if (success)
 					{
 						std::ostringstream ssres; ssres << std::hex << std::setfill('0') << std::setw(16) << old64;
-						std::ostringstream ssr; ssr << b << "^" << (1 << n) << "+1 is ";
+						std::ostringstream ssr; ssr << b << "^" << (size_t(1) << n) << "+1 is ";
 						if (isPrp) ssr << "a probable prime."; else ssr << "composite. (RES=" << ssres.str() << ")";
-						ssr << " (" << static_cast<uint32_t>((1 << n) * log(static_cast<double>(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
+						ssr << " (" << static_cast<uint32_t>((size_t(1) << n) * log(static_cast<double>(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
 							<< timer::formatTime(testTime + validTime) << ") ";
 						time_t ltime; time(&ltime);
 						ssr << std::string(asctime(localtime(&ltime))).substr(11, 8) << std::endl;
@@ -1143,6 +1143,7 @@ public:
 	void displaySupportedImplementations()
 	{
 		const std::string impls = transform::implementations();
-		pio::print(std::string("Supported implementations:") + impls);
+		std::ostringstream ss; ss << "Supported implementations:" << impls << std::endl;
+		pio::print(ss.str());
 	}
 };

@@ -499,7 +499,7 @@ private:
 	}
 
 public:
-	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs) : transform(1 << n, n, b, EKind::NTT3cpu),
+	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs) : transform(size_t(1) << n, n, b, EKind::NTT3cpu),
 		_num_threads(num_threads), _num_regs(num_regs),
 		_mem_size((size_t(1) << n) / 4 * (num_regs + 2) * sizeof(RNS4)), _cache_size((size_t(1) << n) / 4 * sizeof(RNS4)),
 		_norm(Zp1::norm(static_cast<uint32_t>(1) << (n - 1)), Zp2::norm(static_cast<uint32_t>(1) << (n - 1)), Zp3::norm(static_cast<uint32_t>(1) << (n - 1))),

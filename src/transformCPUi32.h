@@ -14,9 +14,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define finline	__attribute__((always_inline))
 
-#define P1		4253024257u		// 507 * 2^23 + 1
-#define P2		4194304001u		// 125 * 2^25 + 1
-#define P3		4076863489u		// 243 * 2^24 + 1
+// #define P0		4253024257u		// 507 * 2^23 + 1
+#define P1		4194304001u		// 125 * 2^25 + 1
+#define P2		4076863489u		// 243 * 2^24 + 1
+#define P3		3942645761u		// 235 * 2^24 + 1
+
 #define P1_inv	(static_cast<uint64_t>(-1) / P1 - (static_cast<uint64_t>(1) << 32))
 #define P2_inv	(static_cast<uint64_t>(-1) / P2 - (static_cast<uint64_t>(1) << 32))
 #define P3_inv	(static_cast<uint64_t>(-1) / P3 - (static_cast<uint64_t>(1) << 32))
@@ -77,9 +79,10 @@ public:
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
-typedef Zp<P1, P1_inv, 5> Zp1;
-typedef Zp<P2, P2_inv, 3> Zp2;
-typedef Zp<P3, P3_inv, 7> Zp3;
+// typedef Zp<P0, P0_inv, 5> Zp0;
+typedef Zp<P1, P1_inv, 3> Zp1;
+typedef Zp<P2, P2_inv, 7> Zp2;
+typedef Zp<P3, P3_inv, 3> Zp3;
 
 class RNS
 {
@@ -180,9 +183,9 @@ public:
 	}
 };
 
-typedef Zp4<P1, P1_inv, 5> Zp4_1;
-typedef Zp4<P2, P2_inv, 3> Zp4_2;
-typedef Zp4<P3, P3_inv, 7> Zp4_3;
+typedef Zp4<P1, P1_inv, 3> Zp4_1;
+typedef Zp4<P2, P2_inv, 7> Zp4_2;
+typedef Zp4<P3, P3_inv, 3> Zp4_3;
 
 class RNS4
 {
@@ -480,11 +483,14 @@ private:
 
 	finline static int96_4 garner3(const RNS4 & s)
 	{
-		const uint32_t invP2_P1 = 1822724754u;		// 1 / P2 mod P1
-		const uint32_t invP3_P1 = 607574918u;		// 1 / P3 mod P1
-		const uint32_t invP3_P2 = 2995931465u;		// 1 / P3 mod P2
-		const uint96_4 P1P2P3 = uint96_4(uint64_4(static_cast<uint64_t>(15383592652180029441ull)), uint64_4(static_cast<uint32_t>(3942432002u)));
-		const uint96_4 P1P2P3_2 = uint96_4(uint64_4(static_cast<uint64_t>(7691796326090014720ull)), uint64_4(static_cast<uint32_t>(1971216001u)));
+		static const uint32_t invP2_P1 = Zp1(P2 % P1).pow(P1 - 2).get();
+		static const uint32_t invP3_P1 = Zp1(P3 % P1).pow(P1 - 2).get();
+		static const uint32_t invP3_P2 = Zp2(P3 % P2).pow(P2 - 2).get();
+		static const uint64_t P1P2 = P1 * static_cast<uint64_t>(P2);
+		static const uint64_t l123 = static_cast<uint32_t>(P1P2) * static_cast<uint64_t>(P3), h123 = (P1P2 >> 32) * P3 + (l123 >> 32);
+		static const uint64_t P1P2P3l = (h123 << 32) | static_cast<uint32_t>(l123); const uint32_t P1P2P3h = static_cast<uint32_t>(h123 >> 32);
+		static const uint96_4 P1P2P3 = uint96_4(uint64_4(P1P2P3l), uint64_4(P1P2P3h));
+		static const uint96_4 P1P2P3_2 = uint96_4(uint64_4((P1P2P3l >> 1) | (static_cast<uint64_t>(P1P2P3h) << 63)), uint64_4(P1P2P3h >> 1));
 
 		const auto r3 = s.r3().get();
 		const Zp4_1 u13 = (s.r1() - Zp4_1(r3)) * Zp4_1(invP3_P1);
@@ -613,17 +619,17 @@ private:
 
 	finline static void forward0(RNS4 * const z, const size_t m)
 	{
-		const RNS w1 = RNS(Zp1(476884782), Zp2(809539273), Zp3(-1544030998));
-		const RNS w2 = RNS(Zp1(-713375721), Zp2(-1890888817), Zp3(-2001741866));
-		const RNS w3 = RNS(Zp1(-1361655604), Zp2(781924903), Zp3(-339917925));
+		const RNS w1 = RNS(Zp1(809539273), Zp2(-1544030998), Zp3(-476065569));
+		const RNS w2 = RNS(Zp1(-1890888817), Zp2(-2001741866), Zp3(822783579));
+		const RNS w3 = RNS(Zp1(781924903), Zp2(-339917925), Zp3(-1788296113));
 		for (size_t i = 0; i < m; ++i) z[i].forward_4(w1, w2, w3);
 	}
 
 	finline static void backward0(RNS4 * const z, const size_t m)
 	{
-		const RNS wi1 = RNS(Zp1(-476884782), Zp2(-809539273), Zp3(1544030998));
-		const RNS wi3 = RNS(Zp1(713375721), Zp2(1890888817), Zp3(2001741866));
-		const RNS wi2 = RNS(Zp1(1361655604), Zp2(-781924903), Zp3(339917925));
+		const RNS wi1 = RNS(Zp1(-809539273), Zp2(1544030998), Zp3(476065569));
+		const RNS wi3 = RNS(Zp1(1890888817), Zp2(2001741866), Zp3(-822783579));
+		const RNS wi2 = RNS(Zp1(-781924903), Zp2(339917925), Zp3(1788296113));
 		for (size_t i = 0; i < m; ++i) z[i].backward_4(wi1, wi2, wi3);
 	}
 

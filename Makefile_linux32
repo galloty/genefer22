@@ -1,3 +1,4 @@
+# These packages are needed to build genefer22: libgmp-dev ocl-icd-opencl-dev
 # Compiler: GCC 5.4+
 CC = g++ -m32 -march=i686 -std=c++17
 RM = rm
@@ -8,9 +9,15 @@ SRC_DIR = src
 OCL_INC = -IKhronos
 OCL_LIB = -L/usr/lib/x86_64-linux-gnu/ -lOpenCL
 
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.20/7.20.2.zip
+# These packages are needed to build BOINC: m4 autoconf libtool openssl libssl-dev libcurl4-openssl-dev ocl-icd-opencl-dev
+# ./_autosetup
+# ./configure --disable-server --disable-client --disable-manager
+# api: make => libboinc_api.a libboinc_opencl.a
+# lib: make => libboinc.a
 BOINC_DIR = ../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
-BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -lpthread
+BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
 BOINC_LIB_OCL = -lboinc_opencl
 
 CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers

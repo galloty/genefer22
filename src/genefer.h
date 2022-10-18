@@ -882,7 +882,7 @@ private:
 			static volatile bool _break;
 
 			_break = false;
-			std::thread oneSecond([=] { std::this_thread::sleep_for(std::chrono::seconds(5)); _break = true; }); oneSecond.detach();
+			std::thread delay([=]() { std::this_thread::sleep_for(std::chrono::seconds(5)); _break = true; }); delay.detach();
 
 			watch chrono(0);
 			size_t i = 1;

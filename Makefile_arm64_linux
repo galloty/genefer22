@@ -1,7 +1,6 @@
 # Under Ubuntu:22.04, these packages are needed to build BOINC and genefer22
 # build-essential autoconf pkg-config libtool openssl libssl-dev libcurl4-openssl-dev libgmp-dev libomp-dev ocl-icd-opencl-dev
-
-# Compiler: GCC 11/12
+# Compiler: GCC 11+
 CC = g++ -std=c++17
 RM = rm
 
@@ -11,6 +10,11 @@ SRC_DIR = src
 OCL_INC = -IKhronos
 OCL_LIB = -L/usr/lib/aarch64-linux-gnu/ -lOpenCL
 
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.20/7.20.2.zip
+# ./_autosetup
+# ./configure --disable-server --disable-client --disable-manager
+# api: make => libboinc_api.a libboinc_opencl.a
+# lib: make => libboinc.a
 BOINC_DIR = ../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -lpthread

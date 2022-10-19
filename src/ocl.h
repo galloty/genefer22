@@ -186,13 +186,9 @@ private:
 	};
 	std::vector<deviceDesc> _devices;
 
-public:
-	platform()
+protected:
+	void findDevices(const bool gpu)
 	{
-#if defined(ocl_debug)
-		std::ostringstream ss; ss << "Create ocl platform." << std::endl;
-		pio::display(ss.str());
-#endif
 		cl_uint num_platforms;
 		cl_platform_id platforms[64];
 		oclFatal(clGetPlatformIDs(64, platforms, &num_platforms));
@@ -203,7 +199,7 @@ public:
 
 			cl_uint num_devices;
 			cl_device_id devices[64];
-			if (oclError(clGetDeviceIDs(platforms[p], ocl_device_type, 64, devices, &num_devices)))
+			if (oclError(clGetDeviceIDs(platforms[p], gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_ALL, 64, devices, &num_devices)))
 			{
 				for (cl_uint d = 0; d < num_devices; ++d)
 				{
@@ -219,6 +215,17 @@ public:
 				}
 			}
 		}
+	}
+
+public:
+	platform()
+	{
+#if defined(ocl_debug)
+		std::ostringstream ss; ss << "Create ocl platform." << std::endl;
+		pio::display(ss.str());
+#endif
+		findDevices(true);
+		if (_devices.empty()) findDevices(false);
 	}
 
 	platform(const cl_platform_id platform_id, const cl_device_id device_id)

@@ -139,7 +139,7 @@ public:
 	{
 		std::string impls;
 #if defined(__aarch64__)
-		impls += " neon"
+		impls += " neon";
 #else
 #if defined(__x86_64)
 		if (__builtin_cpu_supports("avx512f")) impls += " 512";

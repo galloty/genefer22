@@ -1,6 +1,6 @@
 # Under Ubuntu:22.04, these packages are needed to build BOINC and genefer22
 # build-essential autoconf pkg-config libtool openssl libssl-dev libcurl4-openssl-dev libgmp-dev libomp-dev ocl-icd-opencl-dev
-# Compiler: GCC 11+
+# Compiler: GCC 7.5+
 CC = g++ -std=c++17
 RM = rm
 

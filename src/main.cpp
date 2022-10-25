@@ -89,13 +89,13 @@ private:
 
 		std::ostringstream ssc;
 #if defined(__clang__)
-		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+		ssc << ", clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
 #elif defined(__GNUC__)
-		ssc << " gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
+		ssc << ", gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
 #endif
 
 #if defined(BOINC)
-	ssc << " boinc-" << BOINC_VERSION_STRING;
+	ssc << ", boinc-" << BOINC_VERSION_STRING;
 #endif
 
 #if defined(GPU)
@@ -105,7 +105,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " 0.9.6 " << sysver << ssc.str() << std::endl;
+		ss << "genefer22" << ext << " version 22.10.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)

@@ -1,4 +1,4 @@
-# genefer22
+# genefer 22
 Generalized Fermat Prime search program
 
 ## About
@@ -16,17 +16,17 @@ On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (
 
 ## Build
 
-The stage of development of *genefer22* is Release Candidate.  
+Releases are available as tags.  
+ - 22.10.0
 
-The releases are compiled using:  
+They are compiled using:  
  - genefer22: Ubuntu 22.04 amd64, gcc 11.2  
  - genefer22g: Ubuntu 18.04 amd64, gcc 7.5  
  - genefer22_x86, genefer22g_x86: Ubuntu 16.04 i386, gcc 5.4  
  - genefer22.exe, genefer22g.exe, genefer22_x86.exe, genefer22g_x86: Windows - MSYS2, gcc 12.2  
  - genefer22_arm64_AppleM, genefer22g_arm64_AppleM: MacOS, llvm/clang 15  
  - genefer22_arm64: Ubuntu 22.04 arm64, gcc 11.2  
-
-This version was tested on:  
+They are tested on:  
  - Ubuntu 22.04 amd64  
  - Windows 10 64-bit  
  - Windows 11  

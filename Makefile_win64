@@ -56,11 +56,11 @@ transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPUf64)
 
 transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=ivybridge -c -S $< -o avx.asm
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c -S $< -o avx.asm
 
 transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -c -S $< -o fma.asm
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c -S $< -o fma.asm
 
 transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -mtune=skylake-avx512 -c $< -o $@

@@ -318,7 +318,7 @@ public:
 
 		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
 		{
-			for (size_t n = 12; n <= 22; ++n)
+			for (size_t n = 15; n <= 22; ++n)
 			{
 				if (!g.check(0, n, mode, device, nthreads, impl, depth)) return;
 			}

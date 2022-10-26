@@ -857,10 +857,10 @@ private:
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
-		createTransformGPU(b, n, device, num_regs, m == 12, false);
+		createTransformGPU(b, n, device, num_regs, m == 15, false);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 12, false);
+		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 15, false);
 #endif
 
 		transform * const pTransform = _transform;

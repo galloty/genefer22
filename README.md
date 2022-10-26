@@ -26,6 +26,7 @@ They are compiled using:
  - genefer22.exe, genefer22g.exe, genefer22_x86.exe, genefer22g_x86: Windows - MSYS2, gcc 12.2  
  - genefer22_arm64_AppleM, genefer22g_arm64_AppleM: MacOS, llvm/clang 15  
  - genefer22_arm64: Ubuntu 22.04 arm64, gcc 11.2  
+
 They are tested on:  
  - Ubuntu 22.04 amd64  
  - Windows 10 64-bit  

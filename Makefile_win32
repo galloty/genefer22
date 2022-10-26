@@ -53,10 +53,10 @@ transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c $< -o $@
 
 transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=broadwell -c $< -o $@
 
 transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c $< -o $@
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=broadwell -c $< -o $@
 
 transform_i32.o: $(SRC_DIR)/transform_i32.cpp $(DEPS_TRANSFORM_CPUi32)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c $< -o $@

@@ -62,6 +62,23 @@ private:
 #endif	
 #endif
 
+protected:
+	static void * alignNew(const size_t size, const size_t alignment, const size_t offset = 0)
+	{
+		char * const allocPtr = new char[size + alignment + offset + sizeof(size_t)];
+		const size_t addr = size_t(allocPtr) + alignment + sizeof(size_t);
+		size_t * const ptr = (size_t *)(addr - addr % alignment + offset);
+		ptr[-1] = size_t(allocPtr);
+		return (void *)(ptr);
+	}
+
+protected: 
+	static void alignDelete(void * const ptr)
+	{
+		char * const allocPtr = (char *)((size_t *)(ptr))[-1];
+		delete[] allocPtr;
+	}
+
 public:
 	transform(const size_t size, const uint32_t n, const uint32_t b, const EKind kind) : _size(size), _n(n), _b(b), _kind(kind) {}
 	virtual ~transform() {}

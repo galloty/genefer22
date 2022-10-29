@@ -1,5 +1,5 @@
 # These packages are needed to build genefer22: libgmp-dev ocl-icd-opencl-dev
-# Compiler: GCC 5.4+
+# Compiler: GCC 7.5+
 CC = g++ -m32 -march=i686 -std=c++17
 RM = rm
 

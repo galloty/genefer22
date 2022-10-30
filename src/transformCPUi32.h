@@ -131,7 +131,7 @@ public:
 
 	finline Zpp operator[](const size_t i) const { return Zpp(_n0123[2 * i]); }
 
-	finline Zp4 operator-() const { return Zp4((_n0123 != 0) & (p0123 - _n0123)); }
+	finline Zp4 operator-() const { return Zp4(static_cast<__v8su>((_n0123 != 0) & (p0123 - _n0123))); }
 
 	finline Zp4 operator+(const Zp4 & rhs) const
 	{

@@ -15,6 +15,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <ctime>
 #include <sys/stat.h>
 
 #include <gmp.h>
@@ -153,11 +154,12 @@ private:
 		return ss.str();
 	}
 
-	static std::string gfnStatus(const bool isPrp, const uint64_t pkey, const uint64_t res64, const uint64_t old64, const double error, const double time)
+	static std::string gfnStatus(const bool isPrp, const uint64_t pkey, const uint64_t ckey, const uint64_t res64, const uint64_t old64, const double error, const double time)
 	{
 		std::ostringstream ss; ss << " is ";
 		if (isPrp) ss << "a probable prime"; else ss << "composite, res64 = " << uint64toString(res64) << ", old64 = " << uint64toString(old64);
 		if (pkey != 0) ss << ", pkey = " << uint64toString(pkey);
+		if (ckey != 0) ss << ", ckey = " << uint64toString(ckey);
 		if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 		ss << ", time = " << timer::formatTime(time) << ".";
 		return ss.str();
@@ -653,7 +655,7 @@ private:
 		return true;
 	}
 
-	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
+	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -713,6 +715,14 @@ private:
 		pTransform->getInt(gi);
 		pkey = gi.gethash64();
 
+		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
+		const uint32_t rnd = static_cast<uint32_t>(std::rand()) + 4;
+		pTransform->set(2);
+		power(0, rnd);
+		pTransform->mul(1);
+		pTransform->getInt(gi);
+		ckey = gi.gethash64();
+
 		// v2
 		pTransform->copy(0, 2);
 		pTransform->getInt(gi);
@@ -729,6 +739,8 @@ private:
 
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
+
+		mpz_add_ui(p2, p2, rnd);
 
 		{
 			file certFile(certFilename(), "wb", true);
@@ -1073,7 +1085,7 @@ public:
 				else
 				{
 					std::ostringstream ss; ss << gfn(b, n);
-					if (success) ss << gfnStatus(isPrp, 0, res64, old64, error, testTime + validTime);
+					if (success) ss << gfnStatus(isPrp, 0, 0, res64, old64, error, testTime + validTime);
 					else if (!_quit) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
@@ -1103,7 +1115,7 @@ public:
 				ss << std::endl; pio::print(ss.str());
 				if (success)
 				{
-					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, res64, old64, error, time) << std::endl;
+					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, 0, res64, old64, error, time) << std::endl;
 					pio::result(ssr.str());
 					if (!_isBoinc)
 					{
@@ -1114,8 +1126,8 @@ public:
 			}
 			else if (mode == EMode::Server)
 			{
-				double time = 0; bool isPrp = false; uint64_t pkey = 0, res64 = 0, old64 = 0;
-				success = server(exponent, time, isPrp, pkey, res64, old64);
+				double time = 0; bool isPrp = false; uint64_t pkey = 0, ckey = 0, res64 = 0, old64 = 0;
+				success = server(exponent, time, isPrp, pkey, ckey, res64, old64);
 				const double error = _transform->getError();
 				// if (success)
 				// {
@@ -1123,7 +1135,7 @@ public:
 				// 	skeyFile.print(uint64toString(pkey).c_str());
 				// }
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, pkey, res64, old64, error, time);
+				if (success) ss << gfnStatus(isPrp, pkey, ckey, res64, old64, error, time);
 				else if (!_quit) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());

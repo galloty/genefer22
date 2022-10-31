@@ -25,13 +25,15 @@ They are compiled using:
  - genefer22_x86: Lubuntu 18.04 i386, gcc 7.5  
  - genefer22g_x86: Ubuntu 16.04 i386, gcc 5.4  
  - genefer22.exe, genefer22g.exe, genefer22_x86.exe, genefer22g_x86: Windows - MSYS2, gcc 12.2  
- - genefer22_arm64_AppleM, genefer22g_arm64_AppleM: MacOS, llvm/clang 15  
+ - genefer22_macIntel, genefer22g_macIntel: MacOS 10.13, llvm/clang 15  
+ - genefer22_macARM, genefer22g_macARM: MacOS, llvm/clang 15  
  - genefer22_arm64: Ubuntu 22.04 arm64, gcc 11.2  
 
 They are tested on:  
  - Ubuntu 22.04 amd64  
  - Windows 10 64-bit  
  - Windows 11  
+ - MacOS Intel Core  
  - MacOS Apple M1  
  - Ubuntu 16.04 amd64  
  - Ubuntu 16.04 i386  

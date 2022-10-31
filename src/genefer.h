@@ -469,9 +469,9 @@ private:
 		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
 		while (mpz_sgn(e) != 0)
 		{
-			mpz_mod_2exp(t, e, (unsigned long int)(B_GL));
+			mpz_mod_2exp(t, e, static_cast<unsigned long int>(B_GL));
 			mpz_add(res, res, t);
-			mpz_div_2exp(e, e, (unsigned long int)(B_GL));
+			mpz_div_2exp(e, e, static_cast<unsigned long int>(B_GL));
 		}
 		mpz_clear(e); mpz_clear(t);
 
@@ -655,6 +655,8 @@ private:
 		return true;
 	}
 
+	static uint32_t rand32() { return static_cast<uint32_t>(std::rand()) + 16; }
+
 	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
 	{
 		transform * const pTransform = _transform;
@@ -715,32 +717,54 @@ private:
 		pTransform->getInt(gi);
 		pkey = gi.gethash64();
 
-		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
-		const uint32_t rnd = static_cast<uint32_t>(std::rand()) + 4;
-		pTransform->set(2);
-		power(0, rnd);
-		pTransform->mul(1);
-		pTransform->getInt(gi);
-		ckey = gi.gethash64();
-
-		// v2
-		pTransform->copy(0, 2);
-		pTransform->getInt(gi);
-
-		mpz_t p2; mpz_init_set_ui(p2, 0);
-		mpz_t e, t; mpz_init_set(e, exponent); mpz_init(t);
+		mpz_t p2, t; mpz_init_set_ui(p2, 0); mpz_init(t);
+		mpz_t e; mpz_init_set(e, exponent);
 		for (size_t i = 0; i < L; i++)
 		{
-			mpz_mod_2exp(t, e, (unsigned long int)(B));
+			mpz_mod_2exp(t, e, static_cast<unsigned long int>(B));
 			mpz_addmul(p2, t, w[i]);
-			mpz_div_2exp(e, e, (unsigned long int)(B));
+			mpz_div_2exp(e, e, static_cast<unsigned long int>(B));
 		}
-		mpz_clear(e); mpz_clear(t);
+		mpz_clear(e);
 
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		mpz_add_ui(p2, p2, rnd);
+		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
+
+		// encode
+		for (size_t i = 0; i < 4; ++i)
+		{
+			const uint32_t rnd1 = rand32(), rnd2 = rand32() % 256, rnd3 = rand32() % 4;
+
+			power(1, rnd1);
+			pTransform->copy(1, 0);
+			power(2, rnd1);
+			pTransform->copy(2, 0);
+			pTransform->set(2);
+			power(0, rnd2);
+			pTransform->mul(1);
+			pTransform->copy(1, 0);
+
+			mpz_mul_ui(p2, p2, rnd1);
+			mpz_add_ui(p2, p2, rnd2);
+			mpz_set_ui(t, rnd3);
+			mpz_mul_2exp(t, t, static_cast<unsigned long int>(B));
+
+			if (mpz_cmp(p2, t) > 0)
+			{
+				mpz_sub(p2, p2, t);
+				pTransform->set(int32_t(1) << rnd3);
+				pTransform->mul(2);
+				pTransform->copy(2, 0);
+			}
+		}
+
+		pTransform->copy(0, 1);
+		pTransform->getInt(gi);
+		ckey = gi.gethash64();
+		pTransform->copy(0, 2);
+		pTransform->getInt(gi);
 
 		{
 			file certFile(certFilename(), "wb", true);
@@ -752,7 +776,7 @@ private:
 			certFile.write_crc32();
 		}
 
-		mpz_clear(p2);
+		mpz_clear(p2);  mpz_clear(t);
 
 		time = chrono.getElapsedTime();
 		return true;

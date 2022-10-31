@@ -21,7 +21,7 @@ BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -ffp-contract=fast
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 

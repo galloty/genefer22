@@ -332,6 +332,7 @@ private:
 		transform * const pTransform = _transform;
 		pTransform->initMultiplicand(reg);
 		pTransform->set(1);
+		if (e == 0) return;
 		for (int i = ilog2_32(e); i >= 0; --i)
 		{
 			pTransform->squareDup(false);
@@ -339,11 +340,12 @@ private:
 		}
 	}
 
-	void power(const size_t reg, const mpz_t & e) const
+	void powerz(const size_t reg, const mpz_t & e) const
 	{
 		transform * const pTransform = _transform;
 		pTransform->initMultiplicand(reg);
 		pTransform->set(1);
+		if (mpz_sgn(e) == 0) return;
 		for (int i = static_cast<int>(mpz_sizeinbase(e, 2) - 1); i >= 0; --i)
 		{
 			pTransform->squareDup(false);
@@ -559,7 +561,7 @@ private:
 				ckptFile.check_crc32();
 				pTransform->setInt(gi);
 			}
-			power(0, w[0]);
+			powerz(0, w[0]);
 // s += mpz_sizeinbase(w[0], 2);
 			pTransform->copy(1, 0);
 
@@ -574,7 +576,7 @@ private:
 					ckptFile.check_crc32();
 					pTransform->setInt(gi);
 				}
-				power(0, w[j]);
+				powerz(0, w[j]);
 // s += mpz_sizeinbase(w[j], 2);
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
@@ -655,7 +657,7 @@ private:
 		return true;
 	}
 
-	static uint32_t rand32() { return static_cast<uint32_t>(std::rand()) + 16; }
+	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
 	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
 	{
@@ -730,41 +732,33 @@ private:
 		for (size_t i = 0; i < L; ++i) mpz_clear(w[i]);
 		delete[] w;
 
-		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
-
 		// encode
-		for (size_t i = 0; i < 4; ++i)
+		std::srand(static_cast<unsigned int>(std::time(nullptr))); std::rand();	// use current time as seed for random generator
+		const uint32_t rnd1 = rand32(2, 64), rnd2 = rand32(16, 256), rnd3 = rand32(4, 65536);
+
+		mpz_set_ui(t, rnd1);
+		mpz_mul_2exp(t, t, static_cast<unsigned long int>(B));
+		if (mpz_cmp(p2, t) > 0)
 		{
-			const uint32_t rnd1 = rand32(), rnd2 = rand32() % 256, rnd3 = rand32() % 4;
-
-			power(1, rnd1);
-			pTransform->copy(1, 0);
-			power(2, rnd1);
-			pTransform->copy(2, 0);
+			mpz_sub(p2, p2, t);
 			pTransform->set(2);
-			power(0, rnd2);
-			pTransform->mul(1);
-			pTransform->copy(1, 0);
-
-			mpz_mul_ui(p2, p2, rnd1);
-			mpz_add_ui(p2, p2, rnd2);
-			mpz_set_ui(t, rnd3);
-			mpz_mul_2exp(t, t, static_cast<unsigned long int>(B));
-
-			if (mpz_cmp(p2, t) > 0)
-			{
-				mpz_sub(p2, p2, t);
-				pTransform->set(int32_t(1) << rnd3);
-				pTransform->mul(2);
-				pTransform->copy(2, 0);
-			}
+			power(0, rnd1);
+			pTransform->mul(2);
+			pTransform->copy(2, 0);
 		}
 
-		pTransform->copy(0, 1);
+		power(1, rnd2);
+		pTransform->copy(1, 0);
+		pTransform->set(2);
+		power(0, rnd3);
+		pTransform->mul(1);
 		pTransform->getInt(gi);
 		ckey = gi.gethash64();
-		pTransform->copy(0, 2);
+
+		power(2, rnd2);
 		pTransform->getInt(gi);
+		mpz_mul_ui(p2, p2, rnd2);
+		mpz_add_ui(p2, p2, rnd3);
 
 		{
 			file certFile(certFilename(), "wb", true);

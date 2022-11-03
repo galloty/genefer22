@@ -105,7 +105,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " version 22.11.1 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "genefer22" << ext << " version 22.11.2 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer22 is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -172,12 +172,19 @@ public:
 #endif
 		if (bBoinc)
 		{
-			const int retval = boinc_init();
+			BOINC_OPTIONS boinc_options;
+			boinc_options_defaults(boinc_options);
+			boinc_options.direct_process_action = 0;
+#if defined(GPU)
+			boinc_options.normal_thread_priority = 1;
+#endif
+			const int retval = boinc_init_options(&boinc_options);
 			if (retval != 0)
 			{
 				std::ostringstream ss; ss << "boinc_init returned " << retval;
 				throw std::runtime_error(ss.str());
 			}
+
 #if defined(BOINC) && defined(GPU)
 			if (!boinc_is_standalone())
 			{

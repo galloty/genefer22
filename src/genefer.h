@@ -409,7 +409,7 @@ private:
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
 
-				if (_isBoinc) { if (boincMonitor(0, fast_checkpoints ,i, chrono)) return false; }
+				if (_isBoinc) { if (boincMonitor(0, fast_checkpoints, i, chrono)) return false; }
 				else if (chrono.getRecordTime() > 600) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 

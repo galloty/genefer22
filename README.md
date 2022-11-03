@@ -17,13 +17,12 @@ On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (
 ## Build
 
 Releases are available as tags.  
- - 22.10.0
+ - 22.11.2
 
 They are compiled using:  
  - genefer22: Ubuntu 22.04 amd64, gcc 11.3  
  - genefer22g: Ubuntu 18.04 amd64, gcc 7.5  
- - genefer22_x86: Lubuntu 18.04 i386, gcc 7.5  
- - genefer22g_x86: Ubuntu 16.04 i386, gcc 5.4  
+ - genefer22_x86, genefer22g_x86: Lubuntu 18.04 i386, gcc 7.5  
  - genefer22.exe, genefer22g.exe, genefer22_x86.exe, genefer22g_x86: Windows - MSYS2, gcc 12.2  
  - genefer22_macIntel, genefer22g_macIntel: MacOS 10.13, llvm/clang 15  
  - genefer22_macARM, genefer22g_macARM: MacOS, llvm/clang 15  
@@ -31,10 +30,11 @@ They are compiled using:
 
 They are tested on:  
  - Ubuntu 22.04 amd64  
- - Windows 10 64-bit  
  - Windows 11  
- - MacOS Intel Core  
+ - Windows 10 64-bit  
  - MacOS Apple M1  
+ - MacOS Intel Core  
+ - Debian 11 amd64  
  - Ubuntu 16.04 amd64  
  - Ubuntu 16.04 i386  
  - Ubuntu 22.04 arm64  

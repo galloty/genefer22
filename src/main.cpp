@@ -184,18 +184,6 @@ public:
 				std::ostringstream ss; ss << "boinc_init returned " << retval;
 				throw std::runtime_error(ss.str());
 			}
-
-#if defined(BOINC) && defined(GPU)
-			if (!boinc_is_standalone())
-			{
-				const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
-				if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
-				{
-					std::ostringstream ss; ss << std::endl << "error: boinc_get_opencl_ids() failed err = " << err;
-					throw std::runtime_error(ss.str());
-				}
-			}
-#endif
 		}
 
 		// if -v or -V then print header to stderr and exit
@@ -215,6 +203,9 @@ public:
 		genefer::EMode mode = genefer::EMode::None;
 		bool oldfashion = false;
 		size_t device = 0, nthreads = 1;
+#if defined(BOINC) && defined(GPU)
+		bool ext_device = false;
+#endif
 		std::string mainFilename = "", impl = "";
 		const int depth = 7;
 
@@ -290,11 +281,17 @@ public:
 			{
 				const std::string dstr = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				device = size_t(std::atoi(dstr.c_str()));
+#if defined(BOINC) && defined(GPU)
+				ext_device = true;
+#endif
 			}
 			if (arg.substr(0, 8) == "--device")
 			{
 				const std::string dstr = ((arg == "--device") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				device = size_t(std::atoi(dstr.c_str()));
+#if defined(BOINC) && defined(GPU)
+				ext_device = true;
+#endif
 			}
 			if (arg.substr(0, 2) == "-t")
 			{
@@ -315,6 +312,18 @@ public:
 				}
 			}
 		}
+
+#if defined(BOINC) && defined(GPU)
+		if (bBoinc && !boinc_is_standalone() && !ext_device)
+		{
+			const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
+			if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
+			{
+				std::ostringstream ss; ss << std::endl << "error: boinc_get_opencl_ids() failed err = " << err;
+				throw std::runtime_error(ss.str());
+			}
+		}
+#endif
 
 		genefer & g = genefer::getInstance();
 		g.setBoinc(bBoinc);

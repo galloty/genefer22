@@ -282,9 +282,8 @@ private:
 	void boincMonitor()
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
-		const bool bQuit = boincQuitRequest(status);
-		if (bQuit) { quit(); return; }
-			
+		if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
+
 		if (status.suspended != 0)
 		{
 			printState(true);
@@ -292,7 +291,7 @@ private:
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
-				if (boincQuitRequest(status)) { quit(); return; }
+				if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
 			}
 			printState(false);
 		}
@@ -302,11 +301,10 @@ private:
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
 		const bool bQuit = boincQuitRequest(status);
-		if (bQuit) quit();
 
 		if (bQuit || (status.suspended != 0)) saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
-		if (bQuit) return true;
-			
+		if (bQuit) exit(EXIT_SUCCESS);
+
 		if (status.suspended != 0)
 		{
 			printState(true);
@@ -314,7 +312,7 @@ private:
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
-				if (boincQuitRequest(status)) { quit(); return true; }
+				if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
 			}
 			printState(false);
 		}

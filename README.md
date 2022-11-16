@@ -41,4 +41,4 @@ They are tested on:
 
 ## TODO
 
- - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).
+ - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).  

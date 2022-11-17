@@ -66,7 +66,7 @@ private:
 	bool _print_sr = true;
 
 public:
-	void quit() { _quit = true; }
+	void quit() { if (_isBoinc) exit(EXIT_SUCCESS); _quit = true; }
 	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
 #if defined(GPU)
 	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)

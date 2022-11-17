@@ -17,7 +17,7 @@ On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (
 ## Build
 
 Releases are available as tags.  
- - 22.11.3
+ - 22.11.4
 
 They are compiled using:  
  - genefer22: Ubuntu 22.04 amd64, gcc 11.3  
@@ -41,4 +41,4 @@ They are tested on:
 
 ## TODO
 
- - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).
+ - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).  

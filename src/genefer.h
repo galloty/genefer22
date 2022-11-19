@@ -414,6 +414,7 @@ private:
 			pTransform->squareDup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
 			// if (i == static_cast<int>(mpz_sizeinbase(exponent, 2) - 1)) pTransform->add1();	// => invalid
 			// if (i == 0) pTransform->add1();	// => invalid
+
 			if ((i % B_GL == 0) && (i / B_GL != 0))
 			{
 				pTransform->copy(2, 0);
@@ -801,6 +802,9 @@ private:
 		}
 		const int p2size = static_cast<int>(mpz_sizeinbase(p2, 2));
 
+		// Gerbicz test for v2^{2^B} and Gerbicz-Li test for 2^p2
+		const int L = B_GerbiczLi(static_cast<size_t>(B)), GL = B_GerbiczLi(static_cast<size_t>(p2size));
+
 		watch chrono(found ? restoredTime : 0);
 		const int i0 = p2size + B - 1;
 		initPrintProgress(i0, found ? ri : i0);
@@ -809,7 +813,11 @@ private:
 		// v2 = v2^{2^B}
 		if (!found || (ri >= p2size))
 		{
-			if (!found) pTransform->setInt(gi);
+			if (!found)
+			{
+				pTransform->setInt(gi);
+				pTransform->copy(1, 0);	// d(t) = u(0)
+			}
 			for (int i = found ? ri : i0; i >= p2size; --i)
 			{
 				if (_quit)
@@ -827,13 +835,66 @@ private:
 					else if (chrono.getRecordTime() > 600) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
+				const int j = i0 - i;
+				if ((j % L == 0) && (j != 0))
+				{
+					pTransform->copy(2, 0);
+					pTransform->mul(1);	// d(t) = d(t - 1) * u(t * L)
+					pTransform->copy(1, 0);
+					pTransform->copy(0, 2);
+				}
+
+				pTransform->squareDup(false);
+				// if (i == i0) pTransform->add1();	// => invalid
+				// if (i == p2size) pTransform->add1();	// => invalid
+			}
+
+			pTransform->copy(2, 0);	// v2
+
+			// u((t + 1) * L)
+			if (B % L != 0)
+			{
+				for (int i = L - (B % L); i > 0; --i)
+				{
+					if (_isBoinc) boincMonitor();
+					if (_quit) { mpz_clear(p2); return false; }
+					pTransform->squareDup(false);
+				}
+			}
+			// d(t + 1) = d(t) * u((t + 1) * L)
+			pTransform->mul(1);
+			pTransform->copy(3, 0);
+
+			// d(t)^{2^L}
+			pTransform->copy(0, 1);
+			for (int i = L; i > 0; --i)
+			{
+				if (_isBoinc) boincMonitor();
+				if (_quit) { mpz_clear(p2); return false; }
 				pTransform->squareDup(false);
 			}
 			pTransform->copy(1, 0);
+
+			// u(0) * d(t)^{2^L}
+			pTransform->setInt(gi);
+			pTransform->mul(1);
+
+			// u(0) * d(t)^{2^L} ?= d(t + 1)
+			pTransform->getInt(gi);
+			const uint64_t h1 = gi.gethash64();
+			pTransform->copy(0, 3);
+			pTransform->getInt(gi);
+			const uint64_t h2 = gi.gethash64();
+
+			if (h1 != h2) { mpz_clear(p2); return false; }
 		}
 
-		// v1' = v2 * 2^p2
-		if (!found || (ri >= p2size)) pTransform->set(1);
+		// 2^p2
+		if (!found || (ri >= p2size))
+		{
+			pTransform->set(1);
+			pTransform->copy(1, 0);	// d(t)
+		}
 		for (int i = found ? std::min(ri, p2size - 1) : p2size - 1; i >= 0; --i)
 		{
 			if (_quit)
@@ -852,15 +913,74 @@ private:
 			}
 
 			pTransform->squareDup(mpz_tstbit(p2, mp_bitcnt_t(i)) != 0);
+			// if (i == p2size - 1) pTransform->add1();	// => invalid
+			// if (i == 0) pTransform->add1();	// => invalid
+
+			if ((i % GL == 0) && (i / GL != 0))
+			{
+				pTransform->copy(3, 0);
+				pTransform->mul(1);	// d(t)
+				pTransform->copy(1, 0);
+				pTransform->copy(0, 3);
+			}
 		}
 
-		mpz_clear(p2);
+		pTransform->copy(3, 0);
 
-		pTransform->mul(1);
+		// v1' = v2 * 2^p2
+		pTransform->mul(2);
 
 		// ckey = hash64(v1')
 		pTransform->getInt(gi);
 		ckey = gi.gethash64();
+
+		// d(t + 1) = d(t) * result
+		pTransform->copy(0, 3);
+		pTransform->mul(1);
+		pTransform->copy(2, 0);
+
+		// d(t)^{2^GL}
+		pTransform->copy(0, 1);
+		for (int i = GL - 1; i >= 0; --i)
+		{
+			if (_isBoinc) boincMonitor();
+			if (_quit) return false;
+			pTransform->squareDup(false);
+		}
+		pTransform->copy(1, 0);
+
+		mpz_t res, t; mpz_init_set_ui(res, 0); mpz_init(t);
+		while (mpz_sgn(p2) != 0)
+		{
+			mpz_mod_2exp(t, p2, static_cast<unsigned long int>(GL));
+			mpz_add(res, res, t);
+			mpz_div_2exp(p2, p2, static_cast<unsigned long int>(GL));
+		}
+		mpz_clear(p2); mpz_clear(t);
+
+		// 2^res
+		pTransform->set(1);
+		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
+		{
+			if (_isBoinc) boincMonitor();
+			if (_quit) { mpz_clear(res); return false; }
+
+			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
+		}
+
+		mpz_clear(res);
+
+		// d(t)^{2^GL} * 2^res
+		pTransform->mul(1);
+
+		// d(t)^{2^GL} * 2^res ?= d(t + 1)
+		pTransform->getInt(gi);
+		const uint64_t h1 = gi.gethash64();
+		pTransform->copy(0, 2);
+		pTransform->getInt(gi);
+		const uint64_t h2 = gi.gethash64();
+
+		if (h1 != h2) return false;
 
 		time = chrono.getElapsedTime();
 		return true;
@@ -1008,7 +1128,7 @@ public:
 		if (mode == EMode::Quick) num_regs = 3;
 		else if (mode == EMode::Proof) num_regs = fast_checkpoints ? 3 + (size_t(1) << depth) : 3;
 		else if (mode == EMode::Server) num_regs = 4;
-		else if (mode == EMode::Check) num_regs = 2;
+		else if (mode == EMode::Check) num_regs = 4;
 		else return false;
 
 #if defined(GPU)
@@ -1064,7 +1184,7 @@ public:
 		}
 		else
 		{
-			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, size_t(1) << n);
+			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, static_cast<unsigned long int>(1) << n);
 
 			if (mode == EMode::Quick)
 			{

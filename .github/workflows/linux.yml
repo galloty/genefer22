@@ -121,7 +121,7 @@ jobs:
 
       - name: build boinc
         run: |
-          cd {path}/BOINC_dev/boinc/mac_build/
+          cd ./boinc/mac_build/
           source BuildMacBOINC.sh -lib
 
 

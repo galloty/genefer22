@@ -86,13 +86,13 @@ jobs:
         ./_autosetup && ./configure --disable-server --disable-client --disable-manager --build=i686-pc-linux-gnu
         make
           
-  boinc-macOS:
+  boinc-macIntel64:
     runs-on: macos-latest
-    strategy:
-      matrix:
-#        type: [manager, libs-cmake]
-        type: [libs-cmake]
-      fail-fast: false
+#    strategy:
+#      matrix:
+##        type: [manager, libs-cmake]
+#        type: [libs-cmake]
+#      fail-fast: false
 
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
@@ -100,15 +100,15 @@ jobs:
           xcode-version: '13.4.1'
 
       - name: Cache BOINC libs
-        id: cache-boinc-macOS
+        id: cache-boinc-macIntel64
         uses: actions/cache@v3
         with:
           path: |
             boinc/
-          key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macOS
+          key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macIntel64
 
       - name: Checkout boinc
-        if: steps.cache-boinc-macOS.outputs.cache-hit != 'true'
+        if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
           repository: 'BOINC/boinc'
@@ -116,7 +116,7 @@ jobs:
           path: 'boinc'
 
       - name: Check if build is running from fork
-        if: steps.cache-boinc-macOS.outputs.cache-hit != 'true' && ${{ success() && (env.AWS_ACCESS_KEY_ID == 0 || env.AWS_SECRET_ACCESS_KEY == 0) }}
+        if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true' && ${{ success() && (env.AWS_ACCESS_KEY_ID == 0 || env.AWS_SECRET_ACCESS_KEY == 0) }}
         run: |
           echo "VCPKG_BINARY_SOURCES=clear;x-aws-config,no-sign-request;x-aws,s3://vcpkg.cache.boinc/,read" >> $GITHUB_ENV
 
@@ -129,7 +129,8 @@ jobs:
 #        run: cd boinc && ./mac_build/buildMacBOINC-CI.sh --no_shared_headers
 
       - name: libs cmake
-        if: steps.cache-boinc-macOS.outputs.cache-hit != 'true' && matrix.type == 'libs-cmake'
+#        if: steps.cache-boinc-macOS.outputs.cache-hit != 'true' && matrix.type == 'libs-cmake'
+        if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
         run: cd boinc && osx/ci_build_libs_cmake.sh
 
 
@@ -213,3 +214,43 @@ jobs:
         name: linux32_bins
         path: |
           genefer22/bin/genefer22*
+
+  macIntel64:
+    needs: boinc-macIntel64
+    runs-on: macos-latest
+
+    steps:
+      - name: Use cached BOINC libs
+        id: cache-boinc
+        uses: actions/cache@v3
+        with:
+          path: |
+            boinc/libboinc.a
+            boinc/version.h
+            boinc/lib
+            boinc/include
+            boinc/api
+          key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macIntel64
+
+      - name: Fail if boinc missing
+        if: steps.cache-boinc.outputs.cache-hit != 'true'
+        run: exit 1
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '13.4.1'
+
+      - name: Checkout genefer22
+        uses: actions/checkout@v3
+        with:
+          path: 'genefer22'
+
+      - name: make
+        run: cd genefer22 && make -f Makefile_macIntel
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macIntel64_bins
+          path: |
+            genefer22/bin/genefer22*

@@ -210,7 +210,8 @@ private:
 		if (rwhere != where) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
-		if (!_transform->readContext(contextFile, fast_checkpoints ? 0 : 2)) return -2;
+		const size_t num_reg = (where == 0) ? 2 : 3;
+		if (!_transform->readContext(contextFile, fast_checkpoints ? 0 : num_reg)) return -2;
 		if (!contextFile.check_crc32()) return -2;
 		return 0;
 	}
@@ -231,7 +232,8 @@ private:
 			if (!contextFile.write(reinterpret_cast<const char *>(&where), sizeof(where))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
-			_transform->saveContext(contextFile, fast_checkpoints ? 0 : 2);
+			const size_t num_reg = (where == 0) ? 2 : 3;
+			_transform->saveContext(contextFile, fast_checkpoints ? 0 : num_reg);
 			contextFile.write_crc32();
 		}
 
@@ -820,7 +822,7 @@ private:
 			}
 			for (int i = found ? ri : i0; i >= p2size; --i)
 			{
-				if (_quit)
+				if (_quit)	// || (i == p2size + B/2))	// test context
 				{
 					saveContext(1, false, i, chrono.getElapsedTime());
 					mpz_clear(p2);
@@ -897,7 +899,7 @@ private:
 		}
 		for (int i = found ? std::min(ri, p2size - 1) : p2size - 1; i >= 0; --i)
 		{
-			if (_quit)
+			if (_quit)	// || (i == p2size/2))	// test context
 			{
 				saveContext(1, false, i, chrono.getElapsedTime());
 				mpz_clear(p2);

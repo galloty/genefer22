@@ -7,6 +7,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #pragma once
 
+#include <cstdint>
+
 #if defined(__aarch64__)
 
 #include <arm_neon.h>

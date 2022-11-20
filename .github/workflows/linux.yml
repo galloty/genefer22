@@ -225,11 +225,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            boinc/libboinc.a
-            boinc/version.h
-            boinc/lib
-            boinc/include
-            boinc/api
+            boinc/
           key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-macIntel64
 
       - name: Fail if boinc missing

@@ -120,6 +120,7 @@ jobs:
           path: 'boinc'
 
       - name: build boinc
+        if: steps.cache-boinc-macIntel64.outputs.cache-hit != 'true'
         run: |
           cd ./boinc/mac_build/
           source BuildMacBOINC.sh -lib

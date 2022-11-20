@@ -1,0 +1,170 @@
+name: Linux build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  boinc_ref: 82d0a3731c743884b6e7a25d68c6558eca691635  # client release 7.20.2
+
+jobs:
+  boinc64:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Cache BOINC libs
+      id: cache-boinc
+      uses: actions/cache@v3
+      with:
+        path: |
+          boinc/libboinc.a
+          boinc/version.h
+          boinc/lib
+          boinc/include
+          boinc/api
+        key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-64
+
+    - name: Checkout boinc
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
+      uses: actions/checkout@v3
+      with:
+        repository: 'BOINC/boinc'
+        ref: ${{ env.boinc_ref }}
+        path: 'boinc'
+        
+    - name: Build boinc
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
+      run: |
+        cd boinc
+        ./_autosetup && ./configure --disable-server --disable-client --disable-manager --build=i686-pc-linux-gnu
+        make
+        
+  boinc32:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Cache BOINC libs
+      id: cache-boinc-32
+      uses: actions/cache@v3
+      with:
+        path: |
+          boinc/libboinc.a
+          boinc/version.h
+          boinc/lib
+          boinc/include
+          boinc/api
+        key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-32
+        
+    - name: Install boinc deps
+      if: steps.cache-boinc-32.outputs.cache-hit != 'true'
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update 
+        sudo apt-get install gcc-multilib g++-multilib
+
+    - name: Checkout boinc
+      if: steps.cache-boinc-32.outputs.cache-hit != 'true'
+      uses: actions/checkout@v3
+      with:
+        repository: 'BOINC/boinc'
+        ref: ${{ env.boinc_ref }}
+        path: 'boinc'
+        
+    - name: Build boinc
+      if: steps.cache-boinc-32.outputs.cache-hit != 'true'
+      env:
+        CC: 'gcc -m32'
+        CXX: 'g++ -m32'
+      run: |
+        cd boinc
+        ./_autosetup && ./configure --disable-server --disable-client --disable-manager --build=i686-pc-linux-gnu
+        make
+          
+
+  linux64:
+    needs: boinc64
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Use cached BOINC libs
+      id: cache-boinc
+      uses: actions/cache@v3
+      with:
+        path: |
+          boinc/libboinc.a
+          boinc/version.h
+          boinc/lib
+          boinc/include
+          boinc/api
+        key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-64
+    
+    - name: Fail if boinc missing
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
+      run: exit 1
+    
+    - name: Checkout genefer22
+      uses: actions/checkout@v3
+      with: 
+        path: 'genefer22'
+        
+    - name: Get dependencies
+      run: sudo apt-get update && sudo apt-get install libgmp-dev ocl-icd-opencl-dev
+      
+    - name: make
+      run: cd genefer22 && make -f Makefile_linux64
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux64_bins
+        path: |
+          genefer22/bin/genefer22*
+
+  linux32:
+    needs: boinc32
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Use cached BOINC libs
+      id: cache-boinc
+      uses: actions/cache@v3
+      with:
+        path: |
+          boinc/libboinc.a
+          boinc/version.h
+          boinc/lib
+          boinc/include
+          boinc/api
+        key: boinc-${{ runner.os }}-${{ env.boinc_ref }}-32
+    
+    - name: Fail if boinc missing
+      if: steps.cache-boinc.outputs.cache-hit != 'true'
+      run: exit 1
+    
+    - name: Checkout genefer22
+      uses: actions/checkout@v3
+      with: 
+        path: 'genefer22'
+        
+    - name: Get dependencies
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install libgmp-dev:i386 ocl-icd-opencl-dev:i386 gcc-multilib g++-multilib
+      
+    - name: make
+      run: cd genefer22 && make -f Makefile_linux32
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux32_bins
+        path: |
+          genefer22/bin/genefer22*
+

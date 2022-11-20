@@ -230,6 +230,19 @@ jobs:
         with:
           xcode-version: '13.4.1'
 
+      - name: install Homebrew
+        run: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+      - name: install deps (brew)
+        run: |
+          sudo chown -R $(whoami):admin /usr/local/Cellar/
+          brew install llvm libomp gmp
+
+      - name: remove dylib files (force static link)
+        run: |
+          rm -f /usr/local/opt/libomp/lib/libomp.dylib
+          rm -f /usr/local/opt/gmp/lib/libgmp.dylib
+
       - name: Checkout genefer22
         uses: actions/checkout@v3
         with:

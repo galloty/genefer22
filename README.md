@@ -18,10 +18,9 @@ On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (
 
 ## Build
 
-Releases are available as tags.  
- - 22.11.5
+Release 22.11.4 is the current PrimeGrid applications.  
 
-They are compiled using:  
+Binaries are generated using:  
  - genefer22: Ubuntu 22.04 amd64, gcc 11.3  
  - genefer22g: Ubuntu 18.04 amd64, gcc 7.5  
  - genefer22_x86, genefer22g_x86: Lubuntu 18.04 i386, gcc 7.5  

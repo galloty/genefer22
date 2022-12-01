@@ -1,8 +1,10 @@
 # genefer 22
 Generalized Fermat Prime search program
 
+<!---
 [![Linux build](https://github.com/galloty/genefer22/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/galloty/genefer22/actions/workflows/linux.yml)
 [![macOS build](https://github.com/galloty/genefer22/actions/workflows/macOS.yml/badge.svg?branch=main)](https://github.com/galloty/genefer22/actions/workflows/macOS.yml)
+-->
 ## About
 
 **genefer22** is an [OpenMP®](https://www.openmp.org/) application on CPU and an [OpenCL™](https://www.khronos.org/opencl/) application on GPU.  

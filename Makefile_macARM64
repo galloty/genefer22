@@ -32,10 +32,10 @@ DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
 DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(SRC_DIR)/simd128d.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-INTERMEDIATE_EXEC_CPU = genefer22_macARM.tmp
-INTERMEDIATE_EXEC_GPU = genefer22g_macARM.tmp
-EXEC_CPU = $(BIN_DIR)/genefer22_macARM
-EXEC_GPU = $(BIN_DIR)/genefer22g_macARM
+INTERMEDIATE_EXEC_CPU = genefer_macARM.tmp
+INTERMEDIATE_EXEC_GPU = geneferg_macARM.tmp
+EXEC_CPU = $(BIN_DIR)/genefer_macARM
+EXEC_GPU = $(BIN_DIR)/geneferg_macARM
 
 .PHONY: all clean_obj clean_bin rebuild
 

@@ -1,7 +1,7 @@
 /*
 Copyright 2022, Yves Gallot
 
-genefer22 is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
+genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
@@ -108,7 +108,6 @@ public:
 		const size_t ret = std::fread(ptr , sizeof(char), size, _cFile);
 		_crc32 = rc_crc32(_crc32, ptr, size);
 		if (ret == size * sizeof(char)) return true;
-		std::fclose(_cFile);
 		error("failure of a read operation");
 		return false;
 	}
@@ -118,7 +117,6 @@ public:
 		const size_t ret = std::fwrite(ptr , sizeof(char), size, _cFile);
 		_crc32 = rc_crc32(_crc32, ptr, size);
 		if (ret == size * sizeof(char)) return true;
-		std::fclose(_cFile);
 		error("failure of a write operation");
 		return false;
 	}
@@ -127,7 +125,6 @@ public:
 	{
 		if (mpz_inp_raw(z, _cFile) != 0) return true;
 		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
-		std::fclose(_cFile);
 		error("failure of a read operation");
 		return false;
 	}
@@ -136,7 +133,6 @@ public:
 	{
 		if (mpz_out_raw(_cFile, z) != 0) return true;
 		_crc32 = _crc32 ^ static_cast<uint32_t>(mpz_fdiv_ui(z, 0xfedcba98));	// fake crc32
-		std::fclose(_cFile);
 		error("failure of a write operation");
 		return false;
 	}
@@ -145,7 +141,6 @@ public:
 	{
 		const int ret = std::fprintf(_cFile, "%s", str);
 		if (ret >= 0) return true;
-		std::fclose(_cFile);
 		error("failure of a print operation");
 		return false;
 	}

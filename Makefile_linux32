@@ -1,4 +1,4 @@
-# These packages are needed to build genefer22: libgmp-dev ocl-icd-opencl-dev
+# These packages are needed to build genefer: libgmp-dev ocl-icd-opencl-dev
 # Compiler: GCC 7.5+
 CC = g++ -m32 -march=i686 -std=c++17
 RM = rm
@@ -32,8 +32,8 @@ DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(SRC_
 DEPS_TRANSFORM_CPUi32 = $(SRC_DIR)/transformCPUi32.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-EXEC_CPU = $(BIN_DIR)/genefer22_x86
-EXEC_GPU = $(BIN_DIR)/genefer22g_x86
+EXEC_CPU = $(BIN_DIR)/genefer_x86
+EXEC_GPU = $(BIN_DIR)/geneferg_x86
 
 .PHONY: all clean_obj rebuild
 

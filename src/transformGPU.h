@@ -1,7 +1,7 @@
 /*
 Copyright 2022, Yves Gallot
 
-genefer22 is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
+genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
@@ -172,7 +172,7 @@ public:
 
 		hFile << "/*" << std::endl;
 		hFile << "Copyright 2022, Yves Gallot" << std::endl << std::endl;
-		hFile << "genefer22 is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
+		hFile << "genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
 		hFile << "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful." << std::endl;
 		hFile << "*/" << std::endl << std::endl;
 

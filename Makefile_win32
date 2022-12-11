@@ -28,8 +28,8 @@ DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/fp16_80.h $(SRC_
 DEPS_TRANSFORM_CPUi32 = $(SRC_DIR)/transformCPUi32.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-EXEC_CPU = $(BIN_DIR)/genefer22_x86.exe
-EXEC_GPU = $(BIN_DIR)/genefer22g_x86.exe
+EXEC_CPU = $(BIN_DIR)/genefer_x86.exe
+EXEC_GPU = $(BIN_DIR)/geneferg_x86.exe
 
 .PHONY: all clean_obj rebuild
 

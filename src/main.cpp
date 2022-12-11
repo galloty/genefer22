@@ -1,7 +1,7 @@
 /*
 Copyright 2022, Yves Gallot
 
-genefer22 is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
+genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it.
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
@@ -82,7 +82,11 @@ private:
 			"linux x86";
 #endif
 #elif defined(__APPLE__)
-			"macOS";
+#if defined(__aarch64__)
+			"macOS arm64";
+#else
+			"macOS x64";
+#endif
 #else
 			"unknown";
 #endif
@@ -105,9 +109,9 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer22" << ext << " version 22.11.5 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "genefer" << ext << " version 22.12.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
-		ss << "genefer22 is free source code, under the MIT license." << std::endl;
+		ss << "genefer is free source code, under the MIT license." << std::endl;
 		if (nl)
 		{
 			ss << std::endl << "Command line: '";
@@ -131,24 +135,24 @@ private:
 		const char * const ext = "";
 #endif
 		std::ostringstream ss;
-		ss << "Usage: genefer22" << ext << " [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                        the exponent of the GFN (12 <= n <= 23)" << std::endl;
-		ss << "  -b <b>                        the base of the GFN (2 <= b <= 2G)" << std::endl;
-		ss << "  -q                            quick test" << std::endl;
-		ss << "  -p                            full test: a proof is generated" << std::endl;
-		ss << "  -s                            convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
-		ss << "  -c                            check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
-		ss << "  -h                            validate and bench your hardware" << std::endl;
+		ss << "Usage: genefer" << ext << " [options]  options may be specified in any order" << std::endl;
+		ss << "  -n <n>                      the exponent of the GFN (12 <= n <= 23)" << std::endl;
+		ss << "  -b <b>                      the base of the GFN (2 <= b <= 2G)" << std::endl;
+		ss << "  -q                          quick test" << std::endl;
+		ss << "  -p                          full test: a proof is generated" << std::endl;
+		ss << "  -s                          convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
+		ss << "  -c                          check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
+		ss << "  -h                          validate and bench your hardware" << std::endl;
 #if defined(GPU)
-		ss << "  -d <n> or --device <n>        set the device number (default 0)" << std::endl;
+		ss << "  -d <n> or --device <n>      set the device number (default 0)" << std::endl;
 #else
-		ss << "  -t <n> or --nthreads <n>      set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
-		ss << "  -x <implementation>           set a specific implementation (i32, sse2, sse4, avx, fma, 512)" << std::endl;
+		ss << "  -t <n> or --nthreads <n>    set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
+		ss << "  -x <implementation>         set a specific implementation (i32, sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
-		ss << "  -f <filename>                 main filename (without extension) of input and output files" << std::endl;
-		ss << "  -v or -V                      print the startup banner and exit" << std::endl;
+		ss << "  -f <filename>               main filename (without extension) of input and output files" << std::endl;
+		ss << "  -v or -V                    print the startup banner and exit" << std::endl;
 #if defined(BOINC)
-		ss << "  -boinc                        operate as a BOINC client app" << std::endl;
+		ss << "  -boinc                      operate as a BOINC client app" << std::endl;
 #endif
 		ss << std::endl;
 		return ss.str();

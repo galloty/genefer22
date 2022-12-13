@@ -1,4 +1,4 @@
-# genefer 22
+# genefer
 Generalized Fermat Prime search program
 
 <!---

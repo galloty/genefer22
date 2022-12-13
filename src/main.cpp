@@ -190,7 +190,7 @@ public:
 			}
 		}
 
-		// if -v or -V then print header to stderr and exit
+		// if -v or -V then print header and exit
 		for (const std::string & arg : args)
 		{
 			if ((arg[0] == '-') && ((arg[1] == 'v') || (arg[1] == 'V')))
@@ -340,12 +340,12 @@ public:
 		{
 			for (size_t n = 15; n <= 22; ++n)
 			{
-				if (!g.check(0, n, mode, device, nthreads, impl, depth)) return;
+				if (g.check(0, n, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}
 			if (mode == genefer::EMode::Bench)
 			{
-				if (!g.check(0, 23, mode, device, nthreads, impl, depth)) return;	// DYFL
-				if (!g.check(0, 24, mode, device, nthreads, impl, depth)) return;	// 23
+				if (g.check(0, 23, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;	// DYFL
+				if (g.check(0, 24, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;	// 23
 			}
 			return;
 		}
@@ -362,19 +362,19 @@ public:
 													169277952, 114340846, 15913772, 4896418, 1951734 };
 #endif
 
-			// if (!g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5)) return;
-			// if (!g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5)) return;
-			// if (!g.check(1999997802, 11, genefer::EMode::Server, device, nthreads, "i32", 5)) return;
-			// if (!g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5)) return;
-			// if (!g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6)) return;
+			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999997802, 11, genefer::EMode::Server, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 			// return;
 			for (size_t i = 0; i < count; ++i)
 			{
 				// if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;
 
-				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth)) return;
-				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth)) return;
-				if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth)) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}*/
 
 			pio::print(usage());
@@ -387,14 +387,25 @@ public:
 			return;
 		}
 
-		g.check(b, n, mode, device, nthreads, impl, depth, oldfashion);
+		const genefer::EReturn ret = g.check(b, n, mode, device, nthreads, impl, depth, oldfashion);
+		if (bBoinc)
+		{
+			if (ret == genefer::EReturn::Success) boinc_finish(EXIT_SUCCESS);
+			if (ret == genefer::EReturn::Failed) boinc_finish(EXIT_FAILURE);
+		}
 
-		if (bBoinc) boinc_finish(EXIT_SUCCESS);
+		if (ret == genefer::EReturn::Aborted)
+		{
+			std::ostringstream ss; ss << " exiting..." << std::endl;
+			pio::print(ss.str());
+		}
 	}
 };
 
 int main(int argc, char * argv[])
 {
+	std::setvbuf(stderr, nullptr, _IONBF, 0);	// no buffer
+
 	try
 	{
 		application & app = application::getInstance();

@@ -36,6 +36,7 @@ inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 class genefer
 {
 public:
+	enum class EReturn { Success, Failed, Aborted }; 
 	enum class EMode { None, Quick, Proof, Server, Check, Bench, Limit }; 
 
 private:
@@ -66,7 +67,7 @@ private:
 	bool _print_sr = true;
 
 public:
-	void quit() { if (_isBoinc) exit(EXIT_SUCCESS); _quit = true; }
+	void quit() { _quit = true; }
 	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
 #if defined(GPU)
 	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)
@@ -134,8 +135,6 @@ private:
 	std::string proofFilename() const { return _mainFilename + ".proof"; }
 	std::string sfvFilename() const { return _mainFilename + ".sfv"; }
 	std::string certFilename() const { return _mainFilename + ".cert"; }
-	// std::string ckeyFilename() const { return _mainFilename + ".ckey"; }
-	// std::string skeyFilename() const { return _mainFilename + ".skey"; }
 	std::string ckptFilename(const size_t i) const
 	{
 		std::ostringstream ss; ss << _mainFilename << "_" << i << ".ckpt";
@@ -190,13 +189,9 @@ private:
 
 	static void clearline() { pio::display("                                                \r"); }
 
-	int readContext(const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
+	int _readContext(const std::string  & filename, const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
 	{
-		std::string ctxFile = contextFilename();
-		struct stat s;
-		if (stat(ctxFile.c_str(), &s) != 0) ctxFile += ".old";	// not found, try old one
-
-		file contextFile(ctxFile);
+		file contextFile(filename);
 		if (!contextFile.exists()) return -1;
 
 		int version = 0;
@@ -216,11 +211,33 @@ private:
 		return 0;
 	}
 
+	bool readContext(const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
+	{
+		std::string ctxFile = contextFilename();
+		int error = _readContext(ctxFile, where, fast_checkpoints, i, elapsedTime);
+		if (error < -1)
+		{
+			std::ostringstream ss; ss << ctxFile << ": invalid context";
+			pio::error(ss.str());
+		}
+		ctxFile += ".old";
+		if (error < 0)
+		{
+			error = _readContext(ctxFile, where, fast_checkpoints, i, elapsedTime);
+			if (error < -1)
+			{
+				std::ostringstream ss; ss << ctxFile << ": invalid context";
+				pio::error(ss.str());
+			}
+		}
+		return (error == 0);
+	}
+
+		
+
 	void saveContext(const int where, const bool fast_checkpoints, const int i, const double elapsedTime) const
 	{
 		const std::string ctxFile = contextFilename(), oldCtxFile = ctxFile + ".old", newCtxFile = ctxFile + ".new";
-
-		std::remove(oldCtxFile.c_str());
 
 		{
 			file contextFile(newCtxFile, "wb", false);
@@ -236,6 +253,8 @@ private:
 			_transform->saveContext(contextFile, fast_checkpoints ? 0 : num_reg);
 			contextFile.write_crc32();
 		}
+
+		std::remove(oldCtxFile.c_str());
 
 		struct stat s;
 		if ((stat(ctxFile.c_str(), &s) == 0) && (std::rename(ctxFile.c_str(), oldCtxFile.c_str()) != 0))	// file exists and cannot rename it
@@ -284,7 +303,7 @@ private:
 	void boincMonitor()
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
-		if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
+		if (boincQuitRequest(status)) { quit(); return; }
 
 		if (status.suspended != 0)
 		{
@@ -293,28 +312,26 @@ private:
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
-				if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
+				if (boincQuitRequest(status)) { quit(); return; }
 			}
 			printState(false);
 		}
 	}
 
-	bool boincMonitor(const int where, const bool fast_checkpoints, const int i, watch & chrono)
+	void boincMonitor(const int where, const bool fast_checkpoints, const int i, watch & chrono)
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
-		const bool bQuit = boincQuitRequest(status);
-
-		if (bQuit || (status.suspended != 0)) saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
-		if (bQuit) exit(EXIT_SUCCESS);
+		if (boincQuitRequest(status)) { quit(); return; }
 
 		if (status.suspended != 0)
 		{
 			printState(true);
+			saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
 			while (status.suspended != 0)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				boinc_get_status(&status);
-				if (boincQuitRequest(status)) exit(EXIT_SUCCESS);
+				if (boincQuitRequest(status)) { quit(); return; }
 			}
 			printState(false);
 		}
@@ -324,7 +341,6 @@ private:
 			saveContext(where, fast_checkpoints, i, chrono.getElapsedTime());
 			boinc_checkpoint_completed();
 		}
-		return false;
 	}
 
 	void power(const size_t reg, const uint32_t e) const
@@ -365,18 +381,16 @@ private:
 	}
 
 	// out: reg_0 is 2^exponent and reg_1 is d(t)
-	bool prp(const mpz_t & exponent, const int B_GL, const int B_PL, const bool fast_checkpoints, double & testTime)
+	EReturn prp(const mpz_t & exponent, const int B_GL, const int B_PL, const bool fast_checkpoints, double & testTime)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const int error = readContext(0, fast_checkpoints, ri, restoredTime);
-		const bool found = (error == 0);
-		if (error < -1) pio::error("invalid context");
-
+		const bool found = readContext(0, fast_checkpoints, ri, restoredTime);
 		if (!found)
 		{
+			ri = 0; restoredTime = 0;
 			pTransform->set(1);
 			pTransform->copy(1, 0);	// d(t)
 		}
@@ -387,7 +401,7 @@ private:
 			if (ri == -1)
 			{
 				testTime = 0;
-				return true;
+				return EReturn::Success;
 			}
 		}
 
@@ -398,19 +412,19 @@ private:
 
 		for (int i = i_start; i >= 0; --i)
 		{
+			if (_isBoinc) boincMonitor(0, fast_checkpoints, i, chrono);
+
 			if (_quit)
 			{
 				saveContext(0, fast_checkpoints, i, chrono.getElapsedTime());
-				return false;
+				return EReturn::Aborted;
 			}
 
 			if (i % dcount == 0)
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-
-				if (_isBoinc) { if (boincMonitor(0, fast_checkpoints, i, chrono)) return false; }
-				else if (chrono.getRecordTime() > 600) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
@@ -439,13 +453,13 @@ private:
 
 		testTime = chrono.getElapsedTime();
 		saveContext(0, fast_checkpoints, -1, testTime);
-		return true;
+		return EReturn::Success;
 	}
 
 	// Gerbicz-Li error checking
 	// in: reg_0 is 2^exponent and reg_1 is d(t)
 	// out: return valid/invalid
-	bool GL(const mpz_t & exponent, const int B_GL, double & validTime)
+	EReturn GL(const mpz_t & exponent, const int B_GL, double & validTime)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -463,7 +477,7 @@ private:
 		for (int i = B_GL - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) return false;
+			if (_quit) return EReturn::Aborted;
 			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
@@ -483,8 +497,7 @@ private:
 		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) { mpz_clear(res); return false; }
-
+			if (_quit) { mpz_clear(res); return EReturn::Aborted; }
 			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
 		}
 
@@ -503,13 +516,13 @@ private:
 		const bool success = (h1 == h2);
 
 		validTime = chrono.getElapsedTime();
-		return success;
+		return success ? EReturn::Success : EReturn::Failed;
 	}
 
 	// (Pietrzak-Li proof generation
 	// in: ckpt[i]
 	// out: proof file, proof key
-	bool PL(const int depth, const bool fast_checkpoints, double & proofTime, uint64_t & pkey)
+	EReturn PL(const int depth, const bool fast_checkpoints, double & proofTime, uint64_t & pkey)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -588,7 +601,7 @@ private:
 				{
 					for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 					delete[] w;
-					return false;
+					return EReturn::Aborted;
 				}
 			}
 // std::cout << k << ": " << s << ", " << 32 * k * (1 << (k - 1))<< std::endl;
@@ -624,43 +637,44 @@ private:
 		pkey = gi.gethash64();
 
 		proofTime = chrono.getElapsedTime();
-		return true;
+		return EReturn::Success;
 	}
 
-	bool quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp, uint64_t & res64, uint64_t & old64)
+	EReturn quick(const mpz_t & exponent, double & testTime, double & validTime, bool & isPrp, uint64_t & res64, uint64_t & old64)
 	{
 		const int B_GL = B_GerbiczLi(mpz_sizeinbase(exponent, 2));
 
-		if (!prp(exponent, B_GL, 0, false, testTime)) return false;
+		const EReturn rPrp = prp(exponent, B_GL, 0, false, testTime);
+		if (rPrp != EReturn::Success) return rPrp;
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
 			isPrp = gi.isOne(res64, old64);
 		}
-		if (!GL(exponent, B_GL, validTime)) return false;
-		return true;
+		return GL(exponent, B_GL, validTime);
 	}
 
-	bool proof(const mpz_t & exponent, const int depth, const bool fast_checkpoints, double & testTime, double & validTime, double & proofTime,
-			   bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
+	EReturn proof(const mpz_t & exponent, const int depth, const bool fast_checkpoints, double & testTime, double & validTime, double & proofTime,
+				  bool & isPrp, uint64_t & pkey, uint64_t & res64, uint64_t & old64)
 	{
 		const size_t esize = mpz_sizeinbase(exponent, 2);
 		const int B_GL = B_GerbiczLi(esize), B_PL = B_PietrzakLi(esize, depth);
 
-		if (!prp(exponent, B_GL, B_PL, fast_checkpoints, testTime)) return false;
+		const EReturn rPrp = prp(exponent, B_GL, B_PL, fast_checkpoints, testTime);
+		if (rPrp != EReturn::Success) return rPrp;
 		{
 			gint & gi = *_gi;
 			_transform->getInt(gi);
 			isPrp = gi.isOne(res64, old64);
 		}
-		if (!GL(exponent, B_GL, validTime)) return false;
-		if (!PL(depth, fast_checkpoints, proofTime, pkey)) return false;
-		return true;
+		const EReturn rGL = GL(exponent, B_GL, validTime);
+		if (rGL != EReturn::Success) return rGL;
+		return PL(depth, fast_checkpoints, proofTime, pkey);
 	}
 
 	static uint32_t rand32(const uint32_t rmin, const uint32_t rmax) { return (static_cast<uint32_t>(std::rand()) % (rmax - rmin)) + rmin; }
 
-	bool server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
+	EReturn server(const mpz_t & exponent, double & time, bool & isPrp, uint64_t & pkey, uint64_t & ckey, uint64_t & res64, uint64_t & old64)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
@@ -710,7 +724,7 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
 
-			if (_quit) return false;
+			if (_quit) return EReturn::Aborted;
 		}
 
 		proofFile.check_crc32();
@@ -774,19 +788,21 @@ private:
 		mpz_clear(p2);  mpz_clear(t);
 
 		time = chrono.getElapsedTime();
-		return true;
+		return EReturn::Success;
 	}
 
-	bool check(double & time, uint64_t & ckey)
+	EReturn check(double & time, uint64_t & ckey)
 	{
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 
 		int ri = 0; double restoredTime = 0;
-		const int error = readContext(1, false, ri, restoredTime);
-		const bool found = (error == 0);
-		if (error < -1) pio::error("invalid context");
-		if (found)
+		const bool found = readContext(1, false, ri, restoredTime);
+		if (!found)
+		{
+			ri = 0; restoredTime = 0;
+		}
+		else
 		{
 			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
 			pio::print(ss.str());
@@ -822,19 +838,20 @@ private:
 			}
 			for (int i = found ? ri : i0; i >= p2size; --i)
 			{
+				if (_isBoinc) boincMonitor(1, false, i, chrono);
+
 				if (_quit)	// || (i == p2size + B/2))	// test context
 				{
 					saveContext(1, false, i, chrono.getElapsedTime());
 					mpz_clear(p2);
-					return false;
+					return EReturn::Aborted;
 				}
 
 				if (i % dcount == 0)
 				{
 					chrono.read(); const double displayTime = chrono.getDisplayTime();
 					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-					if (_isBoinc) { if (boincMonitor(1, false, i, chrono)) return false; }
-					else if (chrono.getRecordTime() > 600) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+					if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
 				const int j = i0 - i;
@@ -859,7 +876,7 @@ private:
 				for (int i = L - (B % L); i > 0; --i)
 				{
 					if (_isBoinc) boincMonitor();
-					if (_quit) { mpz_clear(p2); return false; }
+					if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
 					pTransform->squareDup(false);
 				}
 			}
@@ -872,7 +889,7 @@ private:
 			for (int i = L; i > 0; --i)
 			{
 				if (_isBoinc) boincMonitor();
-				if (_quit) { mpz_clear(p2); return false; }
+				if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
 				pTransform->squareDup(false);
 			}
 			pTransform->copy(1, 0);
@@ -888,7 +905,7 @@ private:
 			pTransform->getInt(gi);
 			const uint64_t h2 = gi.gethash64();
 
-			if (h1 != h2) { mpz_clear(p2); return false; }
+			if (h1 != h2) { mpz_clear(p2); return EReturn::Failed; }
 		}
 
 		// 2^p2
@@ -899,19 +916,20 @@ private:
 		}
 		for (int i = found ? std::min(ri, p2size - 1) : p2size - 1; i >= 0; --i)
 		{
+			if (_isBoinc) { boincMonitor(1, false, i, chrono); }
+
 			if (_quit)	// || (i == p2size/2))	// test context
 			{
 				saveContext(1, false, i, chrono.getElapsedTime());
 				mpz_clear(p2);
-				return false;
+				return EReturn::Aborted;
 			}
 
 			if (i % dcount == 0)
 			{
 				chrono.read(); const double displayTime = chrono.getDisplayTime();
 				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-				if (_isBoinc) { if (boincMonitor(1, false, i, chrono)) return false; }
-				else if (chrono.getRecordTime() > 600) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
 			pTransform->squareDup(mpz_tstbit(p2, mp_bitcnt_t(i)) != 0);
@@ -946,7 +964,7 @@ private:
 		for (int i = GL - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) return false;
+			if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
 			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
@@ -965,8 +983,7 @@ private:
 		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) { mpz_clear(res); return false; }
-
+			if (_quit) return EReturn::Aborted;
 			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
 		}
 
@@ -982,13 +999,13 @@ private:
 		pTransform->getInt(gi);
 		const uint64_t h2 = gi.gethash64();
 
-		if (h1 != h2) return false;
+		if (h1 != h2) return EReturn::Failed;
 
 		time = chrono.getElapsedTime();
-		return true;
+		return EReturn::Success;
 	}
 
-	bool bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
+	EReturn bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 		static constexpr uint32_t bm[13] = { 500000000, 380000000, 290000000, 220000000, 170000000,
 											 115000000, 16000000, 5500000, 2000000, 830000, 240000, 980000, 500000 };
@@ -1018,7 +1035,7 @@ private:
 		_gi = new gint(size_t(1) << n, b);
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-		const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
+		const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64, old64);
 		mpz_clear(exponent);
 		clearContext();
 		delete _gi; _gi = nullptr;
@@ -1026,7 +1043,8 @@ private:
 		pio::print(gfn(b, n));
 
 		std::ostringstream ss;
-		if (!success) ss << ": test failed!" << std::endl;
+		if (qret == EReturn::Failed) ss << ": test failed!" << std::endl;
+		else if (qret == EReturn::Aborted) ss << ": aborted." << std::endl;
 		else
 		{
 			static volatile bool _break;
@@ -1059,10 +1077,10 @@ private:
 		pio::print(ss.str());
 
 		deleteTransform();
-		return !_quit;
+		return qret;
 	}
 
-	bool check_limit(const uint32_t n, const size_t device, const size_t nthreads, const std::string & impl)
+	EReturn check_limit(const uint32_t n, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 		const size_t num_regs = 3;
 
@@ -1084,9 +1102,9 @@ private:
 			_gi = new gint(size_t(1) << n, b);
 
 			double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
-			const bool success = quick(exponent, testTime, validTime, isPrp, res64, old64);
-			if (success) b_min = b;
-			else if (!_quit) b_max = b;
+			const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64, old64);
+			if (qret == EReturn::Success) b_min = b;
+			else if (qret == EReturn::Failed) b_max = b;
 
 			// std::ostringstream ss; ss << n << ", " << b << ": " << (success ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
@@ -1104,11 +1122,12 @@ private:
 		std::ostringstream ss; ss << n << ": " << b << std::endl;
 		pio::print(ss.str());
 
-		return !_quit;
+		return _quit ? EReturn::Aborted : EReturn::Success;
 	}
 
 public:
-	bool check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl, const int depth, const bool oldfashion = false)
+	EReturn check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl,
+				  const int depth, const bool oldfashion = false)
 	{
 		const bool emptyMainFilename = _mainFilename.empty();
 		if (emptyMainFilename)
@@ -1131,7 +1150,7 @@ public:
 		else if (mode == EMode::Proof) num_regs = fast_checkpoints ? 3 + (size_t(1) << depth) : 3;
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 4;
-		else return false;
+		else return EReturn::Failed;
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
@@ -1155,30 +1174,25 @@ public:
 
 		_gi = new gint(size_t(1) << n, b);
 
-		bool success = false;
+		EReturn success = EReturn::Failed;
 
 		if (mode == EMode::Check)
 		{
 			double time = 0; uint64_t ckey = 0;
 			success = check(time, ckey);
 			const double error = _transform->getError();
-			// if (success)
-			// {
-			// 	file ckeyFile(ckeyFilename(), "w", false);
-			// 	ckeyFile.print(uint64toString(ckey).c_str());
-			// }
 			clearline();
 			std::ostringstream ss; ss << gfn(b, n);
-			if (success)
+			if (success == EReturn::Success)
 			{
 				ss << " is checked, ckey = " << uint64toString(ckey);
 				if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 				ss << ", time = " << timer::formatTime(time) << ".";
 			}
-			else if (!_quit) ss << ": check failed!";
+			else if (success == EReturn::Failed) ss << ": check failed!";
 			else ss << ": terminated.";
 			ss << std::endl; pio::print(ss.str());
-			if (success)
+			if (success == EReturn::Success)
 			{
 				pio::result(ss.str());
 				if (!_isBoinc) clearContext();
@@ -1197,17 +1211,17 @@ public:
 				if (oldfashion)
 				{
 					std::ostringstream ss; ss << b << "^" << (size_t(1) << n) << "+1";
-					if (success)
+					if (success == EReturn::Success)
 					{
 						ss << " is complete";
 						if (error != 0) ss << ", err = " << std::setprecision(4) << error;
 						ss << ", time = " << timer::formatTime(testTime + validTime) << ".";
 					}
-					else if (!_quit) ss << ": validation failed!";
+					else if (success == EReturn::Failed) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
 					pio::result(ss.str(), "genefer.log");
-					if (success)
+					if (success == EReturn::Success)
 					{
 						std::ostringstream ssres; ssres << std::hex << std::setfill('0') << std::setw(16) << old64;
 						std::ostringstream ssr; ssr << b << "^" << (size_t(1) << n) << "+1 is ";
@@ -1223,11 +1237,11 @@ public:
 				else
 				{
 					std::ostringstream ss; ss << gfn(b, n);
-					if (success) ss << gfnStatus(isPrp, 0, 0, res64, old64, error, testTime + validTime);
-					else if (!_quit) ss << ": validation failed!";
+					if (success == EReturn::Success) ss << gfnStatus(isPrp, 0, 0, res64, old64, error, testTime + validTime);
+					else if (success == EReturn::Failed) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
-					if (success)
+					if (success == EReturn::Success)
 					{
 						pio::result(ss.str());
 						if (!_isBoinc) clearContext();
@@ -1242,16 +1256,16 @@ public:
 				const double time = testTime + validTime + proofTime;
 				clearline();
 				std::ostringstream ss; ss << gfn(b, n) << ": ";
-				if (success)
+				if (success == EReturn::Success)
 				{
 					ss << "proof file is generated";
 					if (error != 0) ss << ", error = " << std::setprecision(4) << error;
 					ss << ", time = " << timer::formatTime(time) << ".";
 				}
-				else if (!_quit) ss << "validation failed!";
+				else if (success == EReturn::Failed) ss << "validation failed!";
 				else ss << "terminated.";
 				ss << std::endl; pio::print(ss.str());
-				if (success)
+				if (success == EReturn::Success)
 				{
 					std::ostringstream ssr; ssr << gfn(b, n) << gfnStatus(isPrp, pkey, 0, res64, old64, error, time) << std::endl;
 					pio::result(ssr.str());
@@ -1267,17 +1281,12 @@ public:
 				double time = 0; bool isPrp = false; uint64_t pkey = 0, ckey = 0, res64 = 0, old64 = 0;
 				success = server(exponent, time, isPrp, pkey, ckey, res64, old64);
 				const double error = _transform->getError();
-				// if (success)
-				// {
-				// 	file skeyFile(skeyFilename(), "w", false);
-				// 	skeyFile.print(uint64toString(pkey).c_str());
-				// }
 				std::ostringstream ss; ss << gfn(b, n);
-				if (success) ss << gfnStatus(isPrp, pkey, ckey, res64, old64, error, time);
-				else if (!_quit) ss << ": generation failed!";
+				if (success == EReturn::Success) ss << gfnStatus(isPrp, pkey, ckey, res64, old64, error, time);
+				else if (success == EReturn::Failed) ss << ": generation failed!";
 				else ss << ": terminated.";
 				ss << std::endl; pio::print(ss.str());
-				if (success) pio::result(ss.str());
+				if (success == EReturn::Success) pio::result(ss.str());
 			}
 
 			mpz_clear(exponent);

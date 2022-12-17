@@ -63,6 +63,7 @@ private:
 	transform * _transform = nullptr;
 	gint * _gi = nullptr;
 	std::string _mainFilename;
+	uint32_t _n = 0;
 	int _print_range = 0, _print_i = 0;
 	bool _print_sr = true;
 
@@ -173,10 +174,32 @@ private:
 	int printProgress(const double displayTime, const int i)
 	{
 		if (_print_i == i) return 1;
+#if defined(BOINC)
+		const double prev_percent = static_cast<double>(_print_range - _print_i) / _print_range;
+#endif
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const double percent = static_cast<double>(_print_range - i) / _print_range;
 		const int dcount = std::max(static_cast<int>(1.0 / mulTime), 2);
-		if (_isBoinc) boinc_fraction_done(percent);
+		if (_isBoinc)
+		{
+			boinc_fraction_done(percent);
+#if defined(BOINC)
+			if ((_n >= 19) && (prev_percent < 0.01) && (percent >= 0.01))
+			{
+				const double progress = boinc_get_fraction_done();
+				double cputime; boinc_wu_cpu_time(cputime);
+				APP_INIT_DATA init_data; boinc_get_init_data(init_data);
+				const double runtime = init_data.starting_elapsed_time + boinc_elapsed_time();
+				std::ostringstream ss; ss << "<trickle_up>" << std::endl << " <progress>" << progress << "</progress>" << std::endl
+				   << " <cputime>" << cputime << "</cputime>" << std::endl << " <runtime>" << runtime << "</runtime>" << std::endl << "</trickle_up>" << std::endl;
+				const std::string var = "genefer_progress", message = ss.str();
+				// boinc_send_trickle_up interface is char * and not const char *: strings must be duplicated to char * buffers :-(
+				char variety[64]; const std::size_t variety_length = var.copy(variety, var.length()); variety[variety_length] = '\0';
+				char text[256]; const std::size_t text_length = message.copy(text, message.length()); text[text_length] = '\0';
+				boinc_send_trickle_up(variety, text);
+			}
+#endif
+		}
 		else
 		{
 			const double estimatedTime = mulTime * i;
@@ -232,8 +255,6 @@ private:
 		}
 		return (error == 0);
 	}
-
-		
 
 	void saveContext(const int where, const bool fast_checkpoints, const int i, const double elapsedTime) const
 	{
@@ -1129,6 +1150,7 @@ public:
 	EReturn check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl,
 				  const int depth, const bool oldfashion = false)
 	{
+		_n = n;
 		const bool emptyMainFilename = _mainFilename.empty();
 		if (emptyMainFilename)
 		{

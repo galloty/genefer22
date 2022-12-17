@@ -147,7 +147,9 @@ private:
 		ss << "  -d <n> or --device <n>      set the device number (default 0)" << std::endl;
 #else
 		ss << "  -t <n> or --nthreads <n>    set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
+#if !defined(__aarch64__)
 		ss << "  -x <implementation>         set a specific implementation (i32, sse2, sse4, avx, fma, 512)" << std::endl;
+#endif
 #endif
 		ss << "  -f <filename>               main filename (without extension) of input and output files" << std::endl;
 		ss << "  -v or -V                    print the startup banner and exit" << std::endl;
@@ -300,21 +302,28 @@ public:
 			if (arg.substr(0, 2) == "-t")
 			{
 				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				nthreads = size_t(std::min(std::atoi(ntstr.c_str()), 64));
+				const int nt = std::atoi(ntstr.c_str());
+				if (nt > 64) pio::error("number of threads > 64");
+				nthreads = size_t(std::min(nt, 64));
 			}
 			if (arg.substr(0, 10) == "--nthreads")
 			{
 				const std::string ntstr = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
-				nthreads = size_t(std::min(std::atoi(ntstr.c_str()), 64));
+				const int nt = std::atoi(ntstr.c_str());
+				if (nt > 64) pio::error("number of threads > 64");
+				nthreads = size_t(std::min(nt, 64));
 			}
+#if !defined(__aarch64__)
 			if (arg.substr(0, 2) == "-x")
 			{
 				impl = ((arg == "-x") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				if ((impl != "i32") && (impl != "sse2") && (impl != "sse4") && (impl != "avx") && (impl != "fma") && (impl != "512"))
 				{
-					throw std::runtime_error("implementation is not valid");
+					pio::error("implementation is not valid");
+					impl = "";
 				}
 			}
+#endif
 		}
 
 #if defined(BOINC) && defined(GPU)
@@ -396,7 +405,7 @@ public:
 
 		if (ret == genefer::EReturn::Aborted)
 		{
-			std::ostringstream ss; ss << " exiting..." << std::endl;
+			std::ostringstream ss; ss << std::endl;
 			pio::print(ss.str());
 		}
 	}

@@ -8,11 +8,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 
+#include <gmp.h>
 #include <omp.h>
 
 #include "transform.h"
-#include "fp16_80.h"
 #include "simd128d.h"
 
 namespace transformCPU_namespace
@@ -29,7 +30,7 @@ struct Complex
 	{
 #define	C2PI	6.2831853071795864769252867665590057684L
 		const long double alpha = C2PI * (long double)a / (long double)b;
-		const double cs = (double)cosl(alpha), sn = (double)sinl(alpha);
+		const double cs = static_cast<double>(cosl(alpha)), sn = static_cast<double>(sinl(alpha));
 		return Complex(cs, sn / cs);
 	}
 };
@@ -675,7 +676,7 @@ public:
 	}
 
 	finline Vc mul_carry_i(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
-						   const double sb, const double sb_inv, const double isb, const double fsb)
+						   const double sb, const double sb_inv, const double sbh, const double sbl)
 	{
 		Vc f = f_prev;
 
@@ -697,14 +698,14 @@ public:
 			f = f_b + o_b * g;
 
 			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
+			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
 		}
 
 		return f;
 	}
 
 	finline Vc mul_carry_i(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
-						   const double sb, const double sb_inv, const double isb, const double fsb, Vc & err)
+						   const double sb, const double sb_inv, const double sbh, const double sbl, Vc & err)
 	{
 		Vc f = f_prev;
 
@@ -721,7 +722,7 @@ public:
 			f = f_b + o_b * g;
 
 			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
+			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
 		}
 
 		return f;
@@ -745,7 +746,7 @@ public:
 		zi = f + zi.round();
 	}
 
-	finline void carry_i(const Vc & f_i, const double b, const double b_inv, const double sb, const double sb_inv, const double isb, const double fsb)
+	finline void carry_i(const Vc & f_i, const double b, const double b_inv, const double sb, const double sb_inv, const double sbh, const double sbl)
 	{
 		Vc f = f_i;
 
@@ -757,14 +758,14 @@ public:
 			const Vc r = f - f_o * b;
 			f = f_o;
 			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * isb) - irh * fsb; z1 = irh;
+			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
 			if (f.isZero()) return;
 		}
 
 		Vc & z0 = z[2 * (4 - 1) + 0]; Vc & z1 = z[2 * (4 - 1) + 1];
 		const Vc r = f + Vc(z0 + z1 * sb).round();
 		const Vc irh = Vc(r * sb_inv).round();
-		z0 = (r - irh * isb) - irh * fsb; z1 = irh;
+		z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
 	}
 };
 
@@ -798,11 +799,10 @@ private:
 	static const size_t zpOffset = fcOffset + fcSize;
 	static const size_t zrOffset = zpOffset + zSize;
 
-	const fp16_80 _sqrt_b;
-
 	const size_t _num_threads;
-	const double _b, _b_inv, _sb, _sb_inv, _isb, _fsb;
+	const double _b, _b_inv, _sb, _sb_inv;
 	const size_t _mem_size, _cache_size;
+	double _sbh, _sbl;
 	bool _checkError;
 	double _error;
 	char * const _mem;
@@ -1344,7 +1344,7 @@ private:
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
-		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, isb = _isb, fsb = _fsb, g = dup ? 2.0 : 1.0;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl, g = dup ? 2.0 : 1.0;
 		const bool checkError = _checkError;
 
 		Vc err = Vc(0.0);
@@ -1366,12 +1366,12 @@ private:
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
 				if (!checkError)
 				{
-					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb);
+					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, sbh, sbl);
 					else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N);
 				}
 				else
 				{
-					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, isb, fsb, err);
+					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, sbh, sbl, err);
 					else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, err);
 				}
 
@@ -1394,7 +1394,7 @@ private:
 		Vc * const z = (Vc *)&_mem[zOffset]; Vc * const zl = &z[2 * 4 / VSIZE * lh];
 		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
 
-		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, isb = _isb, fsb = _fsb;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl;
 
 		for (size_t j = 0; j < n_io_inv; ++j)
 		{
@@ -1403,7 +1403,7 @@ private:
 
 			Vc f_prev = f[j];
 			if (thread_id == 0) f_prev.shift(f[((j == 0) ? n_io_inv : j) - 1], j == 0);
-			if (IBASE) z8.carry_i(f_prev, b, b_inv, sb, sb_inv, isb, fsb);
+			if (IBASE) z8.carry_i(f_prev, b, b_inv, sb, sb_inv, sbh, sbl);
 			else z8.carry(f_prev, b, b_inv);
 
 			z8.transpose_out();
@@ -1418,12 +1418,22 @@ public:
 	transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 		: transform(N, n, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
 								   : ((VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8))),
-		_sqrt_b(fp16_80::sqrt(b)), _num_threads(num_threads),
-		_b(b), _b_inv(1.0 / b), _sb(static_cast<double>(sqrtl(b))), _sb_inv(static_cast<double>(1 / sqrtl(b))), _isb(_sqrt_b.hi()), _fsb(_sqrt_b.lo()),
+		_num_threads(num_threads),
+		_b(b), _b_inv(1.0 / b), _sb(sqrt(static_cast<double>(b))), _sb_inv(1 / _sb),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
 		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
 	{
+		mpz_t sb2e64, t; mpz_init_set_ui(sb2e64, b); mpz_init(t);
+		mpz_mul_2exp(sb2e64, sb2e64, 128); mpz_sqrt(sb2e64, sb2e64);
+
+		const int shift = 16;
+		mpz_div_2exp(t, sb2e64, 64 - shift);
+		_sbh = std::ldexp(mpz_get_d(t), -shift);
+		mpz_mod_2exp(t, sb2e64, 64 - shift);
+		_sbl = std::ldexp(mpz_get_d(t), -64);
+		mpz_clear(sb2e64); mpz_clear(t);
+
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
 		{
@@ -1508,7 +1518,7 @@ protected:
 
 		if (IBASE)
 		{
-			const Vd<VSIZE> isb = Vd<VSIZE>::broadcast(_isb), fsb = Vd<VSIZE>::broadcast(_fsb), sb_inv = Vd<VSIZE>::broadcast(_sb_inv);
+			const Vd<VSIZE> sbh = Vd<VSIZE>::broadcast(_sbh), sbl = Vd<VSIZE>::broadcast(_sbl), sb_inv = Vd<VSIZE>::broadcast(_sb_inv);
 
 			for (size_t k = 0; k < N / 2; k += VSIZE / 2)
 			{
@@ -1520,7 +1530,7 @@ protected:
 				}
 
 				const Vd<VSIZE> irh = Vd<VSIZE>(r * sb_inv).round();
-				const Vd<VSIZE> re = (r - irh * isb) - irh * fsb, im = irh;
+				const Vd<VSIZE> re = (r - irh * sbh) - irh * sbl, im = irh;
 
 				Vc vc;
 				for (size_t i = 0; i < VSIZE / 2; ++i)

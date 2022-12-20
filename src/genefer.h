@@ -1029,7 +1029,7 @@ private:
 	EReturn bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 		static constexpr uint32_t bm[13] = { 500000000, 380000000, 290000000, 220000000, 170000000,
-											 115000000, 16000000, 5500000, 2000000, 830000, 240000, 980000, 500000 };
+											 120000000, 17000000, 5500000, 2000000, 900000, 270000, 1000000, 500000 };
 
 		// NTT2 limits
 		// static constexpr uint32_t bm[13] = { 46664208, 32996578, 23332104, 16498288, 11666052,

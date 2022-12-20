@@ -705,7 +705,7 @@ public:
 	}
 
 	finline Vc mul_carry_i(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n,
-						   const double sb, const double sb_inv, const double sbh, const double sbl, Vc & err)
+						   const double sb_inv, const double sbh, const double sbl, Vc & err)
 	{
 		Vc f = f_prev;
 
@@ -713,8 +713,9 @@ public:
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
 
-			const Vc of = (z0 + z1 * sb) * t2_n, o = of.round();
+			const Vc of = ((z0 + z1 * sbl) + z1 * sbh) * t2_n, o = of.round();
 			err.max(Vc(of - o).abs());
+
 			const Vc o_b = Vc(o * b_inv).round();
 			const Vc f_i = f + (o - o_b * b) * g;
 			const Vc f_b = Vc(f_i * b_inv).round();
@@ -1371,7 +1372,7 @@ private:
 				}
 				else
 				{
-					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb, sb_inv, sbh, sbl, err);
+					if (IBASE) f[j] = z8.mul_carry_i(f_prev, g, b, b_inv, 2.0 / N, sb_inv, sbh, sbl, err);
 					else f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, err);
 				}
 
@@ -1432,6 +1433,7 @@ public:
 		_sbh = std::ldexp(mpz_get_d(t), -shift);
 		mpz_mod_2exp(t, sb2e64, 64 - shift);
 		_sbl = std::ldexp(mpz_get_d(t), -64);
+
 		mpz_clear(sb2e64); mpz_clear(t);
 
 		Complex * const w122i = (Complex *)&_mem[wOffset];

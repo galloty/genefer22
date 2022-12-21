@@ -17,6 +17,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstring>
 #include <iostream>
 
+#define BOINC_SUCCESS		0
+#define EXIT_CHILD_FAILED	1
+
 struct BOINC_OPTIONS
 {
 	int normal_thread_priority;

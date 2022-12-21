@@ -109,7 +109,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer" << ext << " version 22.12.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "genefer" << ext << " version 22.12.1 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -399,8 +399,8 @@ public:
 		const genefer::EReturn ret = g.check(b, n, mode, device, nthreads, impl, depth, oldfashion);
 		if (bBoinc)
 		{
-			if (ret == genefer::EReturn::Success) boinc_finish(EXIT_SUCCESS);
-			if (ret == genefer::EReturn::Failed) boinc_finish(EXIT_FAILURE);
+			if (ret == genefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);
+			if (ret == genefer::EReturn::Failed) boinc_finish(EXIT_CHILD_FAILED);
 		}
 
 		if (ret == genefer::EReturn::Aborted)

@@ -12,6 +12,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "simd128d.h"
 
+#define finline	__attribute__((always_inline))
+
 namespace transformCPU_namespace
 {
 
@@ -30,8 +32,6 @@ struct Complex
 		return Complex(cs, sn / cs);
 	}
 };
-
-#define finline	__attribute__((always_inline))
 
 // Is not used because of full template specialization
 template<size_t N>

@@ -967,10 +967,39 @@ public:
 template<size_t VSIZE>
 inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 {
+	transform * pTransform = nullptr;
+#if defined(DTRANSFORM)
+	if      (n == 12) pTransform = new transformCPUf64<(1 << 11), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 13) pTransform = new transformCPUf64<(1 << 12), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 14) pTransform = new transformCPUf64<(1 << 13), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 15) pTransform = new transformCPUf64<(1 << 14), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 16) pTransform = new transformCPUf64<(1 << 15), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 17) pTransform = new transformCPUf64<(1 << 16), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 18) pTransform = new transformCPUf64<(1 << 17), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 19) pTransform = new transformCPUf64<(1 << 18), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 20) pTransform = new transformCPUf64<(1 << 19), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 21) pTransform = new transformCPUf64<(1 << 20), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 22) pTransform = new transformCPUf64<(1 << 21), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+	else if (n == 23) pTransform = new transformCPUf64<(1 << 22), VSIZE, false>(b, n, num_threads, num_regs, checkError);
+#elif defined(IBDTRANSFORM)
+	if      (n == 12) pTransform = new transformCPUf64<(1 << 12), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 13) pTransform = new transformCPUf64<(1 << 13), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 14) pTransform = new transformCPUf64<(1 << 14), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 15) pTransform = new transformCPUf64<(1 << 15), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 16) pTransform = new transformCPUf64<(1 << 16), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 17) pTransform = new transformCPUf64<(1 << 17), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 18) pTransform = new transformCPUf64<(1 << 18), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 19) pTransform = new transformCPUf64<(1 << 19), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 20) pTransform = new transformCPUf64<(1 << 20), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 21) pTransform = new transformCPUf64<(1 << 21), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 22) pTransform = new transformCPUf64<(1 << 22), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	else if (n == 23) pTransform = new transformCPUf64<(1 << 23), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+#elif defined(SBDTRANSFORM)
+	(void)b; (void)n; (void)num_threads; (void)num_regs; (void)checkError;
+#else
 	const uint32_t b12 = 4200000, b13 = 3500000, b14 = 2800000, b15 = 2300000, b16 = 1900000, b17 = 1600000,
 				   b18 = 1300000, b19 = 1100000, b20 = 880000, b21 = 730000, b22 = 600000, b23 = 510000;
 
-	transform * pTransform = nullptr;
 	if (n == 12)
 	{
 		if (b <= b12) pTransform = new transformCPUf64<(1 << 11), VSIZE, false>(b, n, num_threads, num_regs, checkError);
@@ -1031,6 +1060,8 @@ inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, co
 		if (b <= b23) pTransform = new transformCPUf64<(1 << 22), VSIZE, false>(b, n, num_threads, num_regs, checkError);
 		else		  pTransform = new transformCPUf64<(1 << 23), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	}
+#endif
+
 	if (pTransform == nullptr) throw std::runtime_error("exponent is not supported");
 
 	return pTransform;

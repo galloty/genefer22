@@ -580,10 +580,9 @@ private:
 		mpz_t * const w = new mpz_t[L / 2]; for (size_t i = 0; i < L / 2; ++i) mpz_init(w[i]);
 		mpz_set_ui(w[0], q);
 
-		const int l0 = (1 << depth) - depth - 1;
 // size_t s = 0;	// complexity
 
-		for (int k = 1, l = l0; k <= depth; ++k)
+		for (int k = 1; k <= depth; ++k)
 		{
 			const size_t i = size_t(1) << (depth - k);
 
@@ -615,7 +614,6 @@ private:
 // s += mpz_sizeinbase(w[j], 2);
 				pTransform->mul(1);
 				pTransform->copy(1, 0);
-				--l;
 
 				if (_isBoinc) boincMonitor();
 				if (_quit)

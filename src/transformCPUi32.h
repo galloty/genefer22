@@ -409,7 +409,7 @@ public:
 class transformCPUi32 : public transform
 {
 private:
-	const size_t _num_threads, _num_regs;
+	const size_t _num_regs;
 	const size_t _mem_size, _cache_size;
 	const RNS4 _norm;
 	const uint32_t _b, _b_inv;
@@ -419,13 +419,6 @@ private:
 	RNS4 * const _zp;
 
 private:
-	finline static size_t bitRev(const size_t i, const size_t n)
-	{
-		size_t r = 0;
-		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
-		return r;
-	}
-
 	finline static uint64_4 barrett(const uint64_4 a, const uint32_t b, const uint32_t b_inv, const int b_s, uint64_4 & a_p)
 	{
 		// n = 31, alpha = 2^{n-2} = 2^29, s = r - 2, t = n + 1 = 32 => h = 1.
@@ -505,8 +498,8 @@ private:
 	}
 
 public:
-	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs) : transform(size_t(1) << n, n, b, EKind::NTT3cpu),
-		_num_threads(num_threads), _num_regs(num_regs),
+	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_regs) : transform(size_t(1) << n, n, b, EKind::NTT3cpu),
+		_num_regs(num_regs),
 		_mem_size((size_t(1) << n) / 4 * (num_regs + 2) * sizeof(RNS4)), _cache_size((size_t(1) << n) / 4 * sizeof(RNS4)),
 		_norm(Zp1::norm(static_cast<uint32_t>(1) << (n - 1)), Zp2::norm(static_cast<uint32_t>(1) << (n - 1)), Zp3::norm(static_cast<uint32_t>(1) << (n - 1))),
 		_b(b), _b_inv(static_cast<uint32_t>((static_cast<uint64_t>(1) << ((static_cast<int>(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(static_cast<int>(31 - __builtin_clz(b) - 1)),

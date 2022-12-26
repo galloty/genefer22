@@ -52,7 +52,7 @@ private:
 #elif defined(__aarch64__)
 	static transform * create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 #else
-	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs);
+	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_sse4(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_avx(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -87,6 +87,13 @@ protected:
 	size_t getSize() const { return _size; }
 	uint32_t getB() const { return _b; }
 	EKind getKind() const { return _kind; }
+
+	static size_t bitRev(const size_t i, const size_t n)
+	{
+		size_t r = 0;
+		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
+		return r;
+	}
 
 public:
 #if defined(GPU)
@@ -138,7 +145,7 @@ public:
 		}
 		else if (__builtin_cpu_supports("avx2") && (impl.empty() || (impl == "i32")))
 		{
-			pTransform = transform::create_i32(b, n, num_threads, num_regs);
+			pTransform = transform::create_i32(b, n, num_regs);
 			ttype = "i32";
 		}
 		else

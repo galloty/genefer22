@@ -868,13 +868,6 @@ private:
 	RNSe * const _ze;
 	engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE> * _pEngine = nullptr;
 
-	static size_t bitRev(const size_t i, const size_t n)
-	{
-		size_t r = 0;
-		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
-		return r;
-	}
-
 public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)

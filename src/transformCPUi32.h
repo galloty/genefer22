@@ -409,7 +409,6 @@ public:
 class transformCPUi32 : public transform
 {
 private:
-	const size_t _num_regs;
 	const size_t _mem_size, _cache_size;
 	const RNS4 _norm;
 	const uint32_t _b, _b_inv;
@@ -499,7 +498,6 @@ private:
 
 public:
 	transformCPUi32(const uint32_t b, const uint32_t n, const size_t num_regs) : transform(size_t(1) << n, n, b, EKind::NTT3cpu),
-		_num_regs(num_regs),
 		_mem_size((size_t(1) << n) / 4 * (num_regs + 2) * sizeof(RNS4)), _cache_size((size_t(1) << n) / 4 * sizeof(RNS4)),
 		_norm(Zp1::norm(static_cast<uint32_t>(1) << (n - 1)), Zp2::norm(static_cast<uint32_t>(1) << (n - 1)), Zp3::norm(static_cast<uint32_t>(1) << (n - 1))),
 		_b(b), _b_inv(static_cast<uint32_t>((static_cast<uint64_t>(1) << ((static_cast<int>(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(static_cast<int>(31 - __builtin_clz(b) - 1)),

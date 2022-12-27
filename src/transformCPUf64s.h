@@ -179,15 +179,17 @@ private:
 
 	static const size_t wSize = N / 8 * sizeof(Complex);
 	static const size_t wsSize = N / 8 * sizeof(Complex);
-	static const size_t zSize = index(N) * sizeof(Complex);
-	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);	// num_threads <= 64
+	static const size_t zSize = index(N) * sizeof(Complex) + 1024;	// L1 line size is 4K
+	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);		// num_threads <= 64
 
 	static const size_t wOffset = 0;
 	static const size_t wsOffset = wOffset + wSize;
-	static const size_t zOffset = wsOffset + wsSize;
-	static const size_t fcOffset = zOffset + zSize;
-	static const size_t zpOffset = fcOffset + fcSize;
-	static const size_t zrOffset = zpOffset + zSize;
+	static const size_t zlOffset = wsOffset + wsSize;
+	static const size_t zhOffset = zlOffset + zSize;
+	static const size_t fcOffset = zhOffset + zSize;
+	static const size_t zlpOffset = fcOffset + fcSize;
+	static const size_t zhpOffset = zlpOffset + zSize;
+	static const size_t zrOffset = zhpOffset + zSize;
 
 	const size_t _num_threads;
 	const double _b, _b_inv;
@@ -195,17 +197,17 @@ private:
 	bool _checkError;
 	double _error;
 	char * const _mem;
-	Vc * const _z_copy;
+	char * const _mem_copy;
 
 private:
-	finline static void forward_out(Vc * const z, const Complex * const w122i)
+	finline static void forward_out(Vc * const zl, Vc * const zh, const Complex * const w122i)
 	{
 		static const size_t stepi = index(n_io) / VSIZE;
 
 		size_t s = (N / 4) / n_io / 2; for (; s >= 4 * 2; s /= 4);
 
-		if (s == 4) Vr8::forward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, z);
-		else        Vr4::forward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, z);
+		if (s == 4) { Vr8::forward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, zl); Vr8::forward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, zh); }
+		else        { Vr4::forward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, zl); Vr4::forward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, zh); }
 
 		for (size_t mi = index((s == 4) ? N / 32 : N / 16) / VSIZE; mi >= stepi; mi /= 4, s *= 4)
 		{
@@ -214,14 +216,14 @@ private:
 				const size_t k = 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
 				const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-				Vr4::forward4e(mi, stepi, 2 * 4 / VSIZE, &z[k + 0 * 4 * mi], w0, w1);
+				Vr4::forward4e(mi, stepi, 2 * 4 / VSIZE, &zl[k + 0 * 4 * mi], w0, w1); Vr4::forward4e(mi, stepi, 2 * 4 / VSIZE, &zh[k + 0 * 4 * mi], w0, w1);
 				const Vc w2 = Vc::broadcast(w[2]);
-				Vr4::forward4o(mi, stepi, 2 * 4 / VSIZE, &z[k + 1 * 4 * mi], w0, w2);
+				Vr4::forward4o(mi, stepi, 2 * 4 / VSIZE, &zl[k + 1 * 4 * mi], w0, w2); Vr4::forward4o(mi, stepi, 2 * 4 / VSIZE, &zh[k + 1 * 4 * mi], w0, w2);
 			}
 		}
 	}
 
-	finline static void backward_out(Vc * const z, const Complex * const w122i)
+	finline static void backward_out(Vc * const zl, Vc * const zh, const Complex * const w122i)
 	{
 		static const size_t stepi = index(n_io) / VSIZE;
 
@@ -233,27 +235,29 @@ private:
 				const size_t k = 8 * mi * j;
 				const Complex * const w = &w122i[s + 3 * j];
 				const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-				Vr4::backward4e(mi, stepi, 2 * 4 / VSIZE, &z[k + 0 * 4 * mi], w0, w1);
+				Vr4::backward4e(mi, stepi, 2 * 4 / VSIZE, &zl[k + 0 * 4 * mi], w0, w1); Vr4::backward4e(mi, stepi, 2 * 4 / VSIZE, &zh[k + 0 * 4 * mi], w0, w1);
 				const Vc w2 = Vc::broadcast(w[2]);
-				Vr4::backward4o(mi, stepi, 2 * 4 / VSIZE, &z[k + 1 * 4 * mi], w0, w2);
+				Vr4::backward4o(mi, stepi, 2 * 4 / VSIZE, &zl[k + 1 * 4 * mi], w0, w2); Vr4::backward4o(mi, stepi, 2 * 4 / VSIZE, &zh[k + 1 * 4 * mi], w0, w2);
 			}
 		}
 
-		if (s == 1) Vr8::backward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, z);
-		else        Vr4::backward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, z);
+		if (s == 1) { Vr8::backward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, zl); Vr8::backward8_0(index(N / 8) / VSIZE, stepi, 2 * 4 / VSIZE, zh); }
+		else        { Vr4::backward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, zl); Vr4::backward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, zh); }
 	}
 
 	void pass1(const size_t thread_id)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		const Vc * const ws = (Vc *)&_mem[wsOffset];
-		Vc * const z = (Vc *)&_mem[zOffset];
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		Vc * const zh = (Vc *)&_mem[zhOffset];
 
 		const size_t num_threads = _num_threads, s_io = N / n_io;
 		const size_t l_min = thread_id * s_io / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io : (thread_id + 1) * s_io / num_threads;
 		for (size_t l = l_min; l < l_max; ++l)
 		{
-			Vc * const zl = &z[index(n_io * l) / VSIZE];
+			Vc * const zl_l = &zl[index(n_io * l) / VSIZE];
+			Vc * const zh_l = &zh[index(n_io * l) / VSIZE];
 			const Vc * const wsl = &ws[l * n_io / 8 / VSIZE];
 
 			// forward_in
@@ -261,8 +265,8 @@ private:
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
 				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zl_l, w0, w1); Vr4::forward4e(n_io / 4 / VSIZE, zh_l, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zl_l, w0, w2); Vr4::forward4o(n_io / 4 / VSIZE, zh_l, w0, w2); }
 			}
 
 			for (size_t m = n_io / 16 / VSIZE, s = 2; m >= ((VSIZE == 8) ? 16 : 4) / VSIZE; m /= 4, s *= 4)
@@ -271,12 +275,13 @@ private:
 
 				for (size_t j = 0; j < s; ++j)
 				{
-					Vc * const zj = &zl[8 * m * j];
+					Vc * const zl_j = &zl_l[8 * m * j];
+					Vc * const zh_j = &zh_l[8 * m * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-					Vr4::forward4e(m, &zj[0 * 4 * m], w0, w1);
+					Vr4::forward4e(m, &zl_j[0 * 4 * m], w0, w1); Vr4::forward4e(m, &zh_j[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
-					Vr4::forward4o(m, &zj[1 * 4 * m], w0, w2);
+					Vr4::forward4o(m, &zl_j[1 * 4 * m], w0, w2); Vr4::forward4o(m, &zh_j[1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -286,31 +291,34 @@ private:
 
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					Vc * const zj = &zl[32 / VSIZE * j];
+					Vc * const zl_j = &zl_l[32 / VSIZE * j];
+					Vc * const zh_j = &zh_l[32 / VSIZE * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
-					Vr4::forward4e_4(&zj[0], w0, w1);
+					Vr4::forward4e_4(&zl_j[0], w0, w1); Vr4::forward4e_4(&zh_j[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
-					Vr4::forward4o_4(&zj[2], w0, w2);
+					Vr4::forward4o_4(&zl_j[2], w0, w2); Vr4::forward4o_4(&zh_j[2], w0, w2);
 				}
 			}
 
 			// square
 			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
 			{
-				Vc * const zj = &zl[8 * j];
-				Vc8 z8(zj);
+				Vc * const zl_j = &zl_l[8 * j];
+				Vc * const zh_j = &zh_l[8 * j];
+				Vc8 z8(zl_j);
 				z8.transpose_in();
 				z8.square4e(wsl[j]);
-				z8.store(zj);
+				z8.store(zl_j);
 			}
 			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
 			{
-				Vc * const zj = &zl[8 * j];
-				Vc8 z8(zj);
+				Vc * const zl_j = &zl_l[8 * j];
+				Vc * const zh_j = &zh_l[8 * j];
+				Vc8 z8(zl_j);
 				z8.square4o(wsl[j]);
 				z8.transpose_out();
-				z8.store(zj);
+				z8.store(zl_j);
 			}
 
 			if (VSIZE == 8)
@@ -319,12 +327,13 @@ private:
 
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					Vc * const zj = &zl[32 / VSIZE * j];
+					Vc * const zl_j = &zl_l[32 / VSIZE * j];
+					Vc * const zh_j = &zh_l[32 / VSIZE * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
-					Vr4::backward4e_4(&zj[0], w0, w1);
+					Vr4::backward4e_4(&zl_j[0], w0, w1); Vr4::backward4e_4(&zh_j[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
-					Vr4::backward4o_4(&zj[2], w0, w2);
+					Vr4::backward4o_4(&zl_j[2], w0, w2); Vr4::backward4o_4(&zh_j[2], w0, w2);
 				}
 			}
 
@@ -335,12 +344,13 @@ private:
 
 				for (size_t j = 0; j < s; ++j)
 				{
-					Vc * const zj = &zl[8 * m * j];
+					Vc * const zl_j = &zl_l[8 * m * j];
+					Vc * const zh_j = &zh_l[8 * m * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-					Vr4::backward4e(m, &zj[0 * 4 * m], w0, w1);
+					Vr4::backward4e(m, &zl_j[0 * 4 * m], w0, w1); Vr4::backward4e(m, &zh_j[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
-					Vr4::backward4o(m, &zj[1 * 4 * m], w0, w2);
+					Vr4::backward4o(m, &zl_j[1 * 4 * m], w0, w2); Vr4::backward4o(m, &zh_j[1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -348,8 +358,8 @@ private:
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
 				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::backward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::backward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::backward4e(n_io / 4 / VSIZE, zl_l, w0, w1); Vr4::backward4e(n_io / 4 / VSIZE, zh_l, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::backward4o(n_io / 4 / VSIZE, zl_l, w0, w2); Vr4::backward4o(n_io / 4 / VSIZE, zh_l, w0, w2); }
 			}
 		}
 	}
@@ -358,13 +368,15 @@ private:
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		const Vc * const ws = (Vc *)&_mem[wsOffset];
-		Vc * const zp = (Vc *)&_mem[zpOffset];
+		Vc * const zlp = (Vc *)&_mem[zlpOffset];
+		Vc * const zhp = (Vc *)&_mem[zhpOffset];
 
 		const size_t num_threads = _num_threads, s_io = N / n_io;
 		const size_t l_min = thread_id * s_io / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io : (thread_id + 1) * s_io / num_threads;
 		for (size_t l = l_min; l < l_max; ++l)
 		{
-			Vc * const zpl = &zp[index(n_io * l) / VSIZE];
+			Vc * const zlp_l = &zlp[index(n_io * l) / VSIZE];
+			Vc * const zhp_l = &zhp[index(n_io * l) / VSIZE];
 			const Vc * const wsl = &ws[l * n_io / 8 / VSIZE];
 
 			// forward_in
@@ -372,8 +384,8 @@ private:
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
 				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zpl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zpl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zlp_l, w0, w1); Vr4::forward4e(n_io / 4 / VSIZE, zhp_l, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zlp_l, w0, w2); Vr4::forward4o(n_io / 4 / VSIZE, zhp_l, w0, w2); }
 			}
 
 			for (size_t m = n_io / 16 / VSIZE, s = 2; m >= ((VSIZE == 8) ? 16 : 4) / VSIZE; m /= 4, s *= 4)
@@ -382,12 +394,13 @@ private:
 
 				for (size_t j = 0; j < s; ++j)
 				{
-					Vc * const zpj = &zpl[8 * m * j];
+					Vc * const zlp_j = &zlp_l[8 * m * j];
+					Vc * const zhp_j = &zhp_l[8 * m * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-					Vr4::forward4e(m, &zpj[0 * 4 * m], w0, w1);
+					Vr4::forward4e(m, &zlp_j[0 * 4 * m], w0, w1); Vr4::forward4e(m, &zhp_j[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
-					Vr4::forward4o(m, &zpj[1 * 4 * m], w0, w2);
+					Vr4::forward4o(m, &zlp_j[1 * 4 * m], w0, w2); Vr4::forward4o(m, &zhp_j[1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -397,22 +410,24 @@ private:
 
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					Vc * const zpj = &zpl[32 / VSIZE * j];
+					Vc * const zlp_j = &zlp_l[32 / VSIZE * j];
+					Vc * const zhp_j = &zhp_l[32 / VSIZE * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
-					Vr4::forward4e_4(&zpj[0], w0, w1);
+					Vr4::forward4e_4(&zlp_j[0], w0, w1); Vr4::forward4e_4(&zhp_j[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
-					Vr4::forward4o_4(&zpj[2], w0, w2);
+					Vr4::forward4o_4(&zlp_j[2], w0, w2); Vr4::forward4o_4(&zhp_j[2], w0, w2);
 				}
 			}
 
 			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
 			{
-				Vc * const zpj = &zpl[8 * j];
-				Vc8 zp8(zpj);
+				Vc * const zlp_j = &zlp_l[8 * j];
+				Vc * const zhp_j = &zhp_l[8 * j];
+				Vc8 zp8(zlp_j);
 				zp8.transpose_in();
 				zp8.mul4_forward(wsl[j]);
-				zp8.store(zpj);
+				zp8.store(zlp_j);
 			}
 		}
 	}
@@ -421,15 +436,19 @@ private:
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		const Vc * const ws = (Vc *)&_mem[wsOffset];
-		Vc * const z = (Vc *)&_mem[zOffset];
-		const Vc * const zp = (Vc *)&_mem[zpOffset];
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		Vc * const zh = (Vc *)&_mem[zhOffset];
+		const Vc * const zlp = (Vc *)&_mem[zlpOffset];
+		const Vc * const zhp = (Vc *)&_mem[zhpOffset];
 
 		const size_t num_threads = _num_threads, s_io = N / n_io;
 		const size_t l_min = thread_id * s_io / num_threads, l_max = (thread_id + 1 == num_threads) ? s_io : (thread_id + 1) * s_io / num_threads;
 		for (size_t l = l_min; l < l_max; ++l)
 		{
-			Vc * const zl = &z[index(n_io * l) / VSIZE];
-			const Vc * const zpl = &zp[index(n_io * l) / VSIZE];
+			Vc * const zl_l = &zl[index(n_io * l) / VSIZE];
+			Vc * const zh_l = &zh[index(n_io * l) / VSIZE];
+			const Vc * const zlp_l = &zlp[index(n_io * l) / VSIZE];
+			const Vc * const zhp_l = &zhp[index(n_io * l) / VSIZE];
 			const Vc * const wsl = &ws[l * n_io / 8 / VSIZE];
 
 			// forward_in
@@ -437,8 +456,8 @@ private:
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
 				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::forward4e(n_io / 4 / VSIZE, zl_l, w0, w1); Vr4::forward4e(n_io / 4 / VSIZE, zh_l, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::forward4o(n_io / 4 / VSIZE, zl_l, w0, w2); Vr4::forward4o(n_io / 4 / VSIZE, zh_l, w0, w2); }
 			}
 
 			for (size_t m = n_io / 16 / VSIZE, s = 2; m >= ((VSIZE == 8) ? 16 : 4) / VSIZE; m /= 4, s *= 4)
@@ -447,12 +466,13 @@ private:
 
 				for (size_t j = 0; j < s; ++j)
 				{
-					Vc * const zj = &zl[8 * m * j];
+					Vc * const zl_j = &zl_l[8 * m * j];
+					Vc * const zh_j = &zh_l[8 * m * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-					Vr4::forward4e(m, &zj[0 * 4 * m], w0, w1);
+					Vr4::forward4e(m, &zl_j[0 * 4 * m], w0, w1); Vr4::forward4e(m, &zh_j[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
-					Vr4::forward4o(m, &zj[1 * 4 * m], w0, w2);
+					Vr4::forward4o(m, &zl_j[1 * 4 * m], w0, w2); Vr4::forward4o(m, &zh_j[1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -462,24 +482,27 @@ private:
 
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					Vc * const zj = &zl[32 / VSIZE * j];
+					Vc * const zl_j = &zl_l[32 / VSIZE * j];
+					Vc * const zh_j = &zh_l[32 / VSIZE * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
-					Vr4::forward4e_4(&zj[0], w0, w1);
+					Vr4::forward4e_4(&zl_j[0], w0, w1); Vr4::forward4e_4(&zh_j[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
-					Vr4::forward4o_4(&zj[2], w0, w2);
+					Vr4::forward4o_4(&zl_j[2], w0, w2); Vr4::forward4o_4(&zh_j[2], w0, w2);
 				}
 			}
 
 			// mul
 			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
 			{
-				Vc * const zj = &zl[8 * j];
-				const Vc * const zpj = &zpl[8 * j];
-				Vc8 z8(zj); z8.transpose_in();
-				Vc8 zp8(zpj); z8.mul4(zp8, wsl[j]);
+				Vc * const zl_j = &zl_l[8 * j];
+				Vc * const zh_j = &zh_l[8 * j];
+				const Vc * const zlp_j = &zlp_l[8 * j];
+				const Vc * const zhp_j = &zhp_l[8 * j];
+				Vc8 z8(zl_j); z8.transpose_in();
+				Vc8 zp8(zlp_j); z8.mul4(zp8, wsl[j]);
 				z8.transpose_out();
-				z8.store(zj);
+				z8.store(zl_j);
 			}
 
 			if (VSIZE == 8)
@@ -488,12 +511,13 @@ private:
 
 				for (size_t j = 0; j < n_io / 32; j += 2)
 				{
-					Vc * const zj = &zl[32 / VSIZE * j];
+					Vc * const zl_j = &zl_l[32 / VSIZE * j];
+					Vc * const zh_j = &zh_l[32 / VSIZE * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0], w[3]), w1 = Vc::broadcast(w[1], w[4]);
-					Vr4::backward4e_4(&zj[0], w0, w1);
+					Vr4::backward4e_4(&zl_j[0], w0, w1); Vr4::backward4e_4(&zh_j[0], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2], w[5]);
-					Vr4::backward4o_4(&zj[2], w0, w2);
+					Vr4::backward4o_4(&zl_j[2], w0, w2); Vr4::backward4o_4(&zh_j[2], w0, w2);
 				}
 			}
 
@@ -504,12 +528,13 @@ private:
 
 				for (size_t j = 0; j < s; ++j)
 				{
-					Vc * const zj = &zl[8 * m * j];
+					Vc * const zl_j = &zl_l[8 * m * j];
+					Vc * const zh_j = &zh_l[8 * m * j];
 					const Complex * const w = &w_s[3 * j];
 					const Vc w0 = Vc::broadcast(w[0]), w1 = Vc::broadcast(w[1]);
-					Vr4::backward4e(m, &zj[0 * 4 * m], w0, w1);
+					Vr4::backward4e(m, &zl_j[0 * 4 * m], w0, w1); Vr4::backward4e(m, &zh_j[0 * 4 * m], w0, w1);
 					const Vc w2 = Vc::broadcast(w[2]);
-					Vr4::backward4o(m, &zj[1 * 4 * m], w0, w2);
+					Vr4::backward4o(m, &zl_j[1 * 4 * m], w0, w2); Vr4::backward4o(m, &zh_j[1 * 4 * m], w0, w2);
 				}
 			}
 
@@ -517,8 +542,8 @@ private:
 				const Complex * const w = &w122i[s_io / 2 + 3 * (l / 2)];
 				const Vc w0 = Vc::broadcast(w[0]);
 
-				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::backward4e(n_io / 4 / VSIZE, zl, w0, w1); }
-				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::backward4o(n_io / 4 / VSIZE, zl, w0, w2); }
+				if (l % 2 == 0) { const Vc w1 = Vc::broadcast(w[1]); Vr4::backward4e(n_io / 4 / VSIZE, zl_l, w0, w1); Vr4::backward4e(n_io / 4 / VSIZE, zh_l, w0, w1); }
+				else            { const Vc w2 = Vc::broadcast(w[2]); Vr4::backward4o(n_io / 4 / VSIZE, zl_l, w0, w2); Vr4::backward4o(n_io / 4 / VSIZE, zh_l, w0, w2); }
 			}
 		}
 	}
@@ -526,7 +551,8 @@ private:
 	double pass2_0(const size_t thread_id, const bool dup)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
-		Vc * const z = (Vc *)&_mem[zOffset];
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		Vc * const zh = (Vc *)&_mem[zhOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
 		const double b = _b, b_inv = _b_inv, g = dup ? 2.0 : 1.0;
 		const bool checkError = _checkError;
@@ -537,14 +563,16 @@ private:
 		const size_t l_min = thread_id * n_io_s / num_threads, l_max = (thread_id + 1 == num_threads) ? n_io_s : (thread_id + 1) * n_io_s / num_threads;
 		for (size_t lh = l_min; lh < l_max; ++lh)
 		{
-			Vc * const zl = &z[2 * 4 / VSIZE * lh];
+			Vc * const zl_l = &zl[2 * 4 / VSIZE * lh];
+			Vc * const zh_l = &zh[2 * 4 / VSIZE * lh];
 
-			backward_out(zl, w122i);
+			backward_out(zl_l, zh_l, w122i);
 
 			for (size_t j = 0; j < n_io_inv; ++j)
 			{
-				Vc * const zj = &zl[index(n_io) * j];
-				Vc8 z8(zj, index(n_io));
+				Vc * const zl_j = &zl_l[index(n_io) * j];
+				Vc * const zh_j = &zh_l[index(n_io) * j];
+				Vc8 z8(zl_j, index(n_io));
 				z8.transpose_in();
 
 				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
@@ -552,10 +580,10 @@ private:
 				else             f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, err);
 
 				if (lh != l_min) z8.transpose_out();
-				z8.store(zj, index(n_io));	// transposed if lh = l_min
+				z8.store(zl_j, index(n_io));	// transposed if lh = l_min
 			}
 
-			if (lh != l_min) forward_out(zl, w122i);
+			if (lh != l_min) forward_out(zl_l, zh_l, w122i);
 		}
 
 		return err.max();
@@ -567,26 +595,28 @@ private:
 		const size_t thread_id_prev = ((thread_id != 0) ? thread_id : num_threads) - 1;
 		const size_t lh = thread_id * n_io_s / num_threads;	// l_min of pass2
 
-		Vc * const z = (Vc *)&_mem[zOffset]; Vc * const zl = &z[2 * 4 / VSIZE * lh];
+		Vc * const zl = (Vc *)&_mem[zlOffset]; Vc * const zl_l = &zl[2 * 4 / VSIZE * lh];
+		Vc * const zh = (Vc *)&_mem[zhOffset]; Vc * const zh_l = &zh[2 * 4 / VSIZE * lh];
 		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
 
 		const double b = _b, b_inv = _b_inv;
 
 		for (size_t j = 0; j < n_io_inv; ++j)
 		{
-			Vc * const zj = &zl[index(n_io) * j];
-			Vc8 z8(zj, index(n_io));	// transposed
+			Vc * const zl_j = &zl_l[index(n_io) * j];
+			Vc * const zh_j = &zh_l[index(n_io) * j];
+			Vc8 z8(zl_j, index(n_io));	// transposed
 
 			Vc f_prev = f[j];
 			if (thread_id == 0) f_prev.shift(f[((j == 0) ? n_io_inv : j) - 1], j == 0);
 			z8.carry(f_prev, b, b_inv);
 
 			z8.transpose_out();
-			z8.store(zj, index(n_io));
+			z8.store(zl_j, index(n_io));
 		}
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
-		forward_out(zl, w122i);
+		forward_out(zl_l, zh_l, w122i);
 	}
 
 public:
@@ -594,9 +624,9 @@ public:
 		: transform(N, n, b, ((VSIZE == 2) ? EKind::SBDTvec2 : ((VSIZE == 4) ? EKind::SBDTvec4 : EKind::SBDTvec8))),
 		_num_threads(num_threads),
 		_b(b), _b_inv(1.0 / b),
-		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
-		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
-		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
+		_mem_size(wSize + wsSize + 2 * zSize + fcSize + 2 * zSize + (num_regs - 1) * 2 * zSize + 2 * 1024 * 1024),
+		_cache_size(wSize + wsSize + 2 * zSize + fcSize), _checkError(checkError), _error(0),
+		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _mem_copy((char *)alignNew(2 * zSize, 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -624,7 +654,7 @@ public:
 	virtual ~transformCPUf64s()
 	{
 		alignDelete((void *)_mem);
-		alignDelete((void *)_z_copy);
+		alignDelete((void *)_mem_copy);
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -633,22 +663,24 @@ public:
 protected:
 	void getZi(int32_t * const zi) const override
 	{
-		const Vc * const z = (Vc *)&_mem[zOffset];
+		const Vc * const zl = (Vc *)&_mem[zlOffset];
+		const Vc * const zh = (Vc *)&_mem[zhOffset];
 
-		Vc * const z_copy = _z_copy;
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_copy[k] = z[k];
+		Vc * const zl_copy = (Vc *)&_mem_copy[0];
+		Vc * const zh_copy = (Vc *)&_mem_copy[zSize];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) { zl_copy[k] = zl[k]; zh_copy[k] = zh[k]; }
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
 		{
-			backward_out(&z_copy[2 * 4 / VSIZE * lh], w122i);
+			backward_out(&zl_copy[2 * 4 / VSIZE * lh], &zh_copy[2 * 4 / VSIZE * lh], w122i);
 		}
 
 		const double n_io_N = static_cast<double>(n_io) / N;
 
 		for (size_t k = 0; k < N; k += VSIZE)
 		{
-			const Vc vc = z_copy[index(k) / VSIZE];
+			const Vc vc = zl_copy[index(k) / VSIZE];
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
 				const Complex zc = vc[i];
@@ -660,7 +692,8 @@ protected:
 
 	void setZi(const int32_t * const zi) override
 	{
-		Vc * const z = (Vc *)&_mem[zOffset];
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		Vc * const zh = (Vc *)&_mem[zhOffset];
 
 		for (size_t k = 0; k < N; k += VSIZE)
 		{
@@ -670,13 +703,14 @@ protected:
 				const Complex zc(static_cast<double>(zi[k + i + 0 * N]), static_cast<double>(zi[k + i + 1 * N]));
 				vc.set(i, zc);
 			}
-			z[index(k) / VSIZE] = vc;
+			zl[index(k) / VSIZE] = vc;
+			zh[index(k) / VSIZE] = Vc(0.0);
 		}
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
 		{
-			forward_out(&z[2 * 4 / VSIZE * lh], w122i);
+			forward_out(&zl[2 * 4 / VSIZE * lh], &zh[2 * 4 / VSIZE * lh], w122i);
 		}
 	}
 
@@ -689,7 +723,7 @@ public:
 
 		if (!cFile.read(reinterpret_cast<char *>(&_error), sizeof(_error))) return false;
 
-		Vc * const z = (Vc *)&_mem[zOffset];
+		Vc * const z = (Vc *)&_mem[zlOffset];
 		if (!cFile.read(reinterpret_cast<char *>(z), zSize)) return false;
 		if (num_regs > 1)
 		{
@@ -707,7 +741,7 @@ public:
 
 		if (!cFile.write(reinterpret_cast<const char *>(&_error), sizeof(_error))) return;
 
-		const Vc * const z = (Vc *)&_mem[zOffset];
+		const Vc * const z = (Vc *)&_mem[zlOffset];
 		if (!cFile.write(reinterpret_cast<const char *>(z), zSize)) return;
 		if (num_regs > 1)
 		{
@@ -718,14 +752,15 @@ public:
 
 	void set(const int32_t a) override
 	{
-		Vc * const z = (Vc *)&_mem[zOffset];
-		z[0] = Vc(a);
-		for (size_t k = 1; k < index(N) / VSIZE; ++k) z[k] = Vc(0.0);
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		Vc * const zh = (Vc *)&_mem[zhOffset];
+		zl[0] = Vc(a); zh[0] = Vc(0.0);
+		for (size_t k = 1; k < index(N) / VSIZE; ++k) { zl[k] = zh[k] = Vc(0.0); }
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
 		{
-			forward_out(&z[2 * 4 / VSIZE * lh], w122i);
+			forward_out(&zl[2 * 4 / VSIZE * lh], &zh[2 * 4 / VSIZE * lh], w122i);
 		}
 	}
 
@@ -761,8 +796,8 @@ public:
 
 	void initMultiplicand(const size_t src) override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zrOffset + (src - 1) * zSize];
-		Vc * const zp = (Vc *)&_mem[zpOffset];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * zSize];
+		Vc * const zp = (Vc *)&_mem[zlpOffset];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
 
 		if (_num_threads > 1)
@@ -811,8 +846,8 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zrOffset + (src - 1) * zSize];
-		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zOffset : zrOffset + (dst - 1) * zSize];
+		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * zSize];
+		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zlOffset : zrOffset + (dst - 1) * zSize];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
 	}
 

@@ -110,12 +110,10 @@ public:
 		zl[0] = l0.sqr() + l1.sqr().mulW(w); zl[1] = (l0 + l0) * l1; zl[2] = l2.sqr() - l3.sqr().mulW(w); zl[3] = (l2 + l2) * l3;
 
 		const Vc h0 = zh[0], h1 = zh[1], h2 = zh[2], h3 = zh[3];
-		zh[0] = h0.sqr() + h1.sqr().mulW(w); zh[1] = (h0 + h0) * h1; zh[2] = h2.sqr() - h3.sqr().mulW(w); zh[3] = (h2 + h2) * h3;
+		const Vc h2l0 = h0 + (l0 + l0), h2l1 = h1 + (l1 + l1), h2l2 = h2 + (l2 + l2), h2l3 = h3 + (l3 + l3);
 
-		const Vc lh0 = l0 * h0 + Vc(l1 * h1).mulW(w), lh1 = l0 * h1 + h0 * l1;
-		const Vc lh2 = l2 * h2 - Vc(l3 * h3).mulW(w), lh3 = l2 * h3 + h2 * l3;
-
-		zh[0] += lh0 + lh0; zh[1] += lh1 + lh1; zh[2] += lh2 + lh2; zh[3] += lh3 + lh3;
+		zh[0] = h0 * h2l0 + Vc(h1 * h2l1).mulW(w); zh[1] = h0 * h2l1 + h2l0 * h1;
+		zh[2] = h2 * h2l2 - Vc(h3 * h2l3).mulW(w); zh[3] = h2 * h2l3 + h2l2 * h3;
 
 		bwde(w);
 	}
@@ -128,12 +126,10 @@ public:
 		zl[4] = l5.sqr().mulW(w).subi(l4.sqr()); zl[5] = (l4 + l4) * l5; zl[6] = l6.sqr().addi(l7.sqr().mulW(w)); zl[7] = (l6 + l6) * l7;
 
 		const Vc h4 = zh[4], h5 = zh[5], h6 = zh[6], h7 = zh[7];
-		zh[4] = h5.sqr().mulW(w).subi(h4.sqr()); zh[5] = (h4 + h4) * h5; zh[6] = h6.sqr().addi(h7.sqr().mulW(w)); zh[7] = (h6 + h6) * h7;
+		const Vc h2l4 = h4 + (l4 + l4), h2l5 = h5 + (l5 + l5), h2l6 = h6 + (l6 + l6), h2l7 = h7 + (l7 + l7);
 
-		const Vc lh4 = Vc(l5 * h5).mulW(w).subi(l4 * h4), lh5 = l4 * h5 + h4 * l5;
-		const Vc lh6 = Vc(l6 * h6).addi(Vc(l7 * h7).mulW(w)), lh7 = l6 * h7 + h6 * l7;
-
-		zh[4] += lh4 + lh4; zh[5] += lh5 + lh5; zh[6] += lh6 + lh6; zh[7] += lh7 + lh7;
+		zh[4] = Vc(h5 * h2l5).mulW(w).subi(h4 * h2l4); zh[5] = h4 * h2l5 + h2l4 * h5;
+		zh[6] = Vc(h6 * h2l6).addi(Vc(h7 * h2l7).mulW(w)); zh[7] = h6 * h2l7 + h2l6 * h7;
 
 		bwdo(w);
 	}
@@ -155,16 +151,12 @@ public:
 
 		const Vc h0 = zh[0], h2 = zh[2], h1 = zh[1], h3 = zh[3];
 		const Vc hp0 = rhs.zh[0], hp2 = rhs.zh[2], hp1 = rhs.zh[1], hp3 = rhs.zh[3];
-		zh[0] = h0 * hp0 + Vc(h1 * hp1).mulW(w); zh[1] = h0 * hp1 + hp0 * h1;
-		zh[2] = h2 * hp2 - Vc(h3 * hp3).mulW(w); zh[3] = h2 * hp3 + hp2 * h3;
+		const Vc lphp0 = lp0 + hp0, lphp2 = lp2 + hp2, lphp1 = lp1 + hp1, lphp3 = lp3 + hp3;
 
-		const Vc lhp0 = l0 * hp0 + Vc(l1 * hp1).mulW(w), lhp1 = l0 * hp1 + hp0 * l1;
-		const Vc lhp2 = l2 * hp2 - Vc(l3 * hp3).mulW(w), lhp3 = l2 * hp3 + hp2 * l3;
-
-		const Vc lph0 = lp0 * h0 + Vc(lp1 * h1).mulW(w), lph1 = lp0 * h1 + h0 * lp1;
-		const Vc lph2 = lp2 * h2 - Vc(lp3 * h3).mulW(w), lph3 = lp2 * h3 + h2 * lp3;
-
-		zh[0] += lhp0 + lph0; zh[1] += lhp1 + lph1; zh[2] += lhp2 + lph2; zh[3] += lhp3 + lph3;
+		zh[0] = h0 * lphp0 + l0 * hp0 + Vc(h1 * lphp1 + l1 * hp1).mulW(w);
+		zh[1] = h0 * lphp1 + lphp0 * h1 + l0 * hp1 + hp0 * l1;
+		zh[2] = h2 * lphp2 + l2 * hp2 - Vc(h3 * lphp3 + l3 * hp3).mulW(w);
+		zh[3] = h2 * lphp3 + lphp2 * h3 + l2 * hp3 + hp2 * l3;
 
 		bwde(w);
 
@@ -177,16 +169,12 @@ public:
 
 		const Vc h4 = zh[4], h6 = zh[6], h5 = zh[5], h7 = zh[7];
 		const Vc hp4 = rhs.zh[4], hp6 = rhs.zh[6], hp5 = rhs.zh[5], hp7 = rhs.zh[7];
-		zh[4] = Vc(h5 * hp5).mulW(w).subi(h4 * hp4); zh[5] = h4 * hp5 + hp4 * h5;
-		zh[6] = Vc(h6 * hp6).addi(Vc(h7 * hp7).mulW(w)); zh[7] = h6 * hp7 + hp6 * h7;
+		const Vc lphp4 = lp4 + hp4, lphp6 = lp6 + hp6, lphp5 = lp5 + hp5, lphp7 = lp7 + hp7;
 
-		const Vc lhp4 = Vc(l5 * hp5).mulW(w).subi(l4 * hp4), lhp5 = l4 * hp5 + hp4 * l5;
-		const Vc lhp6 = Vc(l6 * hp6).addi(Vc(l7 * hp7).mulW(w)), lhp7 = l6 * hp7 + hp6 * l7;
-
-		const Vc lph4 = Vc(lp5 * h5).mulW(w).subi(lp4 * h4), lph5 = lp4 * h5 + h4 * lp5;
-		const Vc lph6 = Vc(lp6 * h6).addi(Vc(lp7 * h7).mulW(w)), lph7 = lp6 * h7 + h6 * lp7;
-
-		zh[4] += lhp4 + lph4; zh[5] += lhp5 + lph5; zh[6] += lhp6 + lph6; zh[7] += lhp7 + lph7;
+		zh[4] = Vc(h5 * lphp5 + l5 * hp5).mulW(w).subi(h4 * lphp4 + l4 * hp4);
+		zh[5] = h4 * lphp5 + lphp4 * h5 + l4 * hp5 + hp4 * l5;
+		zh[6] = Vc(h6 * lphp6 + l6 * hp6).addi(Vc(h7 * lphp7 + l7 * hp7).mulW(w));
+		zh[7] = h6 * lphp7 + lphp6 * h7 + l6 * hp7 + hp6 * l7;
 
 		bwdo(w);
 	}

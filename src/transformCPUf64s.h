@@ -17,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 namespace transformCPU_namespace
 {
+	static constexpr double split = 1 << 20, split_inv = 1.0 / split;
 
 template<size_t N>
 class Vcx8s
@@ -24,138 +25,248 @@ class Vcx8s
 	using Vc = Vcx<N>;
 
 private:
-	Vc z[8];
+	Vc zl[8], zh[8];
 
 private:
 	Vcx8s() {}
 
 public:
-	finline explicit Vcx8s(const Vc * const mem)
+	finline explicit Vcx8s(const Vc * const mem_l, const Vc * const mem_h)
 	{
-		for (size_t i = 0; i < 8; ++i) z[i] = mem[i];
+		for (size_t i = 0; i < 8; ++i) zl[i] = mem_l[i];
+		for (size_t i = 0; i < 8; ++i) zh[i] = mem_h[i];
 	}
 
-	finline void store(Vc * const mem) const
+	finline void store(Vc * const mem_l, Vc * const mem_h) const
 	{
-		for (size_t i = 0; i < 8; ++i) mem[i] = z[i];
+		for (size_t i = 0; i < 8; ++i) mem_l[i] = zl[i];
+		for (size_t i = 0; i < 8; ++i) mem_h[i] = zh[i];
 	}
 
-	finline explicit Vcx8s(const Vc * const mem, const size_t step)
-	{
-		for (size_t i = 0; i < 8; ++i)
-		{
-			const size_t i_h = (N * i) / 8, i_l = (N * i) % 8;
-			z[i] = mem[(step * i_h + i_l) / N];
-		}
-	}
-
-	finline void store(Vc * const mem, const size_t step) const
+	finline explicit Vcx8s(const Vc * const mem_l, const Vc * const mem_h, const size_t step)
 	{
 		for (size_t i = 0; i < 8; ++i)
 		{
 			const size_t i_h = (N * i) / 8, i_l = (N * i) % 8;
-			mem[(step * i_h + i_l) / N] = z[i];
+			zl[i] = mem_l[(step * i_h + i_l) / N];
+			zh[i] = mem_h[(step * i_h + i_l) / N];
 		}
 	}
 
-	finline void transpose_in() { Vc::transpose_in(z); }
-	finline void transpose_out() { Vc::transpose_out(z); }
+	finline void store(Vc * const mem_l, Vc * const mem_h, const size_t step) const
+	{
+		for (size_t i = 0; i < 8; ++i)
+		{
+			const size_t i_h = (N * i) / 8, i_l = (N * i) % 8;
+			mem_l[(step * i_h + i_l) / N] = zl[i];
+			mem_h[(step * i_h + i_l) / N] = zh[i];
+		}
+	}
+
+	finline void transpose_in() { Vc::transpose_in(zl); Vc::transpose_in(zh); }
+	finline void transpose_out() { Vc::transpose_out(zl); Vc::transpose_out(zh); }
+
+	finline void fwde(const Vc & w)
+	{
+		const Vc l0 = zl[0], l2 = zl[2].mulW(w), l1 = zl[1], l3 = zl[3].mulW(w);
+		zl[0] = l0 + l2; zl[2] = l0 - l2; zl[1] = l1 + l3; zl[3] = l1 - l3;
+
+		const Vc h0 = zh[0], h2 = zh[2].mulW(w), h1 = zh[1], h3 = zh[3].mulW(w);
+		zh[0] = h0 + h2; zh[2] = h0 - h2; zh[1] = h1 + h3; zh[3] = h1 - h3;
+	}
+
+	finline void fwdo(const Vc & w)
+	{
+		const Vc l4 = zl[4], l6 = zl[6].mulW(w), l5 = zl[5], l7 = zl[7].mulW(w);
+		zl[4] = l4.addi(l6); zl[6] = l4.subi(l6); zl[5] = l5.addi(l7); zl[7] = l7.addi(l5);
+
+		const Vc h4 = zh[4], h6 = zh[6].mulW(w), h5 = zh[5], h7 = zh[7].mulW(w);
+		zh[4] = h4.addi(h6); zh[6] = h4.subi(h6); zh[5] = h5.addi(h7); zh[7] = h7.addi(h5);
+	}
+
+	finline void bwde(const Vc & w)
+	{
+		const Vc l0 = zl[0], l2 = zl[2], l1 = zl[1], l3 = zl[3];
+		zl[0] = l0 + l2; zl[2] = Vc(l0 - l2).mulWconj(w); zl[1] = l1 + l3; zl[3] = Vc(l1 - l3).mulWconj(w);
+
+		const Vc h0 = zh[0], h2 = zh[2], h1 = zh[1], h3 = zh[3];
+		zh[0] = h0 + h2; zh[2] = Vc(h0 - h2).mulWconj(w); zh[1] = h1 + h3; zh[3] = Vc(h1 - h3).mulWconj(w);
+	}
+
+	finline void bwdo(const Vc & w)
+	{
+		const Vc l4 = zl[4], l6 = zl[6], l5 = zl[5], l7 = zl[7];
+		zl[4] = l6.addi(l4); zl[6] = l4.addi(l6).mulWconj(w); zl[5] = l5.subi(l7); zl[7] = l7.subi(l5).mulWconj(w);
+
+		const Vc h4 = zh[4], h6 = zh[6], h5 = zh[5], h7 = zh[7];
+		zh[4] = h6.addi(h4); zh[6] = h4.addi(h6).mulWconj(w); zh[5] = h5.subi(h7); zh[7] = h7.subi(h5).mulWconj(w);
+	}
 
 	finline void square4e(const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
-		const Vc s0 = v0.sqr() + v1.sqr().mulW(w), s1 = (v0 + v0) * v1, s2 = v2.sqr() - v3.sqr().mulW(w), s3 = (v2 + v2) * v3;
-		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
+		fwde(w);
+
+		const Vc l0 = zl[0], l1 = zl[1], l2 = zl[2], l3 = zl[3];
+		zl[0] = l0.sqr() + l1.sqr().mulW(w); zl[1] = (l0 + l0) * l1; zl[2] = l2.sqr() - l3.sqr().mulW(w); zl[3] = (l2 + l2) * l3;
+
+		const Vc h0 = zh[0], h1 = zh[1], h2 = zh[2], h3 = zh[3];
+		zh[0] = h0.sqr() + h1.sqr().mulW(w); zh[1] = (h0 + h0) * h1; zh[2] = h2.sqr() - h3.sqr().mulW(w); zh[3] = (h2 + h2) * h3;
+
+		const Vc lh0 = l0 * h0 + Vc(l1 * h1).mulW(w), lh1 = l0 * h1 + h0 * l1;
+		const Vc lh2 = l2 * h2 - Vc(l3 * h3).mulW(w), lh3 = l2 * h3 + h2 * l3;
+
+		zh[0] += lh0 + lh0; zh[1] += lh1 + lh1; zh[2] += lh2 + lh2; zh[3] += lh3 + lh3;
+
+		bwde(w);
 	}
 
 	finline void square4o(const Vc & w)
 	{
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		const Vc v4 = u4.addi(u6), v6 = u4.subi(u6), v5 = u5.addi(u7), v7 = u7.addi(u5);
-		const Vc s4 = v5.sqr().mulW(w).subi(v4.sqr()), s5 = (v4 + v4) * v5, s6 = v6.sqr().addi(v7.sqr().mulW(w)), s7 = (v6 + v6) * v7;
-		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
+		fwdo(w);
+
+		const Vc l4 = zl[4], l5 = zl[5], l6 = zl[6], l7 = zl[7];
+		zl[4] = l5.sqr().mulW(w).subi(l4.sqr()); zl[5] = (l4 + l4) * l5; zl[6] = l6.sqr().addi(l7.sqr().mulW(w)); zl[7] = (l6 + l6) * l7;
+
+		const Vc h4 = zh[4], h5 = zh[5], h6 = zh[6], h7 = zh[7];
+		zh[4] = h5.sqr().mulW(w).subi(h4.sqr()); zh[5] = (h4 + h4) * h5; zh[6] = h6.sqr().addi(h7.sqr().mulW(w)); zh[7] = (h6 + h6) * h7;
+
+		const Vc lh4 = Vc(l5 * h5).mulW(w).subi(l4 * h4), lh5 = l4 * h5 + h4 * l5;
+		const Vc lh6 = Vc(l6 * h6).addi(Vc(l7 * h7).mulW(w)), lh7 = l6 * h7 + h6 * l7;
+
+		zh[4] += lh4 + lh4; zh[5] += lh5 + lh5; zh[6] += lh6 + lh6; zh[7] += lh7 + lh7;
+
+		bwdo(w);
 	}
 
 	finline void mul4_forward(const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		z[0] = u0 + u2; z[2] = u0 - u2; z[1] = u1 + u3; z[3] = u1 - u3;
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		z[4] = u4.addi(u6); z[6] = u4.subi(u6); z[5] = u5.addi(u7); z[7] = u7.addi(u5);
+		fwde(w);
+		fwdo(w);
 	}
 
 	finline void mul4(const Vcx8s & rhs, const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
-		const Vc vp0 = rhs.z[0], vp2 = rhs.z[2], vp1 = rhs.z[1], vp3 = rhs.z[3];
-		const Vc s0 = v0 * vp0 + Vc(v1 * vp1).mulW(w), s1 = v0 * vp1 + vp0 * v1;
-		const Vc s2 = v2 * vp2 - Vc(v3 * vp3).mulW(w), s3 = v2 * vp3 + vp2 * v3;
-		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
+		fwde(w);
 
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		const Vc v4 = u4.addi(u6), v6 = u4.subi(u6), v5 = u5.addi(u7), v7 = u7.addi(u5);
-		const Vc vp4 = rhs.z[4], vp6 = rhs.z[6], vp5 = rhs.z[5], vp7 = rhs.z[7];
-		const Vc s4 = Vc(v5 * vp5).mulW(w).subi(v4 * vp4), s5 = v4 * vp5 + vp4 * v5;
-		const Vc s6 = Vc(v6 * vp6).addi(Vc(v7 * vp7).mulW(w)), s7 = v6 * vp7 + vp6 * v7;
-		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
+		const Vc l0 = zl[0], l2 = zl[2], l1 = zl[1], l3 = zl[3];
+		const Vc lp0 = rhs.zl[0], lp2 = rhs.zl[2], lp1 = rhs.zl[1], lp3 = rhs.zl[3];
+		zl[0] = l0 * lp0 + Vc(l1 * lp1).mulW(w); zl[1] = l0 * lp1 + lp0 * l1;
+		zl[2] = l2 * lp2 - Vc(l3 * lp3).mulW(w); zl[3] = l2 * lp3 + lp2 * l3;
+
+		const Vc h0 = zh[0], h2 = zh[2], h1 = zh[1], h3 = zh[3];
+		const Vc hp0 = rhs.zh[0], hp2 = rhs.zh[2], hp1 = rhs.zh[1], hp3 = rhs.zh[3];
+		zh[0] = h0 * hp0 + Vc(h1 * hp1).mulW(w); zh[1] = h0 * hp1 + hp0 * h1;
+		zh[2] = h2 * hp2 - Vc(h3 * hp3).mulW(w); zh[3] = h2 * hp3 + hp2 * h3;
+
+		const Vc lhp0 = l0 * hp0 + Vc(l1 * hp1).mulW(w), lhp1 = l0 * hp1 + hp0 * l1;
+		const Vc lhp2 = l2 * hp2 - Vc(l3 * hp3).mulW(w), lhp3 = l2 * hp3 + hp2 * l3;
+
+		const Vc lph0 = lp0 * h0 + Vc(lp1 * h1).mulW(w), lph1 = lp0 * h1 + h0 * lp1;
+		const Vc lph2 = lp2 * h2 - Vc(lp3 * h3).mulW(w), lph3 = lp2 * h3 + h2 * lp3;
+
+		zh[0] += lhp0 + lph0; zh[1] += lhp1 + lph1; zh[2] += lhp2 + lph2; zh[3] += lhp3 + lph3;
+
+		bwde(w);
+
+		fwdo(w);
+
+		const Vc l4 = zl[4], l6 = zl[6], l5 = zl[5], l7 = zl[7];
+		const Vc lp4 = rhs.zl[4], lp6 = rhs.zl[6], lp5 = rhs.zl[5], lp7 = rhs.zl[7];
+		zl[4] = Vc(l5 * lp5).mulW(w).subi(l4 * lp4); zl[5] = l4 * lp5 + lp4 * l5;
+		zl[6] = Vc(l6 * lp6).addi(Vc(l7 * lp7).mulW(w)); zl[7] = l6 * lp7 + lp6 * l7;
+
+		const Vc h4 = zh[4], h6 = zh[6], h5 = zh[5], h7 = zh[7];
+		const Vc hp4 = rhs.zh[4], hp6 = rhs.zh[6], hp5 = rhs.zh[5], hp7 = rhs.zh[7];
+		zh[4] = Vc(h5 * hp5).mulW(w).subi(h4 * hp4); zh[5] = h4 * hp5 + hp4 * h5;
+		zh[6] = Vc(h6 * hp6).addi(Vc(h7 * hp7).mulW(w)); zh[7] = h6 * hp7 + hp6 * h7;
+
+		const Vc lhp4 = Vc(l5 * hp5).mulW(w).subi(l4 * hp4), lhp5 = l4 * hp5 + hp4 * l5;
+		const Vc lhp6 = Vc(l6 * hp6).addi(Vc(l7 * hp7).mulW(w)), lhp7 = l6 * hp7 + hp6 * l7;
+
+		const Vc lph4 = Vc(lp5 * h5).mulW(w).subi(lp4 * h4), lph5 = lp4 * h5 + h4 * lp5;
+		const Vc lph6 = Vc(lp6 * h6).addi(Vc(lp7 * h7).mulW(w)), lph7 = lp6 * h7 + h6 * lp7;
+
+		zh[4] += lhp4 + lph4; zh[5] += lhp5 + lph5; zh[6] += lhp6 + lph6; zh[7] += lhp7 + lph7;
+
+		bwdo(w);
 	}
 
-	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n)
+	finline void mul_carry(const Vc & fl_prev, const Vc & fh_prev, Vc & fl_new, Vc & fh_new, const double g, const double b, const double b_inv, const double t2_n)
 	{
-		Vc f = f_prev;
+		Vc fl = fl_prev, fh = fh_prev;
 
 		for (size_t i = 0; i < 8; ++i)
 		{
-			Vc & zi = z[i];
-			const Vc of = zi * t2_n, o = of.round();
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			f = f_b + o_b * g;
-			zi = f_i - f_b * b;
+			Vc & zli = zl[i]; Vc & zhi = zh[i];
+			const Vc ol = Vc(zli * t2_n).round(), oh = Vc(zhi * (t2_n * split_inv)).round();
+
+			fl += ol * g; fh += oh * g;
+			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
+
+			rl_b += rh_b * split;
+			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
+
+			fh = fh_b; fl = fl_b;
+
+			const Vc h = Vc(rl_b * split_inv).round() * split;
+			zli = rl_b - h; zhi = h;
+
+			// const Vc f_b = Vc(f * b_inv).round();
+			// const Vc r_b = f - f_b * b;
+			// f = f_b;
+			// zli = r_b;
 		}
 
-		return f;
+		fl_new = fl; fh_new = fh;
 	}
 
-	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n, Vc & err)
+	finline void mul_carry(const Vc & fl_prev, const Vc & fh_prev, Vc & fl_new, Vc & fh_new, const double g, const double b, const double b_inv, const double t2_n, Vc & err)
 	{
-		Vc f = f_prev;
+		Vc fl = fl_prev, fh = fh_prev;
 
 		for (size_t i = 0; i < 8; ++i)
 		{
-			Vc & zi = z[i];
-			const Vc of = zi * t2_n, o = of.round();
-			err.max(Vc(of - o).abs());
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			f = f_b + o_b * g;
-			zi = f_i - f_b * b;
+			Vc & zli = zl[i]; Vc & zhi = zh[i];
+			const Vc ofl = zli * t2_n, ofh = zhi * (t2_n * split_inv), ol = ofl.round(), oh = ofh.round();
+			err.max(Vc(ofl - ol).abs()); err.max(Vc(ofh - oh).abs());
+
+			fl += ol * g; fh += oh * g;
+			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
+
+			rl_b += rh_b * split;
+			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
+
+			fh = fh_b; fl = fl_b;
+
+			const Vc h = Vc(rl_b * split_inv).round() * split;
+			zli = rl_b - h; zhi = h;
 		}
 
-		return f;
+		fl_new = fl; fh_new = fh;
 	}
 
-
-	finline void carry(const Vc & f_i, const double b, const double b_inv)
+	finline void carry(const Vc & fl_i, const Vc & fh_i, const double b, const double b_inv)
 	{
-		Vc f = f_i;
+		Vc f = fl_i + fh_i * split;
 
 		for (size_t i = 0; i < 8 - 1; ++i)
 		{
-			Vc & zi = z[i];
-			f += zi.round();
-			const Vc f_o = Vc(f * b_inv).round();
-			zi = f - f_o * b;
-			f = f_o;
+			Vc & zli = zl[i]; Vc & zhi = zh[i];
+			f += zli.round() + zhi.round();
+			const Vc f_b = Vc(f * b_inv).round();
+			const Vc r_b = f - f_b * b;
+			f = f_b;
+			const Vc h = Vc(r_b * split_inv).round() * split;
+			zli = r_b - h; zhi = h;
 			if (f.isZero()) return;
 		}
 
-		Vc & zi = z[8 - 1];
-		zi = f + zi.round();
+		Vc & zli = zl[8 - 1]; Vc & zhi = zh[8 - 1];
+		f += zli.round() + zhi.round();
+		const Vc h = Vc(f * split_inv).round() * split;
+		zli = f - h; zhi = h;
 	}
 };
 
@@ -165,7 +276,7 @@ class transformCPUf64s : public transform
 	using Vc = Vcx<VSIZE>;
 	using Vr4 = Vradix4<VSIZE>;
 	using Vr8 = Vradix8<VSIZE>;
-	using Vc8 = Vcx8s<VSIZE>;
+	using Vc8s = Vcx8s<VSIZE>;
 
 private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
@@ -186,8 +297,9 @@ private:
 	static const size_t wsOffset = wOffset + wSize;
 	static const size_t zlOffset = wsOffset + wsSize;
 	static const size_t zhOffset = zlOffset + zSize;
-	static const size_t fcOffset = zhOffset + zSize;
-	static const size_t zlpOffset = fcOffset + fcSize;
+	static const size_t fclOffset = zhOffset + zSize;
+	static const size_t fchOffset = fclOffset + fcSize;
+	static const size_t zlpOffset = fchOffset + fcSize;
 	static const size_t zhpOffset = zlpOffset + zSize;
 	static const size_t zrOffset = zhpOffset + zSize;
 
@@ -306,19 +418,19 @@ private:
 			{
 				Vc * const zl_j = &zl_l[8 * j];
 				Vc * const zh_j = &zh_l[8 * j];
-				Vc8 z8(zl_j);
+				Vc8s z8(zl_j, zh_j);
 				z8.transpose_in();
 				z8.square4e(wsl[j]);
-				z8.store(zl_j);
+				z8.store(zl_j, zh_j);
 			}
 			for (size_t j = 0; j < n_io / 8 / VSIZE; ++j)
 			{
 				Vc * const zl_j = &zl_l[8 * j];
 				Vc * const zh_j = &zh_l[8 * j];
-				Vc8 z8(zl_j);
+				Vc8s z8(zl_j, zh_j);
 				z8.square4o(wsl[j]);
 				z8.transpose_out();
-				z8.store(zl_j);
+				z8.store(zl_j, zh_j);
 			}
 
 			if (VSIZE == 8)
@@ -424,10 +536,10 @@ private:
 			{
 				Vc * const zlp_j = &zlp_l[8 * j];
 				Vc * const zhp_j = &zhp_l[8 * j];
-				Vc8 zp8(zlp_j);
+				Vc8s zp8(zlp_j, zhp_j);
 				zp8.transpose_in();
 				zp8.mul4_forward(wsl[j]);
-				zp8.store(zlp_j);
+				zp8.store(zlp_j, zhp_j);
 			}
 		}
 	}
@@ -499,10 +611,10 @@ private:
 				Vc * const zh_j = &zh_l[8 * j];
 				const Vc * const zlp_j = &zlp_l[8 * j];
 				const Vc * const zhp_j = &zhp_l[8 * j];
-				Vc8 z8(zl_j); z8.transpose_in();
-				Vc8 zp8(zlp_j); z8.mul4(zp8, wsl[j]);
+				Vc8s z8(zl_j, zh_j); z8.transpose_in();
+				Vc8s zp8(zlp_j, zhp_j); z8.mul4(zp8, wsl[j]);
 				z8.transpose_out();
-				z8.store(zl_j);
+				z8.store(zl_j, zh_j);
 			}
 
 			if (VSIZE == 8)
@@ -553,7 +665,8 @@ private:
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const zl = (Vc *)&_mem[zlOffset];
 		Vc * const zh = (Vc *)&_mem[zhOffset];
-		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
+		Vc * const fcl = (Vc *)&_mem[fclOffset]; Vc * const fl = &fcl[thread_id * n_io_inv];
+		Vc * const fch = (Vc *)&_mem[fchOffset]; Vc * const fh = &fch[thread_id * n_io_inv];
 		const double b = _b, b_inv = _b_inv, g = dup ? 2.0 : 1.0;
 		const bool checkError = _checkError;
 
@@ -572,15 +685,16 @@ private:
 			{
 				Vc * const zl_j = &zl_l[index(n_io) * j];
 				Vc * const zh_j = &zh_l[index(n_io) * j];
-				Vc8 z8(zl_j, index(n_io));
+				Vc8s z8(zl_j, zh_j, index(n_io));
 				z8.transpose_in();
 
-				const Vc f_prev = (lh != l_min) ? f[j] : Vc(0.0);
-				if (!checkError) f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N);
-				else             f[j] = z8.mul_carry(f_prev, g, b, b_inv, 2.0 / N, err);
+				const Vc fl_prev = (lh != l_min) ? fl[j] : Vc(0.0);
+				const Vc fh_prev = (lh != l_min) ? fh[j] : Vc(0.0);
+				if (!checkError) z8.mul_carry(fl_prev, fh_prev, fl[j], fh[j], g, b, b_inv, 2.0 / N);
+				else             z8.mul_carry(fl_prev, fh_prev, fl[j], fh[j], g, b, b_inv, 2.0 / N, err);
 
 				if (lh != l_min) z8.transpose_out();
-				z8.store(zl_j, index(n_io));	// transposed if lh = l_min
+				z8.store(zl_j, zh_j, index(n_io));	// transposed if lh = l_min
 			}
 
 			if (lh != l_min) forward_out(zl_l, zh_l, w122i);
@@ -597,7 +711,8 @@ private:
 
 		Vc * const zl = (Vc *)&_mem[zlOffset]; Vc * const zl_l = &zl[2 * 4 / VSIZE * lh];
 		Vc * const zh = (Vc *)&_mem[zhOffset]; Vc * const zh_l = &zh[2 * 4 / VSIZE * lh];
-		const Vc * const fc = (Vc *)&_mem[fcOffset]; const Vc * const f = &fc[thread_id_prev * n_io_inv];
+		const Vc * const fcl = (Vc *)&_mem[fclOffset]; const Vc * const fl = &fcl[thread_id_prev * n_io_inv];
+		const Vc * const fch = (Vc *)&_mem[fchOffset]; const Vc * const fh = &fch[thread_id_prev * n_io_inv];
 
 		const double b = _b, b_inv = _b_inv;
 
@@ -605,14 +720,18 @@ private:
 		{
 			Vc * const zl_j = &zl_l[index(n_io) * j];
 			Vc * const zh_j = &zh_l[index(n_io) * j];
-			Vc8 z8(zl_j, index(n_io));	// transposed
+			Vc8s z8(zl_j, zh_j, index(n_io));	// transposed
 
-			Vc f_prev = f[j];
-			if (thread_id == 0) f_prev.shift(f[((j == 0) ? n_io_inv : j) - 1], j == 0);
-			z8.carry(f_prev, b, b_inv);
+			Vc fl_prev = fl[j], fh_prev = fh[j];
+			if (thread_id == 0)
+			{
+				fl_prev.shift(fl[((j == 0) ? n_io_inv : j) - 1], j == 0);
+				fh_prev.shift(fh[((j == 0) ? n_io_inv : j) - 1], j == 0);
+			}
+			z8.carry(fl_prev, fh_prev, b, b_inv);
 
 			z8.transpose_out();
-			z8.store(zl_j, index(n_io));
+			z8.store(zl_j, zh_j, index(n_io));
 		}
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -624,8 +743,8 @@ public:
 		: transform(N, n, b, ((VSIZE == 2) ? EKind::SBDTvec2 : ((VSIZE == 4) ? EKind::SBDTvec4 : EKind::SBDTvec8))),
 		_num_threads(num_threads),
 		_b(b), _b_inv(1.0 / b),
-		_mem_size(wSize + wsSize + 2 * zSize + fcSize + 2 * zSize + (num_regs - 1) * 2 * zSize + 2 * 1024 * 1024),
-		_cache_size(wSize + wsSize + 2 * zSize + fcSize), _checkError(checkError), _error(0),
+		_mem_size(wSize + wsSize + 2 * (zSize + fcSize + zSize + (num_regs - 1) * zSize) + 2 * 1024 * 1024),
+		_cache_size(wSize + wsSize + 2 * (zSize + fcSize)), _checkError(checkError), _error(0),
 		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _mem_copy((char *)alignNew(2 * zSize, 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -667,8 +786,9 @@ protected:
 		const Vc * const zh = (Vc *)&_mem[zhOffset];
 
 		Vc * const zl_copy = (Vc *)&_mem_copy[0];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zl_copy[k] = zl[k];
 		Vc * const zh_copy = (Vc *)&_mem_copy[zSize];
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) { zl_copy[k] = zl[k]; zh_copy[k] = zh[k]; }
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zh_copy[k] = zh[k];
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t lh = 0; lh < n_io / 4 / 2; ++lh)
@@ -680,7 +800,7 @@ protected:
 
 		for (size_t k = 0; k < N; k += VSIZE)
 		{
-			const Vc vc = zl_copy[index(k) / VSIZE];
+			const Vc vc = zl_copy[index(k) / VSIZE] + zh_copy[index(k) / VSIZE];
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
 				const Complex zc = vc[i];
@@ -703,8 +823,9 @@ protected:
 				const Complex zc(static_cast<double>(zi[k + i + 0 * N]), static_cast<double>(zi[k + i + 1 * N]));
 				vc.set(i, zc);
 			}
-			zl[index(k) / VSIZE] = vc;
-			zh[index(k) / VSIZE] = Vc(0.0);
+			const Vc h = Vc(vc * split_inv).round() * split;
+			zl[index(k) / VSIZE] = vc - h;
+			zh[index(k) / VSIZE] = h;
 		}
 
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -723,12 +844,14 @@ public:
 
 		if (!cFile.read(reinterpret_cast<char *>(&_error), sizeof(_error))) return false;
 
-		Vc * const z = (Vc *)&_mem[zlOffset];
-		if (!cFile.read(reinterpret_cast<char *>(z), zSize)) return false;
+		Vc * const zl = (Vc *)&_mem[zlOffset];
+		if (!cFile.read(reinterpret_cast<char *>(zl), zSize)) return false;
+		Vc * const zh = (Vc *)&_mem[zhOffset];
+		if (!cFile.read(reinterpret_cast<char *>(zh), zSize)) return false;
 		if (num_regs > 1)
 		{
 			Vc * const zr = (Vc *)&_mem[zrOffset];
-			if (!cFile.read(reinterpret_cast<char *>(zr), (num_regs - 1) * zSize)) return false;
+			if (!cFile.read(reinterpret_cast<char *>(zr), (num_regs - 1) * 2 * zSize)) return false;
 		}
 
 		return true;
@@ -741,12 +864,14 @@ public:
 
 		if (!cFile.write(reinterpret_cast<const char *>(&_error), sizeof(_error))) return;
 
-		const Vc * const z = (Vc *)&_mem[zlOffset];
-		if (!cFile.write(reinterpret_cast<const char *>(z), zSize)) return;
+		const Vc * const zl = (Vc *)&_mem[zlOffset];
+		if (!cFile.write(reinterpret_cast<const char *>(zl), zSize)) return;
+		const Vc * const zh = (Vc *)&_mem[zhOffset];
+		if (!cFile.write(reinterpret_cast<const char *>(zh), zSize)) return;
 		if (num_regs > 1)
 		{
 			const Vc * const zr = (Vc *)&_mem[zrOffset];
-			if (!cFile.write(reinterpret_cast<const char *>(zr), (num_regs - 1) * zSize)) return;
+			if (!cFile.write(reinterpret_cast<const char *>(zr), (num_regs - 1) * 2 * zSize)) return;
 		}
 	}
 
@@ -796,9 +921,12 @@ public:
 
 	void initMultiplicand(const size_t src) override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * zSize];
-		Vc * const zp = (Vc *)&_mem[zlpOffset];
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
+		const Vc * const zl_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * 2 * zSize];
+		const Vc * const zh_src = (Vc *)&_mem[(src == 0) ? zhOffset : zrOffset + (src - 1) * 2 * zSize + zSize];
+		Vc * const zlp = (Vc *)&_mem[zlpOffset];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zlp[k] = zl_src[k];
+		Vc * const zhp = (Vc *)&_mem[zhpOffset];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zhp[k] = zh_src[k];
 
 		if (_num_threads > 1)
 		{
@@ -846,9 +974,14 @@ public:
 
 	void copy(const size_t dst, const size_t src) const override
 	{
-		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * zSize];
-		Vc * const z_dst = (Vc *)&_mem[(dst == 0) ? zlOffset : zrOffset + (dst - 1) * zSize];
-		for (size_t k = 0; k < index(N) / VSIZE; ++k) z_dst[k] = z_src[k];
+		const Vc * const zl_src = (Vc *)&_mem[(src == 0) ? zlOffset : zrOffset + (src - 1) * 2 * zSize];
+		const Vc * const zh_src = (Vc *)&_mem[(src == 0) ? zhOffset : zrOffset + (src - 1) * 2 * zSize + zSize];
+
+		Vc * const zl_dst = (Vc *)&_mem[(dst == 0) ? zlOffset : zrOffset + (dst - 1) * 2 * zSize];
+		Vc * const zh_dst = (Vc *)&_mem[(dst == 0) ? zhOffset : zrOffset + (dst - 1) * 2 * zSize + zSize];
+
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zl_dst[k] = zl_src[k];
+		for (size_t k = 0; k < index(N) / VSIZE; ++k) zh_dst[k] = zh_src[k];
 	}
 
 	double getError() const override { return _error; }

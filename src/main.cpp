@@ -109,7 +109,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer" << ext << " version 22.12.1 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "genefer" << ext << " version 22.12.2 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -363,13 +363,7 @@ public:
 		{
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
-#if defined(GPU)
-			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 699995450, 302257864,
-													167811262, 113521888, 15859176, 4896418, 1059094 };
-#else
-			static constexpr uint32_t bp[count] = { 500002286, 380018796, 290067480, 220129842,
-													169277952, 114340846, 15913772, 4896418, 1951734 };
-#endif
+			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 324793266, 1010036096, 122481106, 16769618, 4896418, 1963736 };
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
@@ -379,7 +373,7 @@ public:
 			// return;
 			for (size_t i = 0; i < count; ++i)
 			{
-				// if (!g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth)) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
 				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;

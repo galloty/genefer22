@@ -1042,10 +1042,8 @@ private:
 		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
 		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
 #else
-		// static constexpr uint32_t bm[13] = { 500000000, 380000000, 290000000, 220000000, 170000000,
-		// 									 120000000, 17000000, 5500000, 2000000, 900000, 270000, 1000000, 500000 };
-		static constexpr uint32_t bm[13] = { 500000000, 380000000, 290000000, 100000, 100000,
-		 									 120000000, 17000000, 5500000, 2000000, 900000, 270000, 1000000, 500000 };
+		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 330000000, 200000000,
+		 									 120000000, 18000000, 5500000, 2000000, 910000, 270000, 1000000, 500000 };
 #endif
 		const size_t num_regs = 3;
 
@@ -1135,7 +1133,7 @@ private:
 			if (qret == EReturn::Success) b_min = b;
 			else if (qret == EReturn::Failed) b_max = b;
 
-			// std::ostringstream ss; ss << n << ", " << b << ": " << (success ? 1 : 0) << std::endl;
+			// std::ostringstream ss; ss << n << ", " << b << ": " << ((qret == EReturn::Success) ? 1 : 0) << std::endl;
 			// pio::print(ss.str());
 
 			clearContext();
@@ -1190,7 +1188,8 @@ public:
 		bool checkError = false;
 		if (impl != "i32")
 		{
-			if (b > bm[n - 12] * 1000000) checkError = true;
+			if (n < 16) checkError = false;
+			else if (b > bm[n - 12] * 1000000) checkError = true;
 		}
 		(void)device;
 		createTransformCPU(b, n, nthreads, impl, num_regs, checkError);

@@ -189,21 +189,16 @@ public:
 			const Vc ol = Vc(zli * t2_n).round(), oh = Vc(zhi * (t2_n * split_inv)).round();
 
 			fl += ol * g; fh += oh * g;
-			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
 			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
+			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			fh = fh_b;
 
 			rl_b += rh_b * split;
 			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
-
-			fh = fh_b; fl = fl_b;
+			fl = fl_b;
 
 			const Vc h = Vc(rl_b * split_inv).round() * split;
 			zli = rl_b - h; zhi = h;
-
-			// const Vc f_b = Vc(f * b_inv).round();
-			// const Vc r_b = f - f_b * b;
-			// f = f_b;
-			// zli = r_b;
 		}
 
 		fl_new = fl; fh_new = fh;
@@ -220,13 +215,13 @@ public:
 			err.max(Vc(ofl - ol).abs()); err.max(Vc(ofh - oh).abs());
 
 			fl += ol * g; fh += oh * g;
-			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
 			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
+			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			fh = fh_b;
 
 			rl_b += rh_b * split;
 			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
-
-			fh = fh_b; fl = fl_b;
+			fl = fl_b;
 
 			const Vc h = Vc(rl_b * split_inv).round() * split;
 			zli = rl_b - h; zhi = h;

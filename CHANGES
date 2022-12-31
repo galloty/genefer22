@@ -1,0 +1,19 @@
+genefer22 22.11.4 => genefer 22.12.2
+
+Caveats
+ - genefer22 is now genefer version year.month.release
+ - if the validation fails then exit code is EXIT_CHILD_FAILED (was BOINC_SUCCESS)
+
+New Features
+ - Gerbicz-Li error checking of the proof task (-c)
+ - new CPU transform for n <= 16. The CPU limit is b_max = 2G.
+
+Fixes
+ - double close on file I/O error
+ - read old checkpoint if the current one is invalid
+ - send Boinc trickle
+ - warning "#threads > 64"
+ - warning "implementation is not valid", was an error
+
+Improvements
+- success-failed-aborted logic is propagated, exit(0) were removed

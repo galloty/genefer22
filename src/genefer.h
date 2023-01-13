@@ -1184,12 +1184,11 @@ public:
 		(void)nthreads; (void)impl;
 		createTransformGPU(b, n, device, num_regs);
 #else
-		static constexpr uint32_t bm[23 - 12 + 1] = { 500, 380, 290, 220, 160, 125, 94, 71, 54, 41, 31, 24 };
+		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 94, 71, 54, 41, 31, 24 };
 		bool checkError = false;
 		if (impl != "i32")
 		{
-			if (n < 16) checkError = false;
-			else if (b > bm[n - 12] * 1000000) checkError = true;
+			if (b > bm[n - 12] * 1000000) checkError = true;
 		}
 		(void)device;
 		createTransformCPU(b, n, nthreads, impl, num_regs, checkError);

@@ -109,7 +109,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer" << ext << " version 22.12.2 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "genefer" << ext << " version 23.01.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << "genefer is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -363,7 +363,7 @@ public:
 		{
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
-			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 324793266, 1010036096, 122481106, 16769618, 4896418, 1963736 };
+			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;

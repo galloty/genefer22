@@ -18,7 +18,7 @@ transform * transform::create_fma(const uint32_t b, const uint32_t n, const size
 #elif defined(SBDTRANSFORM)
 	return transformCPU_fma::create_transformCPUf64s<4>(b, n, num_threads, num_regs, checkError);
 #else
-	if (n > 16) return transformCPU_fma::create_transformCPUf64<4>(b, n, num_threads, num_regs, checkError);
+	if (n > 17) return transformCPU_fma::create_transformCPUf64<4>(b, n, num_threads, num_regs, checkError);
 	else return transformCPU_fma::create_transformCPUf64s<4>(b, n, num_threads, num_regs, checkError);
 #endif
 }

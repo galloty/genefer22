@@ -18,7 +18,7 @@ transform * transform::create_512(const uint32_t b, const uint32_t n, const size
 #elif defined(SBDTRANSFORM)
 	return transformCPU_512::create_transformCPUf64s<8>(b, n, num_threads, num_regs, checkError);
 #else
-	if (n > 16) return transformCPU_512::create_transformCPUf64<8>(b, n, num_threads, num_regs, checkError);
+	if (n > 17) return transformCPU_512::create_transformCPUf64<8>(b, n, num_threads, num_regs, checkError);
 	else return transformCPU_512::create_transformCPUf64s<8>(b, n, num_threads, num_regs, checkError);
 #endif
 }

@@ -18,7 +18,7 @@ transform * transform::create_sse4(const uint32_t b, const uint32_t n, const siz
 #elif defined(SBDTRANSFORM)
 	return transformCPU_sse4::create_transformCPUf64s<2>(b, n, num_threads, num_regs, checkError);
 #else
-	if (n > 16) return transformCPU_sse4::create_transformCPUf64<2>(b, n, num_threads, num_regs, checkError);
+	if (n > 17) return transformCPU_sse4::create_transformCPUf64<2>(b, n, num_threads, num_regs, checkError);
 	else return transformCPU_sse4::create_transformCPUf64s<2>(b, n, num_threads, num_regs, checkError);
 #endif
 }

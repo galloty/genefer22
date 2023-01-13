@@ -17,7 +17,9 @@ BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
 BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
 
 CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
+# -DDTRANSFORM -DIBDTRANSFORM -DSBDTRANSFORM
 FLAGS_CPU = -O3 -fopenmp
+# -DNTTRANSFORM2 -DNTTRANSFORM3
 FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_i32.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o

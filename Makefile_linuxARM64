@@ -31,8 +31,8 @@ DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
 DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s.h $(SRC_DIR)/f64vector.h $(SRC_DIR)/simd128d.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-EXEC_CPU = $(BIN_DIR)/genefer
-EXEC_GPU = $(BIN_DIR)/geneferg
+EXEC_CPU = $(BIN_DIR)/genefer_ARM
+EXEC_GPU = $(BIN_DIR)/geneferg_ARM
 
 .PHONY: all clean_obj rebuild
 

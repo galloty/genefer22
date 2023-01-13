@@ -982,10 +982,10 @@ inline transform * create_transformCPUf64s(const uint32_t b, const uint32_t n, c
 	else if (n == 14) pTransform = new transformCPUf64s<(1 << 13), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 15) pTransform = new transformCPUf64s<(1 << 14), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 16) pTransform = new transformCPUf64s<(1 << 15), VSIZE>(b, n, num_threads, num_regs, checkError);
+	else if (n == 17) pTransform = new transformCPUf64s<(1 << 16), VSIZE>(b, n, num_threads, num_regs, checkError);
 #endif
 #if defined(SBDTRANSFORM)
-	if      (n == 17) pTransform = new transformCPUf64s<(1 << 16), VSIZE>(b, n, num_threads, num_regs, checkError);
-	else if (n == 18) pTransform = new transformCPUf64s<(1 << 17), VSIZE>(b, n, num_threads, num_regs, checkError);
+	if      (n == 18) pTransform = new transformCPUf64s<(1 << 17), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 19) pTransform = new transformCPUf64s<(1 << 18), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 20) pTransform = new transformCPUf64s<(1 << 19), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 21) pTransform = new transformCPUf64s<(1 << 20), VSIZE>(b, n, num_threads, num_regs, checkError);

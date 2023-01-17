@@ -150,7 +150,12 @@ private:
 
 	static std::string gfn(const uint32_t b, const uint32_t n)
 	{
-		std::ostringstream ss; ss << b << "^{2^" << n << "} + 1";
+		std::ostringstream ss;
+		ss << b << "^{2^" << n << "}";
+#if defined(CYCLO)
+		ss << " - " << b << "^{2^" << n - 1 << "}";
+#endif
+		ss << " + 1";
 		return ss.str();
 	}
 
@@ -1184,22 +1189,29 @@ public:
 		(void)nthreads; (void)impl;
 		createTransformGPU(b, n, device, num_regs);
 #else
+		bool checkError =
+#if defined(CYCLO)
+			true;
+#else
+			false;
+
 		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 94, 71, 54, 41, 31, 24 };
-		bool checkError = false;
 		if (impl != "i32")
 		{
 			if (b > bm[n - 12] * 1000000) checkError = true;
 		}
+#endif
 		(void)device;
 		createTransformCPU(b, n, nthreads, impl, num_regs, checkError);
 
-		if (checkError)
+#if !defined(CYCLO)
+		if (!_isBoinc && checkError)
 		{
 			std::ostringstream ss; ss << "Warning: b > " << bm[n - 12] << ",000,000: the test may fail." << std::endl;
 			pio::print(ss.str());
 		}
 #endif
-
+#endif
 		_gi = new gint(size_t(1) << n, b);
 
 		EReturn success = EReturn::Failed;

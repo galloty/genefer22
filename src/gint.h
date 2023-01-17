@@ -184,10 +184,20 @@ public:
 		}
 		res64 = r64;
 
+#if defined(CYCLO)
+		uint64_t res = 0, xres = 0;
+		for (size_t i = 0; i < size; ++i)
+		{
+			const uint32_t di = static_cast<uint32_t>(d[i]);
+			res += di;
+			xres ^= di;
+		}
+		old64 = (xres << 40) + res;
+#else
 		uint64_t old = 0;
 		for (size_t i = 8; i != 0; --i) old = (old << 8) | static_cast<uint8_t>(d[size - i]);
 		old64 = old;
-
+#endif
 		return bOne;
 	}
 

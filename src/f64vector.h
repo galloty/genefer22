@@ -432,6 +432,9 @@ static constexpr Complex cs2pi_1_16 = Complex(0.92387953251128675612818318939678
 static constexpr Complex cs2pi_1_32 = Complex(0.98078528040323044912618223613423903697, 0.19891236737965800691159762264467622860);
 static constexpr Complex cs2pi_5_32 = Complex(0.55557023301960222474283081394853287438, 1.49660576266548901760113513494247691870);
 
+static constexpr double csqrt3_2 = 0.86602540378443864676372317075293618347, c2_sqrt3 = 1.15470053837925152901829756100391491130;
+static constexpr Complex cs2pi_1_24 = Complex(0.96592582628906828674974319972889736763, 0.26794919243112270647255365849412763306);
+
 template<size_t N>
 class Vradix4
 {
@@ -497,20 +500,14 @@ public:
 	finline void forward4_0(const Vc & w0)
 	{
 #if defined(CYCLO)
-		static constexpr double c1_2 = 0.5, csqrt3_2 = 0.86602540378443864676372317075293618347;
-		const Vd<N> v1_2 = Vd<N>::broadcast(c1_2), vsqrt3_2 = Vd<N>::broadcast(csqrt3_2);
-		static constexpr Complex cr1 = Complex(0.86602540378443864676372317075293618347, 0.57735026918962576450914878050195745565);
-		static constexpr Complex cr2 = Complex(0.96592582628906828674974319972889736763, 0.26794919243112270647255365849412763306);
-		static constexpr Complex cr3 = Complex(-0.25881904510252076234889883762404832835, -3.73205080756887729352744634150587236694);
-
 		const Vc z0 = z[0], z2 = z[2], z1 = z[1], z3 = z[3];
-		const Vc r1 = Vc::broadcast(cr1), r2 = Vc::broadcast(cr2), r3 = Vc::broadcast(cr3);
+		const Vd<N> v1_2 = Vd<N>::broadcast(0.5), vsqrt3_2 = Vd<N>::broadcast(csqrt3_2);
 		const Vc u0 = Vc(z0.real() + z0.imag() * v1_2, z0.imag() * vsqrt3_2);
-		const Vc u2 = Vc(z2.real() + z2.imag() * v1_2, z2.imag() * vsqrt3_2).mulW(r1);
+		const Vc u2 = Vc(z2.real() * vsqrt3_2, z2.imag() + z2.real() * v1_2);
 		const Vc u1 = Vc(z1.real() + z1.imag() * v1_2, z1.imag() * vsqrt3_2);
-		const Vc u3 = Vc(z3.real() + z3.imag() * v1_2, z3.imag() * vsqrt3_2).mulW(r1);
-		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = Vc(u1 + u3).mulW(r2), v3 = Vc(u1 - u3).mulW(r3);
-		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2 + v3; z[3] = v2 - v3;
+		const Vc u3 = Vc(z3.real() * vsqrt3_2, z3.imag() + z3.real() * v1_2);
+		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = Vc(u1 + u3).mulW(w0), v3 = Vc(u1 - u3).mulW(w0);
+		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2.addi(v3); z[3] = v2.subi(v3);
 #else
 		const Vc u0 = z[0], u2 = z[2].mul1i(), u1 = z[1].mulW(w0), u3 = z[3].mulWconj(w0);
 		const Vc v0 = u0 + u2 * csqrt2_2, v2 = u0 - u2 * csqrt2_2, v1 = u1.addi(u3), v3 = u3.addi(u1);
@@ -521,20 +518,14 @@ public:
 	finline void backward4_0(const Vc & w0)
 	{
 #if defined(CYCLO)
-		static constexpr double c1_sqrt3 = 0.57735026918962576450914878050195745565, c2_sqrt3 = 1.15470053837925152901829756100391491130;
-		const Vd<N> v1_sqrt3 = Vd<N>::broadcast(c1_sqrt3), v2_sqrt3 = Vd<N>::broadcast(c2_sqrt3);
-		static constexpr Complex cr1 = Complex(0.86602540378443864676372317075293618347, 0.57735026918962576450914878050195745565);
-		static constexpr Complex cr2 = Complex(0.96592582628906828674974319972889736763, 0.26794919243112270647255365849412763306);
-		static constexpr Complex cr3 = Complex(-0.25881904510252076234889883762404832835, -3.73205080756887729352744634150587236694);
-
 		const Vc u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];
-		const Vc r1 = Vc::broadcast(cr1), r2 = Vc::broadcast(cr2), r3 = Vc::broadcast(cr3);
-		const Vc v0 = u0 + u1, v1 = Vc(u0 - u1).mulWconj(r2), v2 = u2 + u3, v3 = Vc(u2 - u3).mulWconj(r3);
-		const Vc z0 = v0 + v2, z2 = Vc(v0 - v2).mulWconj(r1), z1 = v1 + v3, z3 = Vc(v1 - v3).mulWconj(r1);
+		const Vc v0 = u0 + u1, v1 = Vc(u0 - u1).mulWconj(w0), v2 = u2 + u3, v3 = Vc(u2 - u3).mulWconj(w0);
+		const Vc z0 = v0 + v2, z2 = v0 - v2, z1 = v1.subi(v3), z3 = v1.addi(v3);
+		const Vd<N> v1_sqrt3 = Vd<N>::broadcast(c2_sqrt3 * 0.5), v2_sqrt3 = Vd<N>::broadcast(c2_sqrt3);
 		z[0] = Vc(z0.real() - z0.imag() * v1_sqrt3, z0.imag() * v2_sqrt3);
-		z[2] = Vc(z2.real() - z2.imag() * v1_sqrt3, z2.imag() * v2_sqrt3);
+		z[2] = Vc(z2.real() * v2_sqrt3, z2.imag() - z2.real() * v1_sqrt3);
 		z[1] = Vc(z1.real() - z1.imag() * v1_sqrt3, z1.imag() * v2_sqrt3);
-		z[3] = Vc(z3.real() - z3.imag() * v1_sqrt3, z3.imag() * v2_sqrt3);
+		z[3] = Vc(z3.real() * v2_sqrt3, z3.imag() - z3.real() * v1_sqrt3);
 #else
 		const Vc v0 = z[0], v1 = z[1], v2 = z[2], v3 = z[3];
 		const Vc u0 = v0 + v1, u1 = v0 - v1, u2 = v2 + v3, u3 = v2 - v3;
@@ -640,7 +631,12 @@ public:
 
 	finline static void forward4_0(const size_t mi, const size_t stepi, const size_t count, Vc * const z)
 	{
-		const Vc w0 = Vc::broadcast(cs2pi_1_16);
+		const Vc w0 =
+#if defined(CYCLO)
+			Vc::broadcast(cs2pi_1_24);
+#else
+			Vc::broadcast(cs2pi_1_16);
+#endif
 		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; ++i)
@@ -655,7 +651,12 @@ public:
 
 	finline static void backward4_0(const size_t mi, const size_t stepi, const size_t count, Vc * const z)
 	{
-		const Vc w0 = Vc::broadcast(cs2pi_1_16);
+		const Vc w0 =
+#if defined(CYCLO)
+			Vc::broadcast(cs2pi_1_24);
+#else
+			Vc::broadcast(cs2pi_1_16);
+#endif
 		for (size_t j = 0; j < mi; j += stepi)
 		{
 			for (size_t i = 0; i < count; ++i)

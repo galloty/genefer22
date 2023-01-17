@@ -1228,8 +1228,16 @@ public:
 		}
 		else
 		{
-			mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, b, static_cast<unsigned long int>(1) << n);
-
+			mpz_t exponent; mpz_init(exponent);
+#if defined(CYCLO)
+			mpz_t e; mpz_init(e);
+			mpz_ui_pow_ui(e, b, static_cast<unsigned long int>(1) << (n - 1));
+			mpz_mul(exponent, e, e);
+			mpz_sub(exponent, exponent, e);
+			mpz_clear(e);
+#else
+			mpz_ui_pow_ui(exponent, b, static_cast<unsigned long int>(1) << n);
+#endif
 			if (mode == EMode::Quick)
 			{
 				double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;

@@ -59,8 +59,14 @@ public:
 
 		while (f != 0)
 		{
-			f = -f;	// d[size] = -d[0]
-
+#if defined(CYCLO)
+			// f x^size = f x^{size/2} - f
+			const int32_t f32 = static_cast<int32_t>(f);
+			d[0] -= f32; d[size / 2] += f32;
+			f = 0;
+#else
+			f = -f;	// f * x^size = -f
+#endif
 			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
@@ -69,7 +75,9 @@ public:
 				d[i] = r;
 				f -= r;
 				f /= base;
+#if !defined(CYCLO)
 				if (f == 0) break;
+#endif
 			}
 
 			if (f == 1)
@@ -116,8 +124,14 @@ public:
 
 		while (f != 0)
 		{
-			f = -f;	// d[size] = -d[0]
-
+#if defined(CYCLO)
+			// f x^size = f x^{size/2} - f
+			const int32_t f32 = static_cast<int32_t>(f);
+			d[0] -= f32; d[size / 2] += f32;
+			f = 0;
+#else
+			f = -f;	// f * x^size = -f
+#endif
 			for (size_t i = 0; i < size; ++i)
 			{
 				f += d[i];
@@ -127,7 +141,9 @@ public:
 				d[i] = r;
 				f -= r;
 				f /= base;
+#if !defined(CYCLO)
 				if (f == 0) break;
+#endif
 			}
 		}
 	}

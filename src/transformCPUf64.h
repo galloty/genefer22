@@ -696,16 +696,22 @@ public:
 
 		mpz_clear(sb2e64); mpz_clear(t);
 
+		const size_t a =
+#if defined(CYCLO)
+			3;
+#else
+			2;
+#endif
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
 		{
 			Complex * const w_s = &w122i[2 * s / 4];
 			for (size_t j = 0; j < s / 2; ++j)
 			{
-				const size_t r = bitRev(j, 2 * s) + 1;
-				w_s[3 * j + 0] = Complex::exp2iPi(r, 8 * s);
-				w_s[3 * j + 1] = Complex::exp2iPi(r, 2 * 8 * s);
-				w_s[3 * j + 2] = Complex::exp2iPi(r + 2 * s, 2 * 8 * s);
+				const size_t r = bitRev(2 * j, 2 * s);
+				w_s[3 * j + 0] = Complex::exp2iPi(a * r + 1, 4 * a * s);
+				w_s[3 * j + 1] = Complex::exp2iPi(a * r + 1, 2 * 4 * a * s);
+				w_s[3 * j + 2] = Complex::exp2iPi(a * (r + s) + 1, 2 * 4 * a * s);
 			}
 		}
 
@@ -714,7 +720,8 @@ public:
 		{
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
-				ws[j].set(i, Complex::exp2iPi(bitRev(VSIZE * j + i, 2 * (N / 4)) + 1, 8 * (N / 4)));
+				const size_t r = bitRev(2 * (VSIZE * j + i), 2 * (N / 4));
+				ws[j].set(i, Complex::exp2iPi(a * r + 1, 4 * a * (N / 4)));
 			}
 		}
 	}

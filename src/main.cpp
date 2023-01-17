@@ -102,16 +102,24 @@ private:
 	ssc << ", boinc-" << BOINC_VERSION_STRING;
 #endif
 
-#if defined(GPU)
-		const char * const ext = "g";
+		const char * const name = 
+#if defined(CYCLO)
+			"cyclo";
 #else
-		const char * const ext = "";
+			"genefer";
+#endif
+
+		const char * const ext =
+#if defined(GPU)
+			"g";
+#else
+			"";
 #endif
 
 		std::ostringstream ss;
-		ss << "genefer" << ext << " version 23.01.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 23.01.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
-		ss << "genefer is free source code, under the MIT license." << std::endl;
+		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)
 		{
 			ss << std::endl << "Command line: '";
@@ -129,13 +137,21 @@ private:
 private:
 	static std::string usage()
 	{
-#if defined(GPU)
-		const char * const ext = "g";
+		const char * const name = 
+#if defined(CYCLO)
+			"cyclo";
 #else
-		const char * const ext = "";
+			"genefer";
+#endif
+
+		const char * const ext =
+#if defined(GPU)
+			"g";
+#else
+			"";
 #endif
 		std::ostringstream ss;
-		ss << "Usage: genefer" << ext << " [options]  options may be specified in any order" << std::endl;
+		ss << "Usage: " << name << ext << " [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                      the exponent of the GFN (12 <= n <= 23)" << std::endl;
 		ss << "  -b <b>                      the base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                          quick test" << std::endl;
@@ -224,7 +240,9 @@ public:
 			{
 				const std::string bstr = ((arg == "-b") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				b = static_cast<uint32_t>(std::atoi(bstr.c_str()));
+#if !defined(CYCLO)
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
+#endif
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
 				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
 			}
@@ -363,7 +381,9 @@ public:
 		{
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
-			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };
+			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };
+			static constexpr uint32_t bp[count] = { 484, 1805064, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
+			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
@@ -371,13 +391,13 @@ public:
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 			// return;
-			for (size_t i = 0; i < count; ++i)
+			for (size_t i = 1; i < count; ++i)
 			{
-				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}*/
 
 			pio::print(usage());

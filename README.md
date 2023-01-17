@@ -16,11 +16,11 @@ It implements an [Efficient Modular Exponentiation Proof Scheme](https://arxiv.o
 The test is validated with [Gerbicz - Li](https://www.mersenneforum.org/showthread.php?t=22510) error checking and a proof is generated with ([Pietrzak - Li](https://eprint.iacr.org/2018/627.pdf)) algorithm. Thanks to the Verifiable Delay Function, distributed projects run at twice the speed of double-checked calculations.  
 
 Any number of the form *b*<sup>2<sup>*n*</sup></sup> + 1 such that 2 &le; *b* < 2,000,000,000 and 12 &le; *n* &le; 23 can be tested on GPU.  
-On CPU, the limit is fuzzy and is *b* ~ 500M (*n* = 12), 380M (*n* = 13), 300M (*n* = 14), 230M (*n* = 15), 170M (*n* = 16), 130M (*n* = 17), 95M (*n* = 18), 70M (*n* = 19), 55M (*n* = 20), 45M (*n* = 21), 35M (*n* = 22), 25M (*n* = 23).  
+On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M (*n* = 12, 13, 14, 15), *b* ~ 1500M (*n* = 16), 1000M (*n* = 17), 95M (*n* = 18), 70M (*n* = 19), 55M (*n* = 20), 45M (*n* = 21), 35M (*n* = 22), 25M (*n* = 23).  
 
 ## Build
 
-Release 22.11.4 is the current PrimeGrid applications.  
+Release 22.12.2 is the current PrimeGrid applications.  
 
 Binaries are generated using:  
  - genefer: Ubuntu 22.04 amd64, gcc 11.3  
@@ -33,6 +33,6 @@ Binaries are generated using:
 
 ## TODO
 
- - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).  
  - add INT32 transform on GPU using Shoup's modular multiplication  
+ - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).  
  - add primality test  

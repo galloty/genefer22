@@ -427,13 +427,17 @@ public:
 	}
 };
 
+#if defined(CYCLO)
+static constexpr double csqrt3_2 = 0.86602540378443864676372317075293618347, c2_sqrt3 = 1.15470053837925152901829756100391491130;
+static constexpr Complex cs2pi_1_24 = Complex(0.96592582628906828674974319972889736763, 0.26794919243112270647255365849412763306);
+static constexpr Complex cs2pi_1_48 = Complex(0.99144486137381041114455752692856287128, 0.13165249758739585347152645740971710359);
+static constexpr Complex cs2pi_7_48 = Complex(0.60876142900872063941609754289816400452, 1.30322537284120575586814900899032094645);
+#else
 static constexpr double csqrt2_2 = 0.70710678118654752440084436210484903929;
 static constexpr Complex cs2pi_1_16 = Complex(0.92387953251128675612818318939678828682, 0.41421356237309504880168872420969807857);
 static constexpr Complex cs2pi_1_32 = Complex(0.98078528040323044912618223613423903697, 0.19891236737965800691159762264467622860);
 static constexpr Complex cs2pi_5_32 = Complex(0.55557023301960222474283081394853287438, 1.49660576266548901760113513494247691870);
-
-static constexpr double csqrt3_2 = 0.86602540378443864676372317075293618347, c2_sqrt3 = 1.15470053837925152901829756100391491130;
-static constexpr Complex cs2pi_1_24 = Complex(0.96592582628906828674974319972889736763, 0.26794919243112270647255365849412763306);
+#endif
 
 template<size_t N>
 class Vradix4
@@ -500,12 +504,11 @@ public:
 	finline void forward4_0(const Vc & w0)
 	{
 #if defined(CYCLO)
-		const Vc z0 = z[0], z2 = z[2], z1 = z[1], z3 = z[3];
 		const Vd<N> v1_2 = Vd<N>::broadcast(0.5), vsqrt3_2 = Vd<N>::broadcast(csqrt3_2);
-		const Vc u0 = Vc(z0.real() + z0.imag() * v1_2, z0.imag() * vsqrt3_2);
-		const Vc u2 = Vc(z2.real() * vsqrt3_2, z2.imag() + z2.real() * v1_2);
-		const Vc u1 = Vc(z1.real() + z1.imag() * v1_2, z1.imag() * vsqrt3_2);
-		const Vc u3 = Vc(z3.real() * vsqrt3_2, z3.imag() + z3.real() * v1_2);
+		const Vc z0 = z[0], u0 = Vc(z0.real() + z0.imag() * v1_2, z0.imag() * vsqrt3_2);
+		const Vc z2 = z[2], u2 = Vc(z2.real() * vsqrt3_2, z2.imag() + z2.real() * v1_2);
+		const Vc z1 = z[1], u1 = Vc(z1.real() + z1.imag() * v1_2, z1.imag() * vsqrt3_2);
+		const Vc z3 = z[3], u3 = Vc(z3.real() * vsqrt3_2, z3.imag() + z3.real() * v1_2);
 		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = Vc(u1 + u3).mulW(w0), v3 = Vc(u1 - u3).mulW(w0);
 		z[0] = v0 + v1; z[1] = v0 - v1; z[2] = v2.addi(v3); z[3] = v2.subi(v3);
 #else
@@ -518,9 +521,9 @@ public:
 	finline void backward4_0(const Vc & w0)
 	{
 #if defined(CYCLO)
-		const Vc u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];
-		const Vc v0 = u0 + u1, v1 = Vc(u0 - u1).mulWconj(w0), v2 = u2 + u3, v3 = Vc(u2 - u3).mulWconj(w0);
-		const Vc z0 = v0 + v2, z2 = v0 - v2, z1 = v1.subi(v3), z3 = v1.addi(v3);
+		const Vc v0 = z[0], v1 = z[1], v2 = z[2], v3 = z[3];
+		const Vc u0 = v0 + v1, u1 = Vc(v0 - v1).mulWconj(w0), u2 = v2 + v3, u3 = Vc(v2 - v3).mulWconj(w0);
+		const Vc z0 = u0 + u2, z2 = u0 - u2, z1 = u1.subi(u3), z3 = u1.addi(u3);
 		const Vd<N> v1_sqrt3 = Vd<N>::broadcast(c2_sqrt3 * 0.5), v2_sqrt3 = Vd<N>::broadcast(c2_sqrt3);
 		z[0] = Vc(z0.real() - z0.imag() * v1_sqrt3, z0.imag() * v2_sqrt3);
 		z[2] = Vc(z2.real() * v2_sqrt3, z2.imag() - z2.real() * v1_sqrt3);
@@ -727,6 +730,23 @@ public:
 
 	finline void forward8_0()
 	{
+#if defined(CYCLO)
+		const Vd<N> v1_2 = Vd<N>::broadcast(0.5), vsqrt3_2 = Vd<N>::broadcast(csqrt3_2);
+		const Vc z0 = z[0], u0 = Vc(z0.real() + z0.imag() * v1_2, z0.imag() * vsqrt3_2);
+		const Vc z4 = z[4], u4 = Vc(z4.real() * vsqrt3_2, z4.imag() + z4.real() * v1_2);
+		const Vc z2 = z[2], u2 = Vc(z2.real() + z2.imag() * v1_2, z2.imag() * vsqrt3_2);
+		const Vc z6 = z[6], u6 = Vc(z6.real() * vsqrt3_2, z6.imag() + z6.real() * v1_2);
+		const Vc z1 = z[1], u1 = Vc(z1.real() + z1.imag() * v1_2, z1.imag() * vsqrt3_2);
+		const Vc z5 = z[5], u5 = Vc(z5.real() * vsqrt3_2, z5.imag() + z5.real() * v1_2);
+		const Vc z3 = z[3], u3 = Vc(z3.real() + z3.imag() * v1_2, z3.imag() * vsqrt3_2);
+		const Vc z7 = z[7], u7 = Vc(z7.real() * vsqrt3_2, z7.imag() + z7.real() * v1_2);
+		const Vc w0 = Vc::broadcast(cs2pi_1_24);
+		const Vc v0 = u0 + u4, v4 = u0 - u4, v2 = Vc(u2 + u6).mulW(w0), v6 = Vc(u2 - u6).mulW(w0);
+		const Vc v1 = u1 + u5, v5 = u1 - u5, v3 = Vc(u3 + u7).mulW(w0), v7 = Vc(u3 - u7).mulW(w0);
+		const Vc w1 = Vc::broadcast(cs2pi_1_48), w2 = Vc::broadcast(cs2pi_7_48);
+		const Vc s0 = v0 + v2, s2 = v0 - v2, s1 = Vc(v1 + v3).mulW(w1), s3 = Vc(v1 - v3).mulW(w1);
+		const Vc s4 = v4.addi(v6), s6 = v4.subi(v6), s5 = v5.addi(v7).mulW(w2), s7 = v5.subi(v7).mulW(w2);
+#else
 		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		const Vc u0 = z[0], u4 = z[4].mul1i(), u2 = z[2].mulW(w0), u6 = z[6].mul1i().mulW(w0);
 		const Vc u1 = z[1], u5 = z[5].mul1i(), u3 = z[3].mulW(w0), u7 = z[7].mul1i().mulW(w0);
@@ -736,6 +756,7 @@ public:
 		const Vc v3 = Vc(u3 + u7 * csqrt2_2).mulW(w1), v7 = Vc(u3 - u7 * csqrt2_2).mulW(w2);
 		const Vc s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = v1 - v3;
 		const Vc s4 = v4.addi(v6), s6 = v4.subi(v6), s5 = v5.addi(v7), s7 = v5.subi(v7);
+#endif
 		z[0] = s0 + s1; z[1] = s0 - s1; z[2] = s2.addi(s3); z[3] = s2.subi(s3);
 		z[4] = s4 + s5; z[5] = s4 - s5; z[6] = s6.addi(s7); z[7] = s6.subi(s7);
 	}
@@ -743,6 +764,25 @@ public:
 	finline void backward8_0()
 	{
 		const Vc s0 = z[0], s1 = z[1], s2 = z[2], s3 = z[3], s4 = z[4], s5 = z[5], s6 = z[6], s7 = z[7];
+#if defined(CYCLO)
+		const Vc w1 = Vc::broadcast(cs2pi_1_48), w2 = Vc::broadcast(cs2pi_7_48);
+		const Vc v0 = s0 + s1, v1 = Vc(s0 - s1).mulWconj(w1), v2 = s2 + s3, v3 = Vc(s2 - s3).mulWconj(w1);
+		const Vc v4 = s4 + s5, v5 = Vc(s4 - s5).mulWconj(w2), v6 = s6 + s7, v7 = Vc(s6 - s7).mulWconj(w2);
+		const Vc w0 = Vc::broadcast(cs2pi_1_24);
+		const Vc u0 = v0 + v2, u2 = (v0 - v2).mulWconj(w0), u4 = v4 + v6, u6 = (v4 - v6).mulWconj(w0);
+		const Vc u1 = v1.subi(v3), u3 = v1.addi(v3).mulWconj(w0), u5 = v5.subi(v7), u7 = v5.addi(v7).mulWconj(w0);
+		const Vc z0 = u0 + u4, z4 = u0 - u4, z2 = u2.subi(u6), z6 = u2.addi(u6);
+		const Vc z1 = u1 + u5, z5 = u1 - u5, z3 = u3.subi(u7), z7 = u3.addi(u7);
+		const Vd<N> v1_sqrt3 = Vd<N>::broadcast(c2_sqrt3 * 0.5), v2_sqrt3 = Vd<N>::broadcast(c2_sqrt3);
+		z[0] = Vc(z0.real() - z0.imag() * v1_sqrt3, z0.imag() * v2_sqrt3);
+		z[4] = Vc(z4.real() * v2_sqrt3, z4.imag() - z4.real() * v1_sqrt3);
+		z[2] = Vc(z2.real() - z2.imag() * v1_sqrt3, z2.imag() * v2_sqrt3);
+		z[6] = Vc(z6.real() * v2_sqrt3, z6.imag() - z6.real() * v1_sqrt3);
+		z[1] = Vc(z1.real() - z1.imag() * v1_sqrt3, z1.imag() * v2_sqrt3);
+		z[5] = Vc(z5.real() * v2_sqrt3, z5.imag() - z5.real() * v1_sqrt3);
+		z[3] = Vc(z3.real() - z3.imag() * v1_sqrt3, z3.imag() * v2_sqrt3);
+		z[7] = Vc(z7.real() * v2_sqrt3, z7.imag() - z7.real() * v1_sqrt3);
+#else
 		const Vc w1 = Vc::broadcast(cs2pi_1_32), w2 = Vc::broadcast(cs2pi_5_32);
 		const Vc v0 = s0 + s1, v1 = Vc(s0 - s1).mulWconj(w1), v2 = s2 + s3, v3 = Vc(s2 - s3).mulWconj(w1);
 		const Vc v4 = s4 + s5, v5 = Vc(s4 - s5).mulWconj(w2), v6 = s6 + s7, v7 = Vc(s6 - s7).mulWconj(w2);
@@ -751,6 +791,7 @@ public:
 		const Vc w0 = Vc::broadcast(cs2pi_1_16);
 		z[0] = u0 + u4; z[4] = Vc(u0 - u4).mul1mi() * csqrt2_2; z[2] = u2.subi(u6).mulWconj(w0); z[6] = u6.subi(u2).mulW(w0);
 		z[1] = u1 + u5; z[5] = Vc(u1 - u5).mul1mi() * csqrt2_2; z[3] = u3.subi(u7).mulWconj(w0); z[7] = u7.subi(u3).mulW(w0);
+#endif
 	}
 
 	finline static void forward8_0(const size_t mi, const size_t stepi, const size_t count, Vc * const z)

@@ -381,9 +381,10 @@ public:
 		{
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
-			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };
-			static constexpr uint32_t bp[count] = { 484, 1805064, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
 			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
+			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
+			// static constexpr uint32_t bp[count] = { 484, 22, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
+			static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
@@ -391,13 +392,13 @@ public:
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 			// return;
-			for (size_t i = 1; i < count; ++i)
+			for (size_t i = 0; i < count; ++i)
 			{
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
-				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}*/
 
 			pio::print(usage());

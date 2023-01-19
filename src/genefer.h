@@ -1289,7 +1289,7 @@ public:
 					else if (success == EReturn::Failed) ss << ": validation failed!";
 					else ss << ": terminated.";
 					ss << std::endl; pio::print(ss.str());
-					if (success == EReturn::Success)
+					if ((success == EReturn::Success) || (!_isBoinc && (success == EReturn::Failed)))
 					{
 						pio::result(ss.str());
 						if (!_isBoinc) clearContext();

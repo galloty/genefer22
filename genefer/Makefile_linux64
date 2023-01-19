@@ -1,25 +1,29 @@
-# Compiler: GCC 7.5++
+# These packages are needed to build genefer: libgmp-dev ocl-icd-opencl-dev
+# Compiler: GCC 7.5+
 CC = g++ -m64 -std=c++17
-RM = del
+RM = rm
 
-BIN_DIR = bin
-SRC_DIR = src
+ROOT_DIR = ..
 
-OCL_INC = -IKhronos
-OCL_LIB = C:/Windows/System32/OpenCL.dll
+BIN_DIR = $(ROOT_DIR)/bin
+SRC_DIR = $(ROOT_DIR)/src
+
+OCL_INC = -I$(ROOT_DIR)/Khronos
+OCL_LIB = -L/usr/lib/x86_64-linux-gnu/ -lOpenCL
 
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.20/7.20.2.zip
-# lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
-BOINC_DIR = ../boinc
-BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/win_build
-BOINC_LIB_DIR = $(BOINC_DIR)/lib_win64
-BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
-BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
+# These packages are needed to build BOINC: m4 autoconf libtool openssl libssl-dev libcurl4-openssl-dev ocl-icd-opencl-dev
+# ./_autosetup
+# ./configure --disable-server --disable-client --disable-manager
+# api: make => libboinc_api.a libboinc_opencl.a
+# lib: make => libboinc.a
+BOINC_DIR = $(ROOT_DIR)/../boinc
+BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
+BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+BOINC_LIB_OCL = -lboinc_opencl
 
 CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
-# -DDTRANSFORM -DIBDTRANSFORM -DSBDTRANSFORM
 FLAGS_CPU = -O3 -fopenmp
-# -DNTTRANSFORM2 -DNTTRANSFORM3
 FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_i32.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
@@ -30,8 +34,8 @@ DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s
 DEPS_TRANSFORM_CPUi32 = $(SRC_DIR)/transformCPUi32.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-EXEC_CPU = $(BIN_DIR)/genefer.exe
-EXEC_GPU = $(BIN_DIR)/geneferg.exe
+EXEC_CPU = $(BIN_DIR)/genefer
+EXEC_GPU = $(BIN_DIR)/geneferg
 
 .PHONY: all clean_obj rebuild
 
@@ -50,27 +54,21 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 
 transform_sse2.o: $(SRC_DIR)/transform_sse2.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mtune=core2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mtune=core2 -c -S $< -o sse2.asm
 
 transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c -S $< -o sse4.asm
 
 transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c -S $< -o avx.asm
 
 transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c -S $< -o fma.asm
 
 transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -mtune=skylake-avx512 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -c -S $< -o 512.asm
 
 transform_i32.o: $(SRC_DIR)/transform_i32.cpp $(DEPS_TRANSFORM_CPUi32)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c -S $< -o i32.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
@@ -79,4 +77,4 @@ $(EXEC_CPU): $(OBJS_CPU)
 	$(CC) $(FLAGS_CPU) -static $^ -lgmp $(BOINC_LIB) -o $@
 
 $(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) -static $^ -lgmp $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@
+	$(CC) $(FLAGS_GPU) -static-libgcc -static-libstdc++ $^ -lgmp $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@

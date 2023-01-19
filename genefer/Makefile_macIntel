@@ -3,10 +3,12 @@
 CC = /usr/local/opt/llvm/bin/clang++ -std=c++17 -target x86_64-apple-macos10.13
 RM = rm -f
 
-BIN_DIR = bin
-SRC_DIR = src
+ROOT_DIR = ..
 
-OCL_INC = -IKhronos
+BIN_DIR = $(ROOT_DIR)/bin
+SRC_DIR = $(ROOT_DIR)/src
+
+OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = -framework OpenCL
 
 GMP_INC = -I/usr/local/opt/gmp/include
@@ -15,7 +17,7 @@ OMP_INC = -I-L/usr/local/opt/libomp/include
 OMP_LIB = -L/usr/local/opt/libomp/lib -lomp
 
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.20/7.20.2.zip
-BOINC_DIR = ../boinc
+BOINC_DIR = $(ROOT_DIR)/../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl

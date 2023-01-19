@@ -1,0 +1,53 @@
+# These packages are needed to build genefer: libgmp-dev ocl-icd-opencl-dev
+# Compiler: GCC 7.5+
+CC = g++ -m64 -std=c++17
+RM = rm
+
+ROOT_DIR = ..
+
+BIN_DIR = $(ROOT_DIR)/bin
+SRC_DIR = $(ROOT_DIR)/src
+
+CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
+FLAGS_CPU = -O3 -fopenmp -DIBDTRANSFORM -DCYCLO
+
+OBJS_CPU = main.o transform_i32.o transform_sse2.o transform_sse4.o transform_avx.o transform_fma.o transform_512.o
+DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
+DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s.h $(SRC_DIR)/f64vector.h $(SRC_DIR)/simd128d.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPUi32 = $(SRC_DIR)/transformCPUi32.h $(DEPS_COMMON)
+
+EXEC_CPU = $(BIN_DIR)/cyclo2
+
+.PHONY: all clean_obj rebuild
+
+all: $(EXEC_CPU)
+
+clean_obj:
+	$(RM) $(OBJS_CPU)
+
+rebuild: clean_obj all
+
+main.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
+
+transform_sse2.o: $(SRC_DIR)/transform_sse2.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mtune=core2 -c $< -o $@
+
+transform_sse4.o: $(SRC_DIR)/transform_sse4.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -msse4.1 -mtune=westmere -c $< -o $@
+
+transform_avx.o: $(SRC_DIR)/transform_avx.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mtune=skylake -c $< -o $@
+
+transform_fma.o: $(SRC_DIR)/transform_fma.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx -mfma -mtune=skylake -c $< -o $@
+
+transform_512.o: $(SRC_DIR)/transform_512.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx512f -mtune=skylake-avx512 -c $< -o $@
+
+transform_i32.o: $(SRC_DIR)/transform_i32.cpp $(DEPS_TRANSFORM_CPUi32)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -mavx2 -c $< -o $@
+
+$(EXEC_CPU): $(OBJS_CPU)
+	$(CC) $(FLAGS_CPU) -static $^ -lgmp -o $@

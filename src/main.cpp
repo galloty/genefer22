@@ -164,7 +164,7 @@ private:
 #else
 		ss << "  -t <n> or --nthreads <n>    set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
 #if !defined(__aarch64__)
-		ss << "  -x <implementation>         set a specific implementation (i32, sse2, sse4, avx, fma, 512)" << std::endl;
+		ss << "  -x <implementation>         set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
 #endif
 		ss << "  -f <filename>               main filename (without extension) of input and output files" << std::endl;

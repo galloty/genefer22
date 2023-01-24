@@ -1,3 +1,11 @@
+genefer 22.12.2 => genefer 23.01.0
+
+New Features
+ - new CPU transform for n = 17. The CPU limit is b_max > 1G.
+ - cyclo can be generated: test numbers of the form Phi_6(b^{2^n})
+
+------------------------------------
+
 genefer22 22.11.4 => genefer 22.12.2
 
 Caveats

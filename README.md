@@ -20,7 +20,7 @@ On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M
 
 ## Build
 
-Release 22.12.2 is the current PrimeGrid applications.  
+Release 22.12.2 & 23.01.0 are currently PrimeGrid applications.  
 
 Binaries are generated using:  
  - genefer: Ubuntu 22.04 amd64, gcc 11.3  

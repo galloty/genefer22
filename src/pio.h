@@ -40,41 +40,38 @@ private:
 	bool _isBoinc = false;
 
 private:
-	// print: console: cout, boinc: stderr
+	// print: console: stdout, boinc: stderr
 	void _print(const std::string & str) const
 	{
-		if (_isBoinc) { std::fprintf(stderr, "%s", str.c_str()); std::fflush(stderr); }
+		if (_isBoinc) { std::cerr << str << std::flush; }
 		else { std::cout << str; }
 	}
 
 private:
-	// display: console: cout, boinc: -
+	// display: console: stdout, boinc: -
 	void _display(const std::string & str) const
 	{
 		if (!_isBoinc) { std::cout << str << std::flush; }
 	}
 
 private:
-	// error: normal: cerr, boinc: stderr
+	// error: normal: stderr, boinc: stderr
 	void _error(const std::string & str, const bool fatal) const
 	{
-		std::ostringstream ss;
-		if (fatal) ss << std::endl;
-		ss << "Error: " << str << "." << std::endl;
-		if (_isBoinc)
+		if (fatal) std::cerr << std::endl;
+		std::cerr << "Error: " << str << "." << std::endl << std::flush;
+		if (fatal)
 		{
-			std::fprintf(stderr, "%s", ss.str().c_str()); std::fflush(stderr);
-			if (fatal)
+			if (_isBoinc)
 			{
 				// delay five minutes before reporting to the host in order to slow down the error rate.
 				std::this_thread::sleep_for(std::chrono::minutes(5));
 				boinc_finish(EXIT_FAILURE);
 			}
-		}
-		else
-		{
-			std::cerr << ss.str().c_str();
-			if (fatal) exit(EXIT_FAILURE);
+			else
+			{
+				exit(EXIT_FAILURE);
+			}
 		}
 	}
 

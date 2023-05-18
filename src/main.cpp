@@ -99,7 +99,7 @@ private:
 #endif
 
 #if defined(BOINC)
-	ssc << ", boinc-" << BOINC_VERSION_STRING;
+		ssc << ", boinc-" << BOINC_VERSION_STRING;
 #endif
 
 		const char * const name = 
@@ -152,12 +152,13 @@ private:
 #endif
 		std::ostringstream ss;
 		ss << "Usage: " << name << ext << " [options]  options may be specified in any order" << std::endl;
-		ss << "  -n <n>                      the exponent of the GFN (12 <= n <= 23)" << std::endl;
-		ss << "  -b <b>                      the base of the GFN (2 <= b <= 2G)" << std::endl;
+		ss << "  -n <n>                      exponent of the GFN (12 <= n <= 23)" << std::endl;
+		ss << "  -b <b>                      base of the GFN (2 <= b <= 2G)" << std::endl;
 		ss << "  -q                          quick test" << std::endl;
 		ss << "  -p                          full test: a proof is generated" << std::endl;
-		ss << "  -s                          convert the proof into a certificate and a 64-bit key (server job)" << std::endl;
-		ss << "  -c                          check the certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
+		ss << "  -s                          server job: convert the proof into a certificate and a 64-bit key" << std::endl;
+		ss << "  -c                          check certificate: a 64-bit key is generated (must be identical to server key)" << std::endl;
+		ss << "  -e                          perform a deterministic test (Brillhart, Lehmer, Selfridge: Theorem 1)" << std::endl;
 		ss << "  -h                          validate and bench your hardware" << std::endl;
 #if defined(GPU)
 		ss << "  -d <n> or --device <n>      set the device number (default 0)" << std::endl;
@@ -274,27 +275,32 @@ public:
 						}
 					}
 				}
-				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -e, -h)");
 				mode = genefer::EMode::Quick;
 			}
 			if (arg.substr(0, 2) == "-p")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-p used with an incompatible option (-q, -s, -c, -e, -h)");
 				mode = genefer::EMode::Proof;
 			}
 			if (arg.substr(0, 2) == "-s")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-s used with an incompatible option (-q, -p, -c, -e, -h)");
 				mode = genefer::EMode::Server;
 			}
 			if (arg.substr(0, 2) == "-c")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -h)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-c used with an incompatible option (-q, -p, -s, -e, -h)");
 				mode = genefer::EMode::Check;
+			}
+			if (arg.substr(0, 2) == "-e")
+			{
+				if (mode != genefer::EMode::None) throw std::runtime_error("-e used with an incompatible option (-q, -p, -s, -c, -h)");
+				mode = genefer::EMode::Prime;
 			}
 			if (arg.substr(0, 2) == "-h")
 			{
-				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -c)");
+				if (mode != genefer::EMode::None) throw std::runtime_error("-h used with an incompatible option (-q, -p, -s, -e, -c)");
 				mode = genefer::EMode::Bench;
 			}
 			if (arg.substr(0, 2) == "-f")
@@ -382,23 +388,29 @@ public:
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
 			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
-			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
+			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 799970660, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
 			// static constexpr uint32_t bp[count] = { 484, 22, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
-			static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
+			// static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Server, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
-			// return;
+
+			// if (g.check(1999992578, 10, genefer::EMode::Prime, device, nthreads, "i32", 0) != genefer::EReturn::Success) return;
+			// if (g.check(1999997802, 11, genefer::EMode::Prime, device, nthreads, "i32", 0) != genefer::EReturn::Success) return;
+			// if (g.check(1999999266, 12, genefer::EMode::Prime, device, nthreads, "i32", 0) != genefer::EReturn::Success) return;
+
 			for (size_t i = 0; i < count; ++i)
 			{
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Prime, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}*/
 
 			pio::print(usage());

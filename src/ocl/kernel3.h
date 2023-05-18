@@ -1117,6 +1117,32 @@ static const char * const src_ocl_kernel3 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
+"void mul1(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,\n" \
+"	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk, const int a)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	__global RNS * restrict const zi = &z[blk * idx];\n" \
+"	__global RNSe * restrict const zie = &ze[blk * idx];\n" \
+"\n" \
+"	prefetch(zi, (size_t)blk);\n" \
+"	prefetch(zie, (size_t)blk);\n" \
+"\n" \
+"	long f = 0;\n" \
+"\n" \
+"	sz_t j = 0;\n" \
+"	do\n" \
+"	{\n" \
+"		f += geti_P1(zi[j].s0) * (long)a;\n" \
+"		const int r = reduce64(&f, b, b_inv, b_s);\n" \
+"		zi[j] = toRNS(r); zie[j] = toRNSe(r);\n" \
+"		++j;\n" \
+"	} while (j != blk);\n" \
+"\n" \
+"	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
+"	c[i] = (i == 0) ? -f : f;\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
 "void normalize2(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const long * restrict const c, \n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)\n" \
 "{\n" \
@@ -1139,6 +1165,14 @@ static const char * const src_ocl_kernel3 = \
 "	const int r = (int)f;\n" \
 "	zi[blk - 1] = add(zi[blk - 1], toRNS(r));\n" \
 "	zie[blk - 1] = adde(zie[blk - 1], toRNSe(r));\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void set(__global RNS * restrict const z, __global RNSe * restrict const ze, const int a)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);\n" \
+"	ze[idx] = (idx == 0) ? toRNSe(a) : (RNSe)(0);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

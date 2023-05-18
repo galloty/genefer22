@@ -818,6 +818,30 @@ void normalize1(__global RNS * restrict const z, __global long * restrict const 
 }
 
 __kernel
+void mul1(__global RNS * restrict const z, __global long * restrict const c,
+	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk, const int a)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	__global RNS * restrict const zi = &z[blk * idx];
+
+	prefetch(zi, (size_t)blk);
+
+	long f = 0;
+
+	sz_t j = 0;
+	do
+	{
+		f += geti_P1(zi[j].s0) * (long)a;
+		const int r = reduce64(&f, b, b_inv, b_s);
+		zi[j] = toRNS(r);
+		++j;
+	} while (j != blk);
+
+	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
+	c[i] = (i == 0) ? -f : f;
+}
+
+__kernel
 void normalize2(__global RNS * restrict const z, __global const long * restrict const c, 
 	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)
 {
@@ -838,6 +862,13 @@ void normalize2(__global RNS * restrict const z, __global const long * restrict 
 
 	const int r = (int)f;
 	zi[blk - 1] = add(zi[blk - 1], toRNS(r));
+}
+
+__kernel
+void set(__global RNS * restrict const z, const int a)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);
 }
 
 __kernel

@@ -32,6 +32,7 @@ protected:
 public:
 	virtual void set(const int32_t a) = 0;					// r_0 = a
 	virtual void squareDup(const bool dup) = 0;				// r_0 = r_0^2 or 2*r_0^2
+	virtual void squareMul(const int32_t a) = 0;			// r_0 = a*r_0^2
 	virtual void initMultiplicand(const size_t src) = 0;	// r_m = transform(r_src)
 	virtual void mul() = 0;									// r_0 *= r_m
 

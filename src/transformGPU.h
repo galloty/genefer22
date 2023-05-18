@@ -144,10 +144,10 @@ private:
 	cl_mem _c = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
-	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
+	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mul1 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
-	cl_kernel _copy = nullptr, _copyp = nullptr;
+	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
 
@@ -285,6 +285,15 @@ private:
 		return kernel;
 	}
 
+	cl_kernel createSetKernel(const char * const kernelName)
+	{
+		cl_kernel kernel = _createKernel(kernelName);
+		cl_uint index = 0;
+		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
+		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		return kernel;
+	}
+
 	cl_kernel createCopyKernel(const char * const kernelName)
 	{
 		cl_kernel kernel = _createKernel(kernelName);
@@ -331,6 +340,7 @@ public:
 		const cl_uint b_inv = static_cast<cl_uint>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
 		_normalize1 = createNormalizeKernel("normalize1", static_cast<cl_uint>(b), b_inv, b_s);
 		_normalize2 = createNormalizeKernel("normalize2", static_cast<cl_uint>(b), b_inv, b_s);
+		_mul1 = createNormalizeKernel("mul1", static_cast<cl_uint>(b), b_inv, b_s);
 
 		_fwd32p = createTransformKernel("fwd32p", false);
 		_fwd64p = createTransformKernel("fwd64p", false);
@@ -348,6 +358,7 @@ public:
 		_mul1024 = createMulKernel("mul1024");
 		_mul2048 = createMulKernel("mul2048");
 
+		_set = createSetKernel("set");
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
@@ -367,12 +378,12 @@ public:
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024);
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
-		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
+		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mul1);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
 		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
 		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048);
-		_releaseKernel(_copy); _releaseKernel(_copyp);
+		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
 	}
 
 ///////////////////////////////
@@ -686,6 +697,14 @@ public:
 		}
 	}
 
+	void set(const int32_t a)
+	{
+		const cl_int ia = static_cast<cl_int>(a);
+		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
+		_setKernelArg(_set, index++, sizeof(cl_int), &ia);
+		_executeKernel(_set, _n);
+	}
+
 	void copy(const size_t dst, const size_t src)
 	{
 		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
@@ -700,8 +719,8 @@ public:
 	{
 		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
 		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
 		const cl_int ln = static_cast<cl_int>(_ln);
+		const size_t size = _n / blk;
 
 		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
 		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
@@ -713,13 +732,32 @@ public:
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
+public:
+	void baseModMul(const int a)
+	{
+		baseMod(false);
+
+		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
+		const size_t size = _n / blk;
+		const cl_int ia = static_cast<cl_int>(a);
+
+		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
+		_setKernelArg(_mul1, index1++, sizeof(cl_int), &blk);
+		_setKernelArg(_mul1, index1++, sizeof(cl_int), &ia);
+		_executeKernel(_mul1, size, std::min(size, _naLocalWS));
+
+		cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
+		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
+		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
+	}
+
 private:
 	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const RNS * const Z, const RNSe * const Ze)
 	{
 		const cl_uint cblk = static_cast<cl_uint>(blk);
 		const cl_int sblk = static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
 		const cl_int ln = static_cast<cl_int>(_ln);
+		const size_t size = _n / blk;
 
 		for (size_t i = 0; i != count; ++i)
 		{
@@ -1069,26 +1107,23 @@ public:
 
 	void set(const int32_t a) override
 	{
-		const size_t size = getSize();
-
-		RNS * const z = _z;
-		z[0] = RNS(a);
-		for (size_t i = 1; i < size; ++i) z[i] = RNS(0);
-		_pEngine->writeMemory_z(_z);
-
-		if (RNS_SIZE == 3)
-		{
-			RNSe * const ze = _ze;
-			ze[0] = RNSe(a);
-			for (size_t i = 1; i < size; ++i) ze[i] = RNSe(0);
-			_pEngine->writeMemory_ze(_ze);
-		}
+		_pEngine->set(a);
 	}
 
 	void squareDup(const bool dup) override
 	{
 		_pEngine->square();
 		_pEngine->baseMod(dup);
+	}
+
+	void squareMul(const int32_t a) override
+	{
+		if (a <= 2) squareDup(a == 2);
+		else
+		{
+			_pEngine->square();
+			_pEngine->baseModMul(a);
+		}
 	}
 
 	void initMultiplicand(const size_t src) override

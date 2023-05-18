@@ -262,6 +262,11 @@ public:
 	finline int64_4 operator+(const int64_4 & rhs) const { return int64_4(_n0123 + rhs._n0123); }
 	finline int64_4 operator-(const int64_4 & rhs) const { return int64_4(_n0123 - rhs._n0123); }
 
+	finline int64_4 operator*(const int64_4 & rhs) const
+	{
+		return int64_4(__v4di(_mm256_mul_epi32(__m256i(_n0123), __m256i(rhs._n0123))));
+	}
+
 	finline int64_4 & operator+=(const int64_4 & rhs) { *this = *this + rhs; return *this; }
 
 	finline void rotate() { _n0123 = __v4di{-_n0123[3], _n0123[0], _n0123[1], _n0123[2]}; }
@@ -765,6 +770,31 @@ private:
 		}
 	}
 
+	void baseModMul(const size_t n, RNS4 * const z, const int32_t a)
+	{
+		const uint32_t b = _b, b_inv = _b_inv;
+		const int b_s = _b_s;
+
+		int64_4 f64 = int64_4(0);
+
+		for (size_t k = 0; k < n; ++k)
+		{
+			f64 += int64_4(z[k].r1().getInt()) * int64_4(int64_t(a));
+			z[k] = reduce64(f64, b, b_inv, b_s);
+		}
+
+		while (!f64.isZero())
+		{
+			f64.rotate();	// a_0 = -a_n
+			for (size_t k = 0; k < n; ++k)
+			{
+				f64 += int64_4(z[k].r1().getInt());
+				z[k] = reduce64(f64, b, b_inv, b_s);
+				if (f64.isZero()) return;
+			}
+		}
+	}
+
 protected:
 	void getZi(int32_t * const zi) const override
 	{
@@ -834,6 +864,12 @@ public:
 		backward0(z, size_4);
 
 		baseMod(size_4, z, dup);
+	}
+
+	void squareMul(const int32_t a) override
+	{
+		squareDup(false);
+		baseModMul(getSize() / 4, _z, a);
 	}
 
 	void initMultiplicand(const size_t src) override

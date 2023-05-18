@@ -30,6 +30,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl.h"
 #endif
 #include "transform.h"
+#include "arith.h"
 
 inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
@@ -37,7 +38,7 @@ class genefer
 {
 public:
 	enum class EReturn { Success, Failed, Aborted }; 
-	enum class EMode { None, Quick, Proof, Server, Check, Bench, Limit }; 
+	enum class EMode { None, Quick, Proof, Server, Check, Prime, Bench, Limit }; 
 
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };
@@ -1029,6 +1030,85 @@ private:
 		return EReturn::Success;
 	}
 
+	EReturn prime(const uint32_t b, double & time, bool & isPrime)
+	{
+		transform * const pTransform = _transform;
+		gint & gi = *_gi;
+		const uint32_t n = _n;
+		uint64_t res64, old64;
+
+		watch chrono(0);
+
+		const std::vector<uint32_t> pfb = primeFactors(b);
+
+		mpz_t exponent; mpz_init(exponent);
+		mpz_ui_pow_ui(exponent, b, (static_cast<unsigned long int>(1) << n) - 1);
+
+		// Search for 'a' such that (a / (b^N + 1)) = -1.
+		// b^N + 1 = 1 (mod 4) then if a is odd we have (a / (b^N + 1)) = ((b^N + 1) / a)
+		uint32_t a2 = 3;
+		while (kronecker((powmod(b % a2, static_cast<uint32_t>(1) << n, a2) + 1) % a2, a2) != -1) a2 += 2;
+
+		// J. Brillhart, D. H. Lehmer and J. L. Selfridge, "New primality criteria and factorizations of 2^m +/- 1", Math. Comp., 29 (1975) 620-647.
+		// Theorem 1.
+		bool isComposite = false;
+		std::vector<bool> cond(pfb.size(), false);
+		for (uint32_t k = 1; true; ++k)
+		{
+			if (k == a2) continue;	// a2 is evaluated first for k = 1
+			if (k > 1)	// no square
+			{
+				const uint32_t sk = uint32_t(std::lrint(std::sqrt(k)));
+				if (k == sk * sk) continue;
+			}
+			const uint32_t a = (k == 1) ? a2 : k;
+
+			// a^{(N - 1)/b}
+			pTransform->set(1);
+			const int i_start = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1);
+			for (int i = i_start; i >= 0; --i)
+			{
+				if (_quit) return EReturn::Aborted;
+				pTransform->squareMul((mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0) ? int32_t(a) : 1);
+			}
+			pTransform->copy(2, 0);
+
+			for (size_t i = 0; i < pfb.size(); ++i)
+			{
+				if (!cond[i])
+				{
+					// a^{(N - 1)/p_i}
+					power(2, b / pfb[i]);
+					_transform->getInt(gi);
+					if (!gi.isOne(res64, old64))
+					{
+						cond[i] = true;
+						std::ostringstream ss; ss << "p = " << pfb[i] << ": a = " << a << "." << std::endl;
+						pio::print(ss.str());
+					}
+					power(0, pfb[i]);
+					_transform->getInt(gi);
+					if (!gi.isOne(res64, old64))
+					{
+						isComposite = true;
+						std::ostringstream ss; ss << a << "^{N - 1} != 1." << std::endl;
+						pio::print(ss.str());
+						break;
+					}
+				}
+			}
+
+			if (isComposite) { isPrime = false; break; }
+			size_t count = 0;
+			for (const bool & c : cond) count += c ? 1 : 0;
+			if (count == cond.size()) { isPrime = true; break; }
+		}
+		mpz_clear(exponent);
+
+		time = chrono.getElapsedTime();
+		return EReturn::Success;
+	}
+
 	EReturn bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 #if defined(DTRANSFORM)
@@ -1183,6 +1263,7 @@ public:
 		else if (mode == EMode::Proof) num_regs = fast_checkpoints ? 3 + (size_t(1) << depth) : 3;
 		else if (mode == EMode::Server) num_regs = 4;
 		else if (mode == EMode::Check) num_regs = 4;
+		else if (mode == EMode::Prime) num_regs = 3;
 		else return EReturn::Failed;
 
 #if defined(GPU)
@@ -1236,6 +1317,28 @@ public:
 			{
 				pio::result(ss.str());
 				if (!_isBoinc) clearContext();
+			}
+		}
+		else if (mode == EMode::Prime)
+		{
+			double time = 0; bool isPrime = false;
+			success = prime(b, time, isPrime);
+			const double error = _transform->getError();
+			clearline();
+			std::ostringstream ss; ss << gfn(b, n);
+			if (success == EReturn::Success)
+			{
+				ss << " is " << (isPrime ? "prime" : "composite");
+				if (error != 0) ss << ", error = " << std::setprecision(4) << error;
+				ss << ", time = " << timer::formatTime(time) << ".";
+			}
+			else if (success == EReturn::Failed) ss << ": test failed!";
+			else ss << ": terminated.";
+			ss << std::endl; pio::print(ss.str());
+			if (success == EReturn::Success)
+			{
+				pio::result(ss.str());
+				clearContext();
 			}
 		}
 		else

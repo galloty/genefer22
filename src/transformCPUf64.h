@@ -600,12 +600,12 @@ private:
 		}
 	}
 
-	double pass2_0(const size_t thread_id, const bool dup)
+	double pass2_0(const size_t thread_id, const double g)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
-		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl, g = dup ? 2.0 : 1.0;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl;
 		const bool checkError = _checkError;
 
 		Vc err = Vc(0.0);
@@ -883,8 +883,14 @@ public:
 
 	void squareDup(const bool dup) override
 	{
+		squareMul(dup ? 2 : 1);
+	}
+
+	void squareMul(const int32_t a) override
+	{
 		const size_t num_threads = _num_threads;
 		double e[num_threads];
+		const double g = static_cast<double>(a);
 
 		if (num_threads > 1)
 		{
@@ -894,7 +900,7 @@ public:
 
 				pass1(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, dup);
+				e[thread_id] = pass2_0(thread_id, g);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -902,7 +908,7 @@ public:
 		else
 		{
 			pass1(0);
-			e[0] = pass2_0(0, dup);
+			e[0] = pass2_0(0, g);
 			pass2_1(0);
 		}
 
@@ -944,7 +950,7 @@ public:
 
 				pass1mul(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, false);
+				e[thread_id] = pass2_0(thread_id, 1.0);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
@@ -952,7 +958,7 @@ public:
 		else
 		{
 			pass1mul(0);
-			e[0] = pass2_0(0, false);
+			e[0] = pass2_0(0, 1.0);
 			pass2_1(0);
 		}
 

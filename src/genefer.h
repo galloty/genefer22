@@ -1037,12 +1037,25 @@ private:
 		const uint32_t n = _n;
 		uint64_t res64, old64;
 
-		watch chrono(0);
+		int ri = 0; double restoredTime = 0;
+		bool found = false;	// TODO readContext
+		if (!found)
+		{
+			int ri = 0; restoredTime = 0;
+			pTransform->set(1);
+		}
+		else
+		{
+			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
+			pio::print(ss.str());
+		}
 
-		const std::vector<uint32_t> pfb = primeFactors(b);
+		watch chrono(found ? restoredTime : 0);
 
 		mpz_t exponent; mpz_init(exponent);
 		mpz_ui_pow_ui(exponent, b, (static_cast<unsigned long int>(1) << n) - 1);
+
+		const std::vector<uint32_t> pfb = primeFactors(b);
 
 		// Search for 'a' such that (a / (b^N + 1)) = -1.
 		// b^N + 1 = 1 (mod 4) then if a is odd we have (a / (b^N + 1)) = ((b^N + 1) / a)
@@ -1065,16 +1078,34 @@ private:
 
 			// a^{(N - 1)/b}
 			pTransform->set(1);
-			const int i_start = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1);
+			const int i0 = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
+			initPrintProgress(i0, i_start);
+			int dcount = 100;
+
 			for (int i = i_start; i >= 0; --i)
 			{
-				if (_quit) return EReturn::Aborted;
+				if (_quit)
+				{
+					// TODO saveContext
+					return EReturn::Aborted;
+				}
+
+				if (i % dcount == 0)
+				{
+					chrono.read(); const double displayTime = chrono.getDisplayTime();
+					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+					// if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+				}
+
 				pTransform->squareMul((mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0) ? int32_t(a) : 1);
 			}
+
 			pTransform->copy(2, 0);
 
 			for (size_t i = 0; i < pfb.size(); ++i)
 			{
+				if (_quit) return EReturn::Aborted;
+
 				if (!cond[i])
 				{
 					// a^{(N - 1)/p_i}
@@ -1083,26 +1114,31 @@ private:
 					if (!gi.isOne(res64, old64))
 					{
 						cond[i] = true;
-						std::ostringstream ss; ss << "p = " << pfb[i] << ": a = " << a << "." << std::endl;
-						pio::print(ss.str());
+						std::ostringstream ss; ss << a << "^{(N - 1)/" << pfb[i] << "} != 1." << std::endl;
+						clearline(); pio::print(ss.str()); pio::result(ss.str());
 					}
+					// a^(N - 1)
 					power(0, pfb[i]);
 					_transform->getInt(gi);
 					if (!gi.isOne(res64, old64))
 					{
 						isComposite = true;
 						std::ostringstream ss; ss << a << "^{N - 1} != 1." << std::endl;
-						pio::print(ss.str());
+						clearline(); pio::print(ss.str()); pio::result(ss.str());
 						break;
 					}
 				}
 			}
 
 			if (isComposite) { isPrime = false; break; }
-			size_t count = 0;
-			for (const bool & c : cond) count += c ? 1 : 0;
+
+			std::ostringstream ss; ss << a << "^{N - 1} = 1." << std::endl;
+			clearline(); pio::print(ss.str()); pio::result(ss.str());
+
+			size_t count = 0; for (const bool & c : cond) count += c ? 1 : 0;
 			if (count == cond.size()) { isPrime = true; break; }
 		}
+
 		mpz_clear(exponent);
 
 		time = chrono.getElapsedTime();

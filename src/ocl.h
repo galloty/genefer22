@@ -538,6 +538,9 @@ public:
 protected:
 	void _readBuffer(cl_mem & mem, void * const ptr, const size_t size)
 	{
+		// Fill the buffer with random numbers to generate an error even if clEnqueueReadBuffer fails without error.
+		char * const cptr = static_cast<char *>(ptr);
+		for (size_t i = 0; i < size; ++i) cptr[i] = static_cast<char>(std::rand());
 		_sync();
 		oclFatal(clEnqueueReadBuffer(_queue, mem, CL_TRUE, 0, size, ptr, 0, nullptr, nullptr));
 	}

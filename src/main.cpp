@@ -117,7 +117,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << name << ext << " version 23.01.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 23.07.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -400,13 +400,13 @@ public:
 
 			for (size_t i = 0; i < count; ++i)
 			{
-				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Prime, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Prime, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 			}*/
 
 			pio::print(usage());

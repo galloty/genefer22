@@ -60,15 +60,67 @@ public:
 	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
 };
 
+// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
+
+// Montgomery form: if 0 <= n < p then r is n * 2^32 mod p
+template <cl_uint p>
+class MForm
+{
+private:
+	const cl_uint _q;
+	const cl_uint _r2;	// (2^32)^2 mod p
+
+private:
+	// p * p_inv = 1 (mod 2^32) (Newton's method)
+	static constexpr cl_uint invert()
+	{
+		cl_uint p_inv = 1, prev = 0;
+		while (p_inv != prev) { prev = p_inv; p_inv *= 2 - p * p_inv; }
+		return p_inv;
+	}
+
+	// The Montgomery REDC algorithm
+	constexpr cl_uint REDC(const cl_ulong t) const
+	{
+		const cl_uint m = cl_uint(t) * _q, t_hi = cl_uint(t >> 32);
+		const cl_uint mp = cl_uint((m * cl_ulong(p)) >> 32), r = t_hi - mp;
+		return (t_hi < mp) ? r + p : r;
+	}
+
+public:
+	MForm() : _q(invert()), _r2(cl_uint((((cl_ulong(1) << 32) % p) * ((cl_ulong(1) << 32) % p)) % p)) {}
+
+	constexpr cl_uint q() const { return _q; }
+	constexpr cl_uint r2() const { return _r2; }
+
+	// Conversion into Montgomery form
+	constexpr cl_uint toMonty(const cl_uint lhs) const
+	{
+		// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)
+		return REDC(lhs * cl_ulong(_r2));
+	}
+
+	// Conversion out of Montgomery form
+	constexpr cl_uint fromMonty(const cl_uint lhs) const
+	{
+		// n = REDC(n * 2^32, 1)
+		return REDC(lhs);
+	}
+};
+
 // #define P0_32	4253024257u		// 507 * 2^23 + 1
 #define P1_32	4194304001u		// 125 * 2^25 + 1
 #define P2_32	4076863489u		// 243 * 2^24 + 1
 #define P3_32	3942645761u		// 235 * 2^24 + 1
 
 // typedef Zp<P0_32, 5> Zp0_32;
-typedef Zp<P1_32, 3> Zp1_32;
-typedef Zp<P2_32, 7> Zp2_32;
-typedef Zp<P3_32, 3> Zp3_32;
+typedef Zp<P1_32, 3> Zp1;
+typedef Zp<P2_32, 7> Zp2;
+typedef Zp<P3_32, 3> Zp3;
+
+typedef MForm<P1_32> MForm1;
+typedef MForm<P2_32> MForm2;
+typedef MForm<P3_32> MForm3;
 
 template<class Zp1, class Zp2>
 class RNS_T
@@ -77,21 +129,35 @@ private:
 	cl_uint2 r;	// Zp1, Zp2
 
 private:
-	explicit RNS_T(const Zp1 & r1, const Zp2 & r2) { r.s[0] = r1.get(); r.s[1] = r2.get(); }
+	explicit RNS_T(const Zp1 & n1, const Zp2 & n2) { r.s[0] = n1.get(); r.s[1] = n2.get(); }
 
 public:
 	RNS_T() {}
 	explicit RNS_T(const int32_t i) { r.s[0] = Zp1(i).get(); r.s[1] = Zp2(i).get(); }
 
-	Zp1 r1() const { Zp1 r1; r1.set(r.s[0]); return r1; }
-	Zp2 r2() const { Zp2 r2; r2.set(r.s[1]); return r2; }
-	void set(const cl_uint r1, const cl_uint r2) { r.s[0] = r1; r.s[1] = r2; }
+	Zp1 r1() const { Zp1 n1; n1.set(r.s[0]); return n1; }
+	Zp2 r2() const { Zp2 n2; n2.set(r.s[1]); return n2; }
+	void set(const cl_uint n1, const cl_uint n2) { r.s[0] = n1; r.s[1] = n2; }
 
 	RNS_T operator-() const { return RNS_T(-r1(), -r2()); }
 
-	RNS_T operator*(const RNS_T & rhs) const { return RNS_T(r1() * rhs.r1(), r2() * rhs.r2()); }
-
 	RNS_T pow(const uint32_t e) const { return RNS_T(r1().pow(e), r2().pow(e)); }
+
+	// Conversion into Montgomery form
+	RNS_T toMonty() const
+	{
+		Zp1 n1; n1.set(MForm1().toMonty(r.s[0]));
+		Zp2 n2; n2.set(MForm2().toMonty(r.s[1]));
+		return RNS_T(n1, n2);
+	}
+
+	// Conversion out of Montgomery form
+	RNS_T fromMonty() const
+	{
+		Zp1 n1; n1.set(MForm1().fromMonty(r.s[0]));
+		Zp2 n2; n2.set(MForm2().fromMonty(r.s[1]));
+		return RNS_T(n1, n2);
+	}
 
 	static const RNS_T prRoot_n(const uint32_t n) { return RNS_T(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
 };
@@ -103,20 +169,34 @@ private:
 	cl_uint r;	// Zp3
 
 private:
-	explicit RNSe_T(const Zp3 & r3) { r = r3.get(); }
+	explicit RNSe_T(const Zp3 & n3) { r = n3.get(); }
 
 public:
 	RNSe_T() {}
 	explicit RNSe_T(const int32_t i) { r = Zp3(i).get(); }
 
-	Zp3 r3() const { Zp3 _r3; _r3.set(r); return _r3; }
-	void set(const cl_uint r3) { r = r3; }
+	Zp3 r3() const { Zp3 n3; n3.set(r); return n3; }
+	void set(const cl_uint n3) { r = n3; }
 
 	RNSe_T operator-() const { return RNSe_T(-r3()); }
 
 	RNSe_T operator*(const RNSe_T & rhs) const { return RNSe_T(r3() * rhs.r3()); }
 
 	RNSe_T pow(const uint32_t e) const { return RNSe_T(r3().pow(e)); }
+
+	// Conversion into Montgomery form
+	RNSe_T toMonty() const
+	{
+		Zp3 n3; n3.set(MForm3().toMonty(r));
+		return RNSe_T(n3);
+	}
+
+	// Conversion out of Montgomery form
+	RNSe_T fromMonty() const
+	{
+		Zp3 n3; n3.set(MForm3().fromMonty(r));
+		return RNSe_T(n3);
+	}
 
 	static const RNSe_T prRoot_n(const uint32_t n) { return RNSe_T(Zp3::prRoot_n(n)); }
 };
@@ -786,7 +866,7 @@ public:
 		for (size_t i = 0; i != n; ++i)
 		{
 			const int v = static_cast<int>(maxSqr * cos(static_cast<double>(i)));
-			Z[i] = RNS(v); if (RNS_SIZE == 3) Ze[i] = RNSe(v);
+			Z[i] = RNS(v).toMonty(); if (RNS_SIZE == 3) Ze[i] = RNSe(v).toMonty();
 		}
 
 		setProfiling(true);
@@ -894,8 +974,8 @@ public:
 template<size_t RNS_SIZE>
 class transformGPU : public transform
 {
-	using RNS = RNS_T<Zp1_32, Zp2_32>;
-	using RNSe = RNSe_T<Zp3_32>;
+	using RNS = RNS_T<Zp1, Zp2>;
+	using RNSe = RNSe_T<Zp3>;
 	using RNS_W = RNS;
 	using RNS_We = RNSe;
 
@@ -922,21 +1002,28 @@ public:
 
 		std::ostringstream src;
 
+		MForm1 mf1; MForm2 mf2;
 		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
 		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
+		src << "#define\tQ1\t" << mf1.q() << "u" << std::endl;
+		src << "#define\tQ2\t" << mf2.q() << "u" << std::endl;
+		src << "#define\tR1\t" << mf1.r2() << "u" << std::endl;
+		src << "#define\tR2\t" << mf2.r2() << "u" << std::endl;
 		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		Zp1_32 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
+		if (RNS_SIZE == 3) src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
+		Zp1 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
 		src << "#define\tInvP2_P1\t" << invP2modP1.get() << "u" << std::endl;
 		src << "#define\tP1P2\t" << P1_32 * static_cast<uint64_t>(P2_32) << "ul" << std::endl;
 
 		if (RNS_SIZE == 3)
 		{
+			MForm3 mf3;
 			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
-			src << "#define\tP3_INV\t" << static_cast<uint64_t>(-1) / P3_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-			Zp1_32 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
+			src << "#define\tQ3\t" << mf3.q() << "u" << std::endl;
+			src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
+			Zp1 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
 			src << "#define\tInvP3_P1\t" << invP3modP1.get() << "u" << std::endl;
-			Zp2_32 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
+			Zp2 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
 			src << "#define\tInvP3_P2\t" << invP3modP2.get() << "u" << std::endl;
 			src << "#define\tP2P3\t" << P2_32 * static_cast<uint64_t>(P3_32) << "ul" << std::endl;
 			const uint64_t P1P2 = P1_32 * static_cast<uint64_t>(P2_32);
@@ -980,7 +1067,7 @@ public:
 			{
 				const size_t e = bitRev(i, 2 * s) + 1;
 				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(e));
-				wr[s + i] = wrsi; wri[s + s - i - 1] = -wrsi;
+				wr[s + i] = wrsi.toMonty(); wri[s + s - i - 1] = RNS(-wrsi).toMonty();
 			}
 		}
 
@@ -989,7 +1076,7 @@ public:
 		for (size_t i = 0; i != size / 4; ++i)
 		{
 			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-			wr[size / 2 + i] = prRoot_m.pow(static_cast<uint32_t>(e));
+			wr[size / 2 + i] = prRoot_m.pow(static_cast<uint32_t>(e)).toMonty();
 		}
 
 		_pEngine->writeMemory_w(wr);
@@ -1007,7 +1094,7 @@ public:
 				{
 					const size_t e = bitRev(i, 2 * s) + 1;
 					const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(e));
-					wre[s + i] = wrsie; wrie[s + s - i - 1] = -wrsie;
+					wre[s + i] = wrsie.toMonty(); wrie[s + s - i - 1] = RNSe(-wrsie).toMonty();
 				}
 			}
 
@@ -1016,7 +1103,7 @@ public:
 			for (size_t i = 0; i != size / 4; ++i)
 			{
 				const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-				wre[size / 2 + i] = prRoot_me.pow(static_cast<uint32_t>(e));
+				wre[size / 2 + i] = prRoot_me.pow(static_cast<uint32_t>(e)).toMonty();
 			}
 
 			_pEngine->writeMemory_we(wre);
@@ -1048,7 +1135,7 @@ protected:
 		const size_t size = getSize();
 
 		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) zi[i] = z[i].r1().getInt();
+		for (size_t i = 0; i < size; ++i) zi[i] = z[i].fromMonty().r1().getInt();
 	}
 
 	void setZi(const int32_t * const zi) override
@@ -1056,13 +1143,13 @@ protected:
 		const size_t size = getSize();
 
 		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]);
+		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]).toMonty();
 		_pEngine->writeMemory_z(z);
 
 		if (RNS_SIZE == 3)
 		{
 			RNSe * const ze = _ze;
-			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]);
+			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]).toMonty();
 			_pEngine->writeMemory_ze(_ze);
 		}
 	}

@@ -33,6 +33,41 @@ static const char * const src_ocl_kernel2 = \
 "	return lhs - rhs + c;\n" \
 "}\n" \
 "\n" \
+"// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.\n" \
+"\n" \
+"// The Montgomery REDC algorithm\n" \
+"inline uint REDC(const ulong t, const uint p, const uint q)\n" \
+"{\n" \
+"	const uint mp = mul_hi((uint)(t) * q, p), t_hi = (uint)(t >> 32), r = t_hi - mp;\n" \
+"	return (t_hi < mp) ? r + p : r;\n" \
+"}\n" \
+"\n" \
+"inline uint REDCshort(const uint t, const uint p, const uint q)\n" \
+"{\n" \
+"	const uint mp = mul_hi(t * q, p);\n" \
+"	return (mp != 0) ? p - mp : 0;\n" \
+"}\n" \
+"\n" \
+"// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p\n" \
+"inline uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)\n" \
+"{\n" \
+"	return REDC(lhs * (ulong)(rhs), p, q);\n" \
+"}\n" \
+"\n" \
+"// Conversion into Montgomery form\n" \
+"inline uint _toMonty(const uint n, const uint r2, const uint p, const uint q)\n" \
+"{\n" \
+"	// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)\n" \
+"	return _mulMonty(n, r2, p, q);\n" \
+"}\n" \
+"\n" \
+"// Conversion out of Montgomery form\n" \
+"inline uint _fromMonty(const uint n, const uint p, const uint q)\n" \
+"{\n" \
+"	// n = REDC(n * 2^32, 1)\n" \
+"	return REDCshort(n, p, q);\n" \
+"}\n" \
+"\n" \
 "inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_inv)\n" \
 "{\n" \
 "	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.\n" \
@@ -42,20 +77,30 @@ static const char * const src_ocl_kernel2 = \
 "	return (r >= p) ? r - p : r;\n" \
 "}\n" \
 "\n" \
-"inline int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n; }\n" \
-"\n" \
 "inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }\n" \
 "inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }\n" \
 "\n" \
 "inline uint sub_P1(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P1); }\n" \
 "inline uint sub_P2(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P2); }\n" \
 "\n" \
-"inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }\n" \
-"inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }\n" \
+"// Montgomery form\n" \
+"inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P1, Q1); }\n" \
+"inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P2, Q2); }\n" \
+"\n" \
+"inline uint toMonty_P1(const uint lhs) { return _toMonty(lhs, R1, P1, Q1); }\n" \
+"inline uint toMonty_P2(const uint lhs) { return _toMonty(lhs, R2, P2, Q2); }\n" \
+"\n" \
+"inline uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }\n" \
+"inline uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }\n" \
+"\n" \
+"// Standard residue class\n" \
+"inline uint mul_P1std(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }\n" \
+"\n" \
+"inline int geti_P1(const uint r) { return (r > P1 / 2) ? (int)(r - P1) : (int)r; }\n" \
 "\n" \
 "inline long garner2(const uint r1, const uint r2)\n" \
 "{\n" \
-"	const uint u12 = mul_P1(sub_P1(r1, r2), InvP2_P1);\n" \
+"	const uint u12 = mul_P1std(sub_P1(r1, r2), InvP2_P1);\n" \
 "	const ulong n = r2 + u12 * (ulong)P2;\n" \
 "	return (n > P1P2 / 2) ? (long)(n - P1P2) : (long)n;\n" \
 "}\n" \
@@ -65,7 +110,11 @@ static const char * const src_ocl_kernel2 = \
 "typedef uint2	RNS;\n" \
 "typedef RNS		RNS_W;\n" \
 "\n" \
-"inline RNS toRNS(const int i) { return (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0)); }\n" \
+"inline RNS toRNS(const int i)\n" \
+"{\n" \
+"	const RNS r = (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0));\n" \
+"	return (RNS)(toMonty_P1(r.s0), toMonty_P2(r.s1));\n" \
+"}\n" \
 "\n" \
 "inline RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }\n" \
 "inline RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }\n" \
@@ -808,14 +857,15 @@ static const char * const src_ocl_kernel2 = \
 "	prefetch(zi, (size_t)blk);\n" \
 "\n" \
 "	const uint norm1 = P1 - ((P1 - 1) >> (ln - 1)), norm2 = P2 - ((P2 - 1) >> (ln - 1));\n" \
+"	const RNS norm = (RNS)(toMonty_P1(norm1), toMonty_P2(norm2));\n" \
 "\n" \
 "	long f = 0;\n" \
 "\n" \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		const RNS zj = zi[j];\n" \
-"		long l = garner2(mul_P1(zj.s0, norm1), mul_P2(zj.s1, norm2));\n" \
+"		const RNS zj = mul(zi[j], norm);\n" \
+"		long l = garner2(fromMonty_P1(zj.s0), fromMonty_P2(zj.s1));\n" \
 "		if (sblk < 0) l += l;\n" \
 "		f += l;\n" \
 "\n" \
@@ -843,7 +893,7 @@ static const char * const src_ocl_kernel2 = \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(zi[j].s0) * (long)a;\n" \
+"		f += geti_P1(fromMonty_P1(zi[j].s0)) * (long)a;\n" \
 "		const int r = reduce64(&f, b, b_inv, b_s);\n" \
 "		zi[j] = toRNS(r);\n" \
 "		++j;\n" \
@@ -865,7 +915,7 @@ static const char * const src_ocl_kernel2 = \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(zi[j].s0);\n" \
+"		f += geti_P1(fromMonty_P1(zi[j].s0));\n" \
 "		const int r = reduce64(&f, b, b_inv, b_s);\n" \
 "		zi[j] = toRNS(r);\n" \
 "		if (f == 0) return;\n" \

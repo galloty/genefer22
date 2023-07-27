@@ -21,6 +21,41 @@ inline uint _subMod(const uint lhs, const uint rhs, const uint p)
 	return lhs - rhs + c;
 }
 
+// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
+
+// The Montgomery REDC algorithm
+inline uint REDC(const ulong t, const uint p, const uint q)
+{
+	const uint mp = mul_hi((uint)(t) * q, p), t_hi = (uint)(t >> 32), r = t_hi - mp;
+	return (t_hi < mp) ? r + p : r;
+}
+
+inline uint REDCshort(const uint t, const uint p, const uint q)
+{
+	const uint mp = mul_hi(t * q, p);
+	return (mp != 0) ? p - mp : 0;
+}
+
+// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p
+inline uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)
+{
+	return REDC(lhs * (ulong)(rhs), p, q);
+}
+
+// Conversion into Montgomery form
+inline uint _toMonty(const uint n, const uint r2, const uint p, const uint q)
+{
+	// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)
+	return _mulMonty(n, r2, p, q);
+}
+
+// Conversion out of Montgomery form
+inline uint _fromMonty(const uint n, const uint p, const uint q)
+{
+	// n = REDC(n * 2^32, 1)
+	return REDCshort(n, p, q);
+}
+
 inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_inv)
 {
 	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
@@ -30,20 +65,30 @@ inline uint _mulMod(const uint lhs, const uint rhs, const uint p, const uint p_i
 	return (r >= p) ? r - p : r;
 }
 
-inline int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n; }
-
 inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }
 inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }
 
 inline uint sub_P1(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P1); }
 inline uint sub_P2(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P2); }
 
-inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }
-inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }
+// Montgomery form
+inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P1, Q1); }
+inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P2, Q2); }
+
+inline uint toMonty_P1(const uint lhs) { return _toMonty(lhs, R1, P1, Q1); }
+inline uint toMonty_P2(const uint lhs) { return _toMonty(lhs, R2, P2, Q2); }
+
+inline uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }
+inline uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }
+
+// Standard residue class
+inline uint mul_P1std(const uint lhs, const uint rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }
+
+inline int geti_P1(const uint r) { return (r > P1 / 2) ? (int)(r - P1) : (int)r; }
 
 inline long garner2(const uint r1, const uint r2)
 {
-	const uint u12 = mul_P1(sub_P1(r1, r2), InvP2_P1);
+	const uint u12 = mul_P1std(sub_P1(r1, r2), InvP2_P1);
 	const ulong n = r2 + u12 * (ulong)P2;
 	return (n > P1P2 / 2) ? (long)(n - P1P2) : (long)n;
 }
@@ -53,7 +98,11 @@ inline long garner2(const uint r1, const uint r2)
 typedef uint2	RNS;
 typedef RNS		RNS_W;
 
-inline RNS toRNS(const int i) { return (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0)); }
+inline RNS toRNS(const int i)
+{
+	const RNS r = (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0));
+	return (RNS)(toMonty_P1(r.s0), toMonty_P2(r.s1));
+}
 
 inline RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }
 inline RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }
@@ -796,14 +845,15 @@ void normalize1(__global RNS * restrict const z, __global long * restrict const 
 	prefetch(zi, (size_t)blk);
 
 	const uint norm1 = P1 - ((P1 - 1) >> (ln - 1)), norm2 = P2 - ((P2 - 1) >> (ln - 1));
+	const RNS norm = (RNS)(toMonty_P1(norm1), toMonty_P2(norm2));
 
 	long f = 0;
 
 	sz_t j = 0;
 	do
 	{
-		const RNS zj = zi[j];
-		long l = garner2(mul_P1(zj.s0, norm1), mul_P2(zj.s1, norm2));
+		const RNS zj = mul(zi[j], norm);
+		long l = garner2(fromMonty_P1(zj.s0), fromMonty_P2(zj.s1));
 		if (sblk < 0) l += l;
 		f += l;
 
@@ -831,7 +881,7 @@ void mul1(__global RNS * restrict const z, __global long * restrict const c,
 	sz_t j = 0;
 	do
 	{
-		f += geti_P1(zi[j].s0) * (long)a;
+		f += geti_P1(fromMonty_P1(zi[j].s0)) * (long)a;
 		const int r = reduce64(&f, b, b_inv, b_s);
 		zi[j] = toRNS(r);
 		++j;
@@ -853,7 +903,7 @@ void normalize2(__global RNS * restrict const z, __global const long * restrict 
 	sz_t j = 0;
 	do
 	{
-		f += geti_P1(zi[j].s0);
+		f += geti_P1(fromMonty_P1(zi[j].s0));
 		const int r = reduce64(&f, b, b_inv, b_s);
 		zi[j] = toRNS(r);
 		if (f == 0) return;

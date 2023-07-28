@@ -218,7 +218,7 @@ private:
 
 	static void clearline() { pio::display("                                                \r"); }
 
-	int _readContext(const std::string  & filename, const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
+	int _readContext(const std::string & filename, const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
 	{
 		file contextFile(filename);
 		if (!contextFile.exists()) return -1;
@@ -278,6 +278,96 @@ private:
 			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
 			const size_t num_reg = (where == 0) ? 2 : 3;
 			_transform->saveContext(contextFile, fast_checkpoints ? 0 : num_reg);
+			contextFile.write_crc32();
+		}
+
+		std::remove(oldCtxFile.c_str());
+
+		struct stat s;
+		if ((stat(ctxFile.c_str(), &s) == 0) && (std::rename(ctxFile.c_str(), oldCtxFile.c_str()) != 0))	// file exists and cannot rename it
+		{
+			pio::error("cannot save context");
+			return;
+		}
+
+		if (std::rename(newCtxFile.c_str(), ctxFile.c_str()) != 0)
+		{
+			pio::error("cannot save context");
+			return;
+		}
+	}
+
+	int _readContextPrime(const std::string & filename, uint32_t & k, int & i, double & elapsedTime, double & totalTime, std::vector<bool> & cond)
+	{
+		file contextFile(filename);
+		if (!contextFile.exists()) return -1;
+
+		int version = 0;
+		if (!contextFile.read(reinterpret_cast<char *>(&version), sizeof(version))) return -2;
+#if defined(GPU)
+		version = -version;
+#endif
+		if (version != 1) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&k), sizeof(k))) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&totalTime), sizeof(totalTime))) return -2;
+		int condSize; if (!contextFile.read(reinterpret_cast<char *>(&condSize), sizeof(condSize))) return -2;
+		for (size_t i = 0, size = static_cast<size_t>(condSize); i < size; ++i)
+		{
+			int ci; if (!contextFile.read(reinterpret_cast<char *>(&ci), sizeof(ci))) return -2;
+			cond[i] = (ci != 0);
+		}
+		if (!_transform->readContext(contextFile, 2)) return -2;
+		if (!contextFile.check_crc32()) return -2;
+		return 0;
+	}
+	
+	bool readContextPrime(uint32_t & k, int & i, double & elapsedTime, double & totalTime, std::vector<bool> & cond)
+	{
+		std::string ctxFile = contextFilename() + "p";
+		int error = _readContextPrime(ctxFile, k, i, elapsedTime, totalTime, cond);
+		if (error < -1)
+		{
+			std::ostringstream ss; ss << ctxFile << ": invalid context";
+			pio::error(ss.str());
+		}
+		ctxFile += ".old";
+		if (error < 0)
+		{
+			error = _readContextPrime(ctxFile, k, i, elapsedTime, totalTime, cond);
+			if (error < -1)
+			{
+				std::ostringstream ss; ss << ctxFile << ": invalid context";
+				pio::error(ss.str());
+			}
+		}
+		return (error == 0);
+	}
+	
+	void saveContextPrime(const uint32_t k, const int i, const double elapsedTime, const double totalTime, const std::vector<bool> & cond) const
+	{
+		const std::string ctxFile = contextFilename() + "p", oldCtxFile = ctxFile + ".old", newCtxFile = ctxFile + ".new";
+
+		{
+			file contextFile(newCtxFile, "wb", false);
+			int version = 1;
+#if defined(GPU)
+			version = -version;
+#endif
+			if (!contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&k), sizeof(k))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&totalTime), sizeof(totalTime))) return;
+			const int condSize = static_cast<int>(cond.size());
+			if (!contextFile.write(reinterpret_cast<const char *>(&condSize), sizeof(condSize))) return;
+			for (const bool c : cond)
+			{
+				const int ci = c ? 1 : 0;
+				if (!contextFile.write(reinterpret_cast<const char *>(&ci), sizeof(ci))) return;
+			}
+			_transform->saveContext(contextFile, 2);
 			contextFile.write_crc32();
 		}
 
@@ -1035,14 +1125,15 @@ private:
 		transform * const pTransform = _transform;
 		gint & gi = *_gi;
 		const uint32_t n = _n;
-		uint64_t res64, old64;
 
-		int ri = 0; double restoredTime = 0;
-		bool found = false;	// TODO readContext
+		const std::vector<uint32_t> pfb = primeFactors(b);
+		std::vector<bool> cond(pfb.size(), false);
+
+		uint32_t rk = 1; int ri = 0; double restoredTime = 0, totalTime = 0;
+		bool found = readContextPrime(rk, ri, restoredTime, totalTime, cond);
 		if (!found)
 		{
-			int ri = 0; restoredTime = 0;
-			pTransform->set(1);
+			rk = 1; ri = 0; restoredTime = 0; totalTime = 0;
 		}
 		else
 		{
@@ -1050,12 +1141,9 @@ private:
 			pio::print(ss.str());
 		}
 
-		watch chrono(found ? restoredTime : 0);
-
 		mpz_t exponent; mpz_init(exponent);
 		mpz_ui_pow_ui(exponent, b, (static_cast<unsigned long int>(1) << n) - 1);
-
-		const std::vector<uint32_t> pfb = primeFactors(b);
+		const int i0 = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1);
 
 		// Search for 'a' such that (a / (b^N + 1)) = -1.
 		// b^N + 1 = 1 (mod 4) then if a is odd we have (a / (b^N + 1)) = ((b^N + 1) / a)
@@ -1065,8 +1153,7 @@ private:
 		// J. Brillhart, D. H. Lehmer and J. L. Selfridge, "New primality criteria and factorizations of 2^m +/- 1", Math. Comp., 29 (1975) 620-647.
 		// Theorem 1.
 		bool isComposite = false;
-		std::vector<bool> cond(pfb.size(), false);
-		for (uint32_t k = 1; true; ++k)
+		for (uint32_t k = rk; true; ++k)
 		{
 			if (k == a2) continue;	// a2 is evaluated first for k = 1
 			if (k > 1)	// no square
@@ -1077,16 +1164,19 @@ private:
 			const uint32_t a = (k == 1) ? a2 : k;
 
 			// a^{(N - 1)/b}
-			pTransform->set(1);
-			const int i0 = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1), i_start = found ? ri : i0;
+			if (!found) pTransform->set(1);
+			watch chrono(found ? restoredTime : 0);
+			const int i_start = found ? ri : i0;
 			initPrintProgress(i0, i_start);
+			found = false;
 			int dcount = 100;
 
 			for (int i = i_start; i >= 0; --i)
 			{
 				if (_quit)
 				{
-					// TODO saveContext
+					saveContextPrime(k, i, chrono.getElapsedTime(), totalTime, cond);
+					mpz_clear(exponent);
 					return EReturn::Aborted;
 				}
 
@@ -1094,13 +1184,13 @@ private:
 				{
 					chrono.read(); const double displayTime = chrono.getDisplayTime();
 					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
-					// if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
+					if (chrono.getRecordTime() > 600) { saveContextPrime(k, i, chrono.getElapsedTime(), totalTime, cond); chrono.resetRecordTime(); }
 				}
 
 				pTransform->squareMul((mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0) ? int32_t(a) : 1);
 			}
 
-			pTransform->copy(2, 0);
+			pTransform->copy(1, 0);
 
 			for (size_t i = 0; i < pfb.size(); ++i)
 			{
@@ -1108,8 +1198,9 @@ private:
 
 				if (!cond[i])
 				{
+					uint64_t res64, old64;
 					// a^{(N - 1)/p_i}
-					power(2, b / pfb[i]);
+					power(1, b / pfb[i]);
 					_transform->getInt(gi);
 					if (!gi.isOne(res64, old64))
 					{
@@ -1130,6 +1221,8 @@ private:
 				}
 			}
 
+			totalTime += chrono.getElapsedTime();
+
 			if (isComposite) { isPrime = false; break; }
 
 			std::ostringstream ss; ss << a << "^{N - 1} = 1." << std::endl;
@@ -1141,7 +1234,7 @@ private:
 
 		mpz_clear(exponent);
 
-		time = chrono.getElapsedTime();
+		time = totalTime;
 		return EReturn::Success;
 	}
 

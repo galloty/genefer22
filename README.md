@@ -26,13 +26,11 @@ Binaries are generated using:
  - genefer: Ubuntu 22.04 amd64, gcc 11.3  
  - geneferg: Ubuntu 18.04 amd64, gcc 7.5  
  - genefer_x86, geneferg_x86: Lubuntu 18.04 i386, gcc 7.5  
- - genefer.exe, geneferg.exe, genefer_x86.exe, geneferg_x86.exe: Windows - MSYS2, gcc 12.2  
+ - genefer.exe, geneferg.exe, genefer_x86.exe, geneferg_x86.exe: Windows - MSYS2, gcc 13.1  
  - genefer_macIntel, geneferg_macIntel: MacOS 10.13, llvm/clang 15  
  - genefer_macARM, geneferg_macARM: MacOS, llvm/clang 15  
  - genefer_arm64: Ubuntu 22.04 arm64, gcc 11.2  
 
 ## TODO
 
- - add INT32 transform on GPU using Shoup's modular multiplication  
- - add FP64 transform on GPU (for ratio FP64 >= 1/4 INT32).  
- - add primality test  
+ - add FP64 transform on GPU (if FP64 >= 1/4 x INT32 Units).  

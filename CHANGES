@@ -1,7 +1,17 @@
+genefer 23.01.0 => genefer 23.07.0
+
+New Features
+ - a deterministic test is implemented [-e]
+
+Improvements
+ - GPU transforms are based on Montgomery modular multiplication
+
+------------------------------------
+
 genefer 22.12.2 => genefer 23.01.0
 
 New Features
- - new CPU transform for n = 17. The CPU limit is b_max > 1G.
+ - new CPU transform for n = 17. The CPU limit is b_max > 1G
  - cyclo can be generated: test numbers of the form Phi_6(b^{2^n})
 
 ------------------------------------
@@ -14,7 +24,7 @@ Caveats
 
 New Features
  - Gerbicz-Li error checking of the proof task (-c)
- - new CPU transform for n <= 16. The CPU limit is b_max = 2G.
+ - new CPU transform for n <= 16. The CPU limit is b_max = 2G
 
 Fixes
  - double close on file I/O error
@@ -24,4 +34,4 @@ Fixes
  - warning "implementation is not valid", was an error
 
 Improvements
-- success-failed-aborted logic is propagated, exit(0) were removed
+ - success-failed-aborted logic is propagated, exit(0) were removed

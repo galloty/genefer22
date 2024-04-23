@@ -117,7 +117,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << name << ext << " version 23.07.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 24.04.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -356,8 +356,10 @@ public:
 			const int err = boinc_get_opencl_ids(argc, argv, 0, &boinc_device_id, &boinc_platform_id);
 			if ((err != 0) || (boinc_device_id == 0) || (boinc_platform_id == 0))
 			{
-				std::ostringstream ss; ss << std::endl << "error: boinc_get_opencl_ids() failed err = " << err;
-				throw std::runtime_error(ss.str());
+				std::ostringstream ss; ss << "boinc_get_opencl_ids() failed, err = " << err;
+				pio::error(ss.str());
+				// Continue using default OpenCL device
+				boinc_device_id = boinc_platform_id = 0;
 			}
 		}
 #endif

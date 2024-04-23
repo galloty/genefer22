@@ -11,7 +11,7 @@ SRC_DIR = $(ROOT_DIR)/src
 OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = -L/usr/lib/x86_64-linux-gnu/ -lOpenCL
 
-# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.20/7.20.2.zip
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.24/7.24.3.zip
 # These packages are needed to build BOINC: m4 autoconf libtool openssl libssl-dev libcurl4-openssl-dev ocl-icd-opencl-dev
 # ./_autosetup
 # ./configure --disable-server --disable-client --disable-manager

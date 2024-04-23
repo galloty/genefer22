@@ -20,13 +20,13 @@ On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M
 
 ## Build
 
-Release 22.12.2 & 23.01.0 are currently PrimeGrid applications.  
+Release 22.12.2, 23.01.0 and 23.07.0 are currently PrimeGrid applications.  
 
 Binaries are generated using:  
  - genefer: Ubuntu 22.04 amd64, gcc 11.3  
  - geneferg: Ubuntu 18.04 amd64, gcc 7.5  
  - genefer_x86, geneferg_x86: Lubuntu 18.04 i386, gcc 7.5  
- - genefer.exe, geneferg.exe, genefer_x86.exe, geneferg_x86.exe: Windows - MSYS2, gcc 13.1  
+ - genefer.exe, geneferg.exe, genefer_x86.exe, geneferg_x86.exe: Windows - MSYS2, gcc 13.2  
  - genefer_macIntel, geneferg_macIntel: MacOS 10.13, llvm/clang 15  
  - genefer_macARM, geneferg_macARM: MacOS, llvm/clang 15  
  - genefer_arm64: Ubuntu 22.04 arm64, gcc 11.2  

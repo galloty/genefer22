@@ -150,9 +150,9 @@ inline int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n;
 
 inline int96 garner3(const uint r1, const uint r2, const uint r3)
 {
-	const uint u13 = mul_P1(sub_P1(r1, r3), toMonty_P1(InvP3_P1));
-	const uint u23 = mul_P2(sub_P2(r2, r3), toMonty_P2(InvP3_P2));
-	const uint u123 = mul_P1(sub_P1(u13, u23), toMonty_P1(InvP2_P1));
+	const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
+	const uint u23 = mul_P2(sub_P2(r2, r3), InvP3_P2);
+	const uint u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);
 	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (ulong)P3 + r3);
 	const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
 	const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
@@ -1108,7 +1108,7 @@ inline int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)
 
 __kernel
 void normalize1(__global RNS * restrict const z, __global RNSe * restrict const ze, __global long * restrict const c,
-	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)
+	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const unsigned int blk = abs(sblk);
@@ -1118,10 +1118,9 @@ void normalize1(__global RNS * restrict const z, __global RNSe * restrict const 
 	prefetch(zi, (size_t)blk);
 	prefetch(zie, (size_t)blk);
 
-	const uint norm1 = P1 - ((P1 - 1) >> (ln - 1)), norm2 = P2 - ((P2 - 1) >> (ln - 1)), norm3 = P3 - ((P3 - 1) >> (ln - 1));
 	// Not converted into Montgomery form such that output is converted out of Montgomery form
-	const RNS norm = (RNS)(norm1, norm2);
-	const RNSe norme = (RNSe)(norm3);
+	const RNS norm = (RNS)(NORM1, NORM2);
+	const RNSe norme = (RNSe)(NORM3);
 
 	int96 f = int96_set_si(0);
 

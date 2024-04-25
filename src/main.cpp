@@ -359,7 +359,7 @@ public:
 				std::ostringstream ss; ss << "boinc_get_opencl_ids() failed, err = " << err;
 				pio::error(ss.str());
 				// Continue using default OpenCL device
-				boinc_device_id = boinc_platform_id = 0;
+				boinc_device_id = 0; boinc_platform_id = 0;
 			}
 		}
 #endif

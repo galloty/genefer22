@@ -552,6 +552,8 @@ private:
 public:
 	void square()
 	{
+		//static bool first = true;
+		const bool first = false;
 		const splitter * const pSplit = _pSplit;
 
 		const size_t sIndex = _splitIndex;
@@ -565,48 +567,50 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				forward1024(lm);
+				forward1024(lm); if (first) std::cout << "forward1024 (" << lm << ") ";
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				forward256(lm);
+				forward256(lm); if (first) std::cout << "forward256 (" << lm << ") ";
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				forward64(lm);
+				forward64(lm); if (first) std::cout << "forward64 (" << lm << ") ";
 			}
 		}
 
 		// lm = split.GetPart(sIndex, s - 1);
-		if (lm == 11) square2048();
-		else if (lm == 10) square1024();
-		else if (lm == 9) square512();
-		else if (lm == 8) square256();
-		else if (lm == 7) square128();
-		else if (lm == 6) square64();
-		else if (lm == 5) square32();
+		if (lm == 11) { square2048(); if (first) std::cout << "square2048 "; }
+		else if (lm == 10) { square1024(); if (first) std::cout << "square1024 "; }
+		else if (lm == 9) { square512(); if (first) std::cout << "square512 "; }
+		else if (lm == 8) { square256(); if (first) std::cout << "square256 "; }
+		else if (lm == 7) { square128(); if (first) std::cout << "square128 "; }
+		else if (lm == 6) { square64(); if (first) std::cout << "square64 "; }
+		else if (lm == 5) { square32(); if (first) std::cout << "square32 "; }
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, s - 2 - i);
 			if (k == 10)
 			{
-				backward1024(lm);
+				backward1024(lm); if (first) std::cout << "backward1024 (" << lm << ") ";
 				lm += 10;
 			}
 			else if (k == 8)
 			{
-				backward256(lm);
+				backward256(lm); if (first) std::cout << "backward256 (" << lm << ") ";
 				lm += 8;
 			}
 			else // if (k == 6)
 			{
-				backward64(lm);
+				backward64(lm); if (first) std::cout << "backward64 (" << lm << ") ";
 				lm += 6;
 			}
 		}
+
+		// if (first) { first = false; std::cout << std::endl; }
 	}
 
 private:
@@ -799,16 +803,12 @@ public:
 	{
 		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
 		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
-		const cl_int ln = static_cast<cl_int>(_ln);
 		const size_t size = _n / blk;
 
-		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
-		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
-		_setKernelArg(_normalize1, index1++, sizeof(cl_int), &ln);
+		_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
 		_executeKernel(_normalize1, size, std::min(size, _naLocalWS));
 
-		cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
-		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
+		_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
@@ -836,7 +836,6 @@ private:
 	{
 		const cl_uint cblk = static_cast<cl_uint>(blk);
 		const cl_int sblk = static_cast<cl_int>(blk);
-		const cl_int ln = static_cast<cl_int>(_ln);
 		const size_t size = _n / blk;
 
 		for (size_t i = 0; i != count; ++i)
@@ -844,13 +843,10 @@ private:
 			writeMemory_z(Z);
 			if (RNS_SIZE == 3) writeMemory_ze(Ze);
 
-			cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
-			_setKernelArg(_normalize1, index1++, sizeof(cl_int), &sblk);
-			_setKernelArg(_normalize1, index1++, sizeof(cl_int), &ln);
+			_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
 			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
 
-			cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
-			_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &cblk);
+			_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &cblk);
 			_executeKernel(_normalize2, size, std::min(size, n3bLocalWS));
 		}
 	}
@@ -1009,11 +1005,10 @@ public:
 		src << "#define\tQ2\t" << mf2.q() << "u" << std::endl;
 		src << "#define\tR1\t" << mf1.r2() << "u" << std::endl;
 		src << "#define\tR2\t" << mf2.r2() << "u" << std::endl;
-		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		if (RNS_SIZE == 3) src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2_32 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
+		src << "#define\tNORM1\t" << (P1_32 - ((P1_32 - 1) >> (n - 1))) << "u" << std::endl;
+		src << "#define\tNORM2\t" << (P2_32 - ((P2_32 - 1) >> (n - 1))) << "u" << std::endl;
 		Zp1 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
-		src << "#define\tInvP2_P1\t" << invP2modP1.get() << "u" << std::endl;
-		src << "#define\tP1P2\t" << P1_32 * static_cast<uint64_t>(P2_32) << "ul" << std::endl;
+		src << "#define\tInvP2_P1\t" << mf1.toMonty(invP2modP1.get()) << "u" << std::endl;
 
 		if (RNS_SIZE == 3)
 		{
@@ -1021,11 +1016,11 @@ public:
 			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
 			src << "#define\tQ3\t" << mf3.q() << "u" << std::endl;
 			src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
+			src << "#define\tNORM3\t" << (P3_32 - ((P3_32 - 1) >> (n - 1))) << "u" << std::endl;
 			Zp1 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
-			src << "#define\tInvP3_P1\t" << invP3modP1.get() << "u" << std::endl;
+			src << "#define\tInvP3_P1\t" << mf1.toMonty(invP3modP1.get()) << "u" << std::endl;
 			Zp2 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
-			src << "#define\tInvP3_P2\t" << invP3modP2.get() << "u" << std::endl;
-			src << "#define\tP2P3\t" << P2_32 * static_cast<uint64_t>(P3_32) << "ul" << std::endl;
+			src << "#define\tInvP3_P2\t" << mf2.toMonty(invP3modP2.get()) << "u" << std::endl;
 			const uint64_t P1P2 = P1_32 * static_cast<uint64_t>(P2_32);
 			const uint64_t l123 = static_cast<uint32_t>(P1P2) * static_cast<uint64_t>(P3_32), h123 = (P1P2 >> 32) * P3_32 + (l123 >> 32);
 			const uint64_t P1P2P3l = (h123 << 32) | static_cast<uint32_t>(l123); const uint32_t P1P2P3h = static_cast<uint32_t>(h123 >> 32);

@@ -68,7 +68,7 @@ inline int geti_P1(const uint r) { return (r > P1 / 2) ? (int)(r - P1) : (int)r;
 
 inline long garner2(const uint r1, const uint r2)
 {
-	const uint u12 = mul_P1(sub_P1(r1, r2), toMonty_P1(InvP2_P1));
+	const uint u12 = mul_P1(sub_P1(r1, r2), InvP2_P1);
 	const ulong n = r2 + u12 * (ulong)P2;
 	return (n > P1P2 / 2) ? (long)(n - P1P2) : (long)n;
 }
@@ -816,7 +816,7 @@ inline int reduce64(long * f, const uint b, const uint b_inv, const int b_s)
 
 __kernel
 void normalize1(__global RNS * restrict const z, __global long * restrict const c,
-	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk, const int ln)
+	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const unsigned int blk = abs(sblk);
@@ -824,9 +824,8 @@ void normalize1(__global RNS * restrict const z, __global long * restrict const 
 
 	prefetch(zi, (size_t)blk);
 
-	const uint norm1 = P1 - ((P1 - 1) >> (ln - 1)), norm2 = P2 - ((P2 - 1) >> (ln - 1));
 	// Not converted into Montgomery form such that output is converted out of Montgomery form
-	const RNS norm = (RNS)(norm1, norm2);
+	const RNS norm = (RNS)(NORM1, NORM2);
 
 	long f = 0;
 

@@ -1103,6 +1103,7 @@ public:
 				const size_t e = bitRev(i, 2 * s) + 1;
 				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(e));
 				wr[s + i] = wrsi.toMonty(); wri[s + s - i - 1] = RNS(-wrsi).toMonty();
+				if (s == 1) wr[s + i] = wr[s + i].toMonty(); // toMonty is applied twice to convert input into Montgomery form
 			}
 		}
 
@@ -1130,6 +1131,7 @@ public:
 					const size_t e = bitRev(i, 2 * s) + 1;
 					const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(e));
 					wre[s + i] = wrsie.toMonty(); wrie[s + s - i - 1] = RNSe(-wrsie).toMonty();
+					if (s == 1) wre[s + i] = wre[s + i].toMonty();
 				}
 			}
 

@@ -212,14 +212,16 @@ inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, __local RN
 	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)
 {
+	__global const RNS * const z2mg = &z[2 * mg];
+	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
 	__global const RNS_W * restrict const w_j = &w[j];
 	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];
+	__global const RNSe * const z2mge = &ze[2 * mg];
+	const RNSe z0e = ze[0], z2e = z2mge[0], z1e = ze[mg], z3e = z2mge[mg];
 	__global const RNS_We * restrict const we_j = &we[j];
 	const RNS_We w1e = we_j[0], w2e = we_j[j], w3e = we_j[j + 1];
-	__global const RNS * const z2mg = &z[2 * mg];
-	const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);
-	__global const RNSe * const z2mge = &ze[2 * mg];
-	const RNSe u0e = ze[0], u2e = mulWe(z2mge[0], w1e), u1e = ze[mg], u3e = mulWe(z2mge[mg], w1e);
+	const RNS u0 = z0, u2 = mulW(z2, w1), u1 = z1, u3 = mulW(z3, w1);
+	const RNSe u0e = z0e, u2e = mulWe(z2e, w1e), u1e = z1e, u3e = mulWe(z3e, w1e);
 	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
 	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);
 	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);
@@ -228,20 +230,18 @@ inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, __local RN
 
 inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,
 	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,
-	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)
+	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
-	__global const RNS_W * restrict const w_j = &w[j];
-	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];
-	__global const RNS_We * restrict const we_j = &we[j];
-	const RNS_We w1e = we_j[0], w2e = we_j[j], w3e = we_j[j + 1];
 	__global const RNS * const z2mg = &z[2 * mg];
-	// const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);
-	const RNS u0 = toMonty(z[0]), u2 = mulW(toMonty(z2mg[0]), w1), u1 = toMonty(z[mg]), u3 = mulW(toMonty(z2mg[mg]), w1);
+	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
+	const RNS_W w1 = w[1], w2 = w[2], w3 = w[3];
 	__global const RNSe * const z2mge = &ze[2 * mg];
-	// const RNSe u0e = ze[0], u2e = mulWe(z2mge[0], w1e), u1e = ze[mg], u3e = mulWe(z2mge[mg], w1e);
-	const RNSe u0e = toMontye(ze[0]), u2e = mulWe(toMontye(z2mge[0]), w1e), u1e = toMontye(ze[mg]), u3e = mulWe(toMontye(z2mge[mg]), w1e);
-	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
-	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);
+	const RNSe z0e = ze[0], z2e = z2mge[0], z1e = ze[mg], z3e = z2mge[mg];
+	const RNS_We w1e = we[1], w2e = we[2], w3e = we[3];
+	const RNS u0 = toMonty(z0), u2 = mulW(z2, w1), u1 = toMonty(z1), u3 = mulW(z3, w1);
+	const RNSe u0e = toMontye(z0e), u2e = mulWe(z2e, w1e), u1e = toMontye(z1e), u3e = mulWe(z3e, w1e);
+	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w[2]), v3 = mulW(sub(u1, u3), w[3]);
+	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), we[2]), v3e = mulWe(sube(u1e, u3e), we[3]);
 	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);
 	Ze[0 * ml] = adde(v0e, v1e); Ze[1 * ml] = sube(v0e, v1e); Ze[2 * ml] = adde(v2e, v3e); Ze[3 * ml] = sube(v2e, v3e);
 }
@@ -285,14 +285,14 @@ inline void backward_4i(const sz_t ml, __local RNS * restrict const Z, __local R
 	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,
 	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)
 {
-	__global const RNS_W * restrict const wi_j = &wi[j];
-	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];
-	__global const RNS_We * restrict const wie_j = &wie[j];
-	const RNS_We wi1e = wie_j[0], wi2e = wie_j[j], wi3e = wie_j[j + 1];
 	__global const RNS * const z2mg = &z[2 * mg];
 	const RNS u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];
+	__global const RNS_W * restrict const wi_j = &wi[j];
+	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];
 	__global const RNSe * const z2mge = &ze[2 * mg];
 	const RNSe u0e = ze[0], u1e = ze[mg], u2e = z2mge[0], u3e = z2mge[mg];
+	__global const RNS_We * restrict const wie_j = &wie[j];
+	const RNS_We wi1e = wie_j[0], wi2e = wie_j[j], wi3e = wie_j[j + 1];
 	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);
 	const RNSe v0e = adde(u0e, u1e), v1e = mulWe(sube(u0e, u1e), wi2e), v2e = adde(u2e, u3e), v3e = mulWe(sube(u2e, u3e), wi3e);
 	Z[0 * ml] = add(v0, v2); Z[2 * ml] = mulW(sub(v0, v2), wi1); Z[1 * ml] = add(v1, v3); Z[3 * ml] = mulW(sub(v1, v3), wi1);
@@ -457,7 +457,7 @@ inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const 
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_FORWARD(); \
 	\
-	forward_4i_0(B_N * CHUNK_N, &Z[i], &Ze[i], B_N << lm, zi, zie, w, we, sj / B_N);
+	forward_4i_0(B_N * CHUNK_N, &Z[i], &Ze[i], B_N << lm, zi, zie, w, we);
 
 #define FORWARD_O(CHUNK_N) \
 	forward_4o((sz_t)1 << lm, zo, zoe, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &Zie[CHUNK_N * 4 * threadIdx], w, we, sj / 1);

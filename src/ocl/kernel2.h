@@ -116,21 +116,21 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w, const sz_t j)\n" \
 "{\n" \
+"	__global const RNS * const z2mg = &z[2 * mg];\n" \
+"	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];\n" \
 "	__global const RNS_W * restrict const w_j = &w[j];\n" \
 "	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
-"	__global const RNS * const z2mg = &z[2 * mg];\n" \
-"	const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);\n" \
+"	const RNS u0 = z0, u2 = mulW(z2, w1), u1 = z1, u3 = mulW(z3, w1);\n" \
 "	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);\n" \
 "	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w, const sz_t j)\n" \
+"inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w)\n" \
 "{\n" \
-"	__global const RNS_W * restrict const w_j = &w[j];\n" \
-"	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
-"	// const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);\n" \
-"	const RNS u0 = toMonty(z[0]), u2 = mulW(toMonty(z2mg[0]), w1), u1 = toMonty(z[mg]), u3 = mulW(toMonty(z2mg[mg]), w1);\n" \
+"	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];\n" \
+"	const RNS_W w1 = w[1], w2 = w[2], w3 = w[3];\n" \
+"	const RNS u0 = toMonty(z0), u2 = mulW(z2, w1), u1 = toMonty(z1), u3 = mulW(z3, w1);\n" \
 "	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);\n" \
 "	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);\n" \
 "}\n" \
@@ -158,10 +158,10 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "inline void backward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const wi,const sz_t j)\n" \
 "{\n" \
-"	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
-"	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
 "	const RNS u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];\n" \
+"	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
+"	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];\n" \
 "	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);\n" \
 "	Z[0 * ml] = add(v0, v2); Z[2 * ml] = mulW(sub(v0, v2), wi1); Z[1 * ml] = add(v1, v3); Z[3 * ml] = mulW(sub(v1, v3), wi1);\n" \
 "}\n" \
@@ -273,7 +273,7 @@ static const char * const src_ocl_kernel2 = \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
 "	DECLARE_VAR_FORWARD(); \\\n" \
 "	\\\n" \
-"	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);\n" \
+"	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w);\n" \
 "\n" \
 "#define FORWARD_O(CHUNK_N) \\\n" \
 "	forward_4o((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);\n" \

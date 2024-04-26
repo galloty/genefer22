@@ -104,21 +104,21 @@ inline void forward_4(const sz_t m, __local RNS * restrict const Z, __global con
 
 inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w, const sz_t j)
 {
+	__global const RNS * const z2mg = &z[2 * mg];
+	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
 	__global const RNS_W * restrict const w_j = &w[j];
 	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];
-	__global const RNS * const z2mg = &z[2 * mg];
-	const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);
+	const RNS u0 = z0, u2 = mulW(z2, w1), u1 = z1, u3 = mulW(z3, w1);
 	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
 	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);
 }
 
-inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w, const sz_t j)
+inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w)
 {
-	__global const RNS_W * restrict const w_j = &w[j];
-	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];
 	__global const RNS * const z2mg = &z[2 * mg];
-	// const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);
-	const RNS u0 = toMonty(z[0]), u2 = mulW(toMonty(z2mg[0]), w1), u1 = toMonty(z[mg]), u3 = mulW(toMonty(z2mg[mg]), w1);
+	const RNS z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
+	const RNS_W w1 = w[1], w2 = w[2], w3 = w[3];
+	const RNS u0 = toMonty(z0), u2 = mulW(z2, w1), u1 = toMonty(z1), u3 = mulW(z3, w1);
 	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);
 	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);
 }
@@ -146,10 +146,10 @@ inline void backward_4(const sz_t m, __local RNS * restrict const Z, __global co
 
 inline void backward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const wi,const sz_t j)
 {
-	__global const RNS_W * restrict const wi_j = &wi[j];
-	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];
 	__global const RNS * const z2mg = &z[2 * mg];
 	const RNS u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];
+	__global const RNS_W * restrict const wi_j = &wi[j];
+	const RNS_W wi1 = wi_j[0], wi2 = wi_j[j], wi3 = wi_j[j + 1];
 	const RNS v0 = add(u0, u1), v1 = mulW(sub(u0, u1), wi2), v2 = add(u2, u3), v3 = mulW(sub(u2, u3), wi3);
 	Z[0 * ml] = add(v0, v2); Z[2 * ml] = mulW(sub(v0, v2), wi1); Z[1 * ml] = add(v1, v3); Z[3 * ml] = mulW(sub(v1, v3), wi1);
 }
@@ -261,7 +261,7 @@ inline void mul_4(__local RNS * restrict const Z, const sz_t mg, __global const 
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_FORWARD(); \
 	\
-	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);
+	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w);
 
 #define FORWARD_O(CHUNK_N) \
 	forward_4o((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);

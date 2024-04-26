@@ -53,12 +53,12 @@ static const char * const src_ocl_kernel2 = \
 "}\n" \
 "\n" \
 "// Conversion out of Montgomery form\n" \
-"inline uint _fromMonty(const uint n, const uint p, const uint q)\n" \
-"{\n" \
-"	// REDC(n * 2^32, 1)\n" \
-"	const uint mp = mul_hi(n * q, p);\n" \
-"	return (mp != 0) ? p - mp : 0;\n" \
-"}\n" \
+"// inline uint _fromMonty(const uint n, const uint p, const uint q)\n" \
+"// {\n" \
+"// 	// REDC(n * 2^32, 1)\n" \
+"// 	const uint mp = mul_hi(n * q, p);\n" \
+"// 	return (mp != 0) ? p - mp : 0;\n" \
+"// }\n" \
 "\n" \
 "inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }\n" \
 "inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }\n" \
@@ -73,8 +73,8 @@ static const char * const src_ocl_kernel2 = \
 "inline uint toMonty_P1(const uint lhs) { return _toMonty(lhs, R1, P1, Q1); }\n" \
 "inline uint toMonty_P2(const uint lhs) { return _toMonty(lhs, R2, P2, Q2); }\n" \
 "\n" \
-"inline uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }\n" \
-"inline uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }\n" \
+"// inline uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }\n" \
+"// inline uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }\n" \
 "\n" \
 "inline int geti_P1(const uint r) { return (r > P1 / 2) ? (int)(r - P1) : (int)r; }\n" \
 "\n" \
@@ -90,11 +90,7 @@ static const char * const src_ocl_kernel2 = \
 "typedef uint2	RNS;\n" \
 "typedef RNS		RNS_W;\n" \
 "\n" \
-"inline RNS toRNS(const int i)\n" \
-"{\n" \
-"	const RNS r = (RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0));\n" \
-"	return (RNS)(toMonty_P1(r.s0), toMonty_P2(r.s1));\n" \
-"}\n" \
+"inline RNS toRNS(const int i) { return ((RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0))); }\n" \
 "\n" \
 "inline RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }\n" \
 "inline RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }\n" \
@@ -103,6 +99,8 @@ static const char * const src_ocl_kernel2 = \
 "inline RNS sqr(const RNS lhs) { return mul(lhs, lhs); }\n" \
 "\n" \
 "inline RNS mulW(const RNS lhs, const RNS_W w) { return mul(lhs, w); }\n" \
+"\n" \
+"inline RNS toMonty(const RNS lhs) { return (RNS)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }\n" \
 "\n" \
 "// --- transform/inline ---\n" \
 "\n" \
@@ -122,6 +120,17 @@ static const char * const src_ocl_kernel2 = \
 "	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
 "	const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);\n" \
+"	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);\n" \
+"	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);\n" \
+"}\n" \
+"\n" \
+"inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z, __global const RNS_W * restrict const w, const sz_t j)\n" \
+"{\n" \
+"	__global const RNS_W * restrict const w_j = &w[j];\n" \
+"	const RNS_W w1 = w_j[0], w2 = w_j[j], w3 = w_j[j + 1];\n" \
+"	__global const RNS * const z2mg = &z[2 * mg];\n" \
+"	// const RNS u0 = z[0], u2 = mulW(z2mg[0], w1), u1 = z[mg], u3 = mulW(z2mg[mg], w1);\n" \
+"	const RNS u0 = toMonty(z[0]), u2 = mulW(toMonty(z2mg[0]), w1), u1 = toMonty(z[mg]), u3 = mulW(toMonty(z2mg[mg]), w1);\n" \
 "	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);\n" \
 "	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);\n" \
 "}\n" \
@@ -260,6 +269,12 @@ static const char * const src_ocl_kernel2 = \
 "	\\\n" \
 "	forward_4i(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);\n" \
 "\n" \
+"#define FORWARD_I_0(B_N, CHUNK_N) \\\n" \
+"	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
+"	DECLARE_VAR_FORWARD(); \\\n" \
+"	\\\n" \
+"	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);\n" \
+"\n" \
 "#define FORWARD_O(CHUNK_N) \\\n" \
 "	forward_4o((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
@@ -298,6 +313,19 @@ static const char * const src_ocl_kernel2 = \
 "	BACKWARD_O(B_64, CHUNK64);\n" \
 "}\n" \
 "\n" \
+"__kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"void forward64_0(__global RNS * restrict const z, __global const RNS_W * restrict const w)\n" \
+"{\n" \
+"	const int lm = LNSIZE - 6; const unsigned int s = 64 / 4;\n" \
+"\n" \
+"	FORWARD_I_0(B_64, CHUNK64);\n" \
+"\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);\n" \
+"\n" \
+"	FORWARD_O(CHUNK64);\n" \
+"}\n" \
+"\n" \
 "// -----------------\n" \
 "\n" \
 "#define B_256	(256 / 4)\n" \
@@ -326,6 +354,21 @@ static const char * const src_ocl_kernel2 = \
 "	backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sj / 16);\n" \
 "\n" \
 "	BACKWARD_O(B_256, CHUNK256);\n" \
+"}\n" \
+"\n" \
+"__kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"void forward256_0(__global RNS * restrict const z, __global const RNS_W * restrict const w)\n" \
+"{\n" \
+"	const int lm = LNSIZE - 8; const unsigned int s = 256 / 4;\n" \
+"\n" \
+"	FORWARD_I_0(B_256, CHUNK256);\n" \
+"\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);\n" \
+"\n" \
+"	FORWARD_O(CHUNK256);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -360,6 +403,23 @@ static const char * const src_ocl_kernel2 = \
 "	backward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sj / 64);\n" \
 "\n" \
 "	BACKWARD_O(B_1024, CHUNK1024);\n" \
+"}\n" \
+"\n" \
+"__kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"void forward1024_0(__global RNS * restrict const z, __global const RNS_W * restrict const w)\n" \
+"{\n" \
+"	const int lm = LNSIZE - 10; const unsigned int s = 1024 / 4;\n" \
+"\n" \
+"	FORWARD_I_0(B_1024, CHUNK1024);\n" \
+"\n" \
+"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );\n" \
+"	forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);\n" \
+"\n" \
+"	FORWARD_O(CHUNK1024);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -873,7 +933,7 @@ static const char * const src_ocl_kernel2 = \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(fromMonty_P1(zi[j].s0)) * (long)a;\n" \
+"		f += geti_P1(zi[j].s0) * (long)a;\n" \
 "		const int r = reduce64(&f, b, b_inv, b_s);\n" \
 "		zi[j] = toRNS(r);\n" \
 "		++j;\n" \
@@ -895,7 +955,7 @@ static const char * const src_ocl_kernel2 = \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(fromMonty_P1(zi[j].s0));\n" \
+"		f += geti_P1(zi[j].s0);\n" \
 "		const int r = reduce64(&f, b, b_inv, b_s);\n" \
 "		zi[j] = toRNS(r);\n" \
 "		if (f == 0) return;\n" \

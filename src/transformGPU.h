@@ -101,11 +101,11 @@ public:
 	}
 
 	// Conversion out of Montgomery form
-	constexpr cl_uint fromMonty(const cl_uint lhs) const
-	{
-		// n = REDC(n * 2^32, 1)
-		return REDC(lhs);
-	}
+	// constexpr cl_uint fromMonty(const cl_uint lhs) const
+	// {
+	// 	// n = REDC(n * 2^32, 1)
+	// 	return REDC(lhs);
+	// }
 };
 
 // #define P0_32	4253024257u		// 507 * 2^23 + 1
@@ -152,12 +152,12 @@ public:
 	}
 
 	// Conversion out of Montgomery form
-	RNS_T fromMonty() const
-	{
-		Zp1 n1; n1.set(MForm1().fromMonty(r.s[0]));
-		Zp2 n2; n2.set(MForm2().fromMonty(r.s[1]));
-		return RNS_T(n1, n2);
-	}
+	// RNS_T fromMonty() const
+	// {
+	// 	Zp1 n1; n1.set(MForm1().fromMonty(r.s[0]));
+	// 	Zp2 n2; n2.set(MForm2().fromMonty(r.s[1]));
+	// 	return RNS_T(n1, n2);
+	// }
 
 	static const RNS_T prRoot_n(const uint32_t n) { return RNS_T(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
 };
@@ -192,11 +192,11 @@ public:
 	}
 
 	// Conversion out of Montgomery form
-	RNSe_T fromMonty() const
-	{
-		Zp3 n3; n3.set(MForm3().fromMonty(r));
-		return RNSe_T(n3);
-	}
+	// RNSe_T fromMonty() const
+	// {
+	// 	Zp3 n3; n3.set(MForm3().fromMonty(r));
+	// 	return RNSe_T(n3);
+	// }
 
 	static const RNSe_T prRoot_n(const uint32_t n) { return RNSe_T(Zp3::prRoot_n(n)); }
 };
@@ -223,6 +223,7 @@ private:
 	cl_mem _ze = nullptr, _zpe = nullptr, _we = nullptr;
 	cl_mem _c = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
+	cl_kernel _forward64_0 = nullptr, _forward256_0 = nullptr, _forward1024_0 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mul1 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
@@ -230,6 +231,7 @@ private:
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
+	bool _first = true;
 
 public:
 	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
@@ -408,6 +410,10 @@ public:
 		_forward1024 = createTransformKernel("forward1024");
 		_backward1024 = createTransformKernel("backward1024");
 
+		_forward64_0 = createTransformKernel("forward64_0");
+		_forward256_0 = createTransformKernel("forward256_0");
+		_forward1024_0 = createTransformKernel("forward1024_0");
+
 		_square32 = createTransformKernel("square32");
 		_square64 = createTransformKernel("square64");
 		_square128 = createTransformKernel("square128");
@@ -456,6 +462,7 @@ public:
 		_releaseKernel(_forward64); _releaseKernel(_backward64);
 		_releaseKernel(_forward256); _releaseKernel(_backward256);
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024);
+		_releaseKernel(_forward64_0); _releaseKernel(_forward256_0); _releaseKernel(_forward1024_0);
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mul1);
@@ -498,6 +505,10 @@ private:
 	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024); }
 	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024); }
 
+	void forward64_0() { const size_t n_4 = _n / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64); }
+	void forward256_0() { const size_t n_4 = _n / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256); }
+	void forward1024_0() { const size_t n_4 = _n / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024); }
+	
 	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
 	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
 	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
@@ -549,11 +560,30 @@ private:
 		setTransformArgs(_forward1024);
 	}
 
+	void forward64p_0()
+	{
+		setTransformArgs(_forward64_0, false);
+		forward64_0();
+		setTransformArgs(_forward64_0);
+	}
+
+	void forward256p_0()
+	{
+		setTransformArgs(_forward256_0, false);
+		forward256_0();
+		setTransformArgs(_forward256_0);
+	}
+
+	void forward1024p_0()
+	{
+		setTransformArgs(_forward1024_0, false);
+		forward1024_0();
+		setTransformArgs(_forward1024_0);
+	}
+
 public:
 	void square()
 	{
-		//static bool first = true;
-		const bool first = false;
 		const splitter * const pSplit = _pSplit;
 
 		const size_t sIndex = _splitIndex;
@@ -567,50 +597,57 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				forward1024(lm); if (first) std::cout << "forward1024 (" << lm << ") ";
+				if (i == 0) forward1024_0(); else forward1024(lm);
+				if (_first) std::cout << "forward1024 (" << lm << ") ";
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				forward256(lm); if (first) std::cout << "forward256 (" << lm << ") ";
+				if (i == 0) forward256_0(); else forward256(lm);
+				if (_first) std::cout << "forward256 (" << lm << ") ";
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				forward64(lm); if (first) std::cout << "forward64 (" << lm << ") ";
+				if (i == 0) forward64_0(); else forward64(lm);
+				if (_first) std::cout << "forward64 (" << lm << ") ";
 			}
 		}
 
 		// lm = split.GetPart(sIndex, s - 1);
-		if (lm == 11) { square2048(); if (first) std::cout << "square2048 "; }
-		else if (lm == 10) { square1024(); if (first) std::cout << "square1024 "; }
-		else if (lm == 9) { square512(); if (first) std::cout << "square512 "; }
-		else if (lm == 8) { square256(); if (first) std::cout << "square256 "; }
-		else if (lm == 7) { square128(); if (first) std::cout << "square128 "; }
-		else if (lm == 6) { square64(); if (first) std::cout << "square64 "; }
-		else if (lm == 5) { square32(); if (first) std::cout << "square32 "; }
+		if (lm == 11) square2048();
+		else if (lm == 10) square1024();
+		else if (lm == 9) square512();
+		else if (lm == 8) square256();
+		else if (lm == 7) square128();
+		else if (lm == 6) square64();
+		else if (lm == 5) square32();
+		if (_first) std::cout << "square" << (1u << lm) << " ";
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, s - 2 - i);
 			if (k == 10)
 			{
-				backward1024(lm); if (first) std::cout << "backward1024 (" << lm << ") ";
+				backward1024(lm);
+				if (_first) std::cout << "backward1024 (" << lm << ") ";
 				lm += 10;
 			}
 			else if (k == 8)
 			{
-				backward256(lm); if (first) std::cout << "backward256 (" << lm << ") ";
+				backward256(lm);
+				if (_first) std::cout << "backward256 (" << lm << ") ";
 				lm += 8;
 			}
 			else // if (k == 6)
 			{
-				backward64(lm); if (first) std::cout << "backward64 (" << lm << ") ";
+				backward64(lm);
+				if (_first) std::cout << "backward64 (" << lm << ") ";
 				lm += 6;
 			}
 		}
 
-		// if (first) { first = false; std::cout << std::endl; }
+		if (_first) { _first = false; std::cout << std::endl; }
 	}
 
 private:
@@ -633,17 +670,17 @@ private:
 				if (k == 10)
 				{
 					lm -= 10;
-					forward1024(lm);
+					if (i == 0) forward1024_0(); else forward1024(lm);
 				}
 				else if (k == 8)
 				{
 					lm -= 8;
-					forward256(lm);
+					if (i == 0) forward256_0(); else forward256(lm);
 				}
 				else // if (k == 6)
 				{
 					lm -= 6;
-					forward64(lm);
+					if (i == 0) forward64_0(); else forward64(lm);
 				}
 			}
 
@@ -698,17 +735,17 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				forward1024p(lm);
+				if (i == 0) forward1024p_0(); else forward1024p(lm);
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				forward256p(lm);
+				if (i == 0) forward256p_0(); else forward256p(lm);
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				forward64p(lm);
+				if (i == 0) forward64p_0(); else forward64p(lm);
 			}
 		}
 
@@ -737,17 +774,17 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				forward1024(lm);
+				if (i == 0) forward1024_0(); else forward1024(lm);
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				forward256(lm);
+				if (i == 0) forward256_0(); else forward256(lm);
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				forward64(lm);
+				if (i == 0) forward64_0(); else forward64(lm);
 			}
 		}
 
@@ -862,7 +899,7 @@ public:
 		for (size_t i = 0; i != n; ++i)
 		{
 			const int v = static_cast<int>(maxSqr * cos(static_cast<double>(i)));
-			Z[i] = RNS(v).toMonty(); if (RNS_SIZE == 3) Ze[i] = RNSe(v).toMonty();
+			Z[i] = RNS(v); if (RNS_SIZE == 3) Ze[i] = RNSe(v);
 		}
 
 		setProfiling(true);
@@ -998,6 +1035,9 @@ public:
 
 		std::ostringstream src;
 
+		src << "#define\tLNSIZE\t" << n << std::endl;
+		src << "#define\tNSIZE\t" << (1u << n) << "u" << std::endl;
+
 		MForm1 mf1; MForm2 mf2;
 		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
 		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
@@ -1130,7 +1170,7 @@ protected:
 		const size_t size = getSize();
 
 		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) zi[i] = z[i].fromMonty().r1().getInt();
+		for (size_t i = 0; i < size; ++i) zi[i] = z[i].r1().getInt();
 	}
 
 	void setZi(const int32_t * const zi) override
@@ -1138,13 +1178,13 @@ protected:
 		const size_t size = getSize();
 
 		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]).toMonty();
+		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]);
 		_pEngine->writeMemory_z(z);
 
 		if (RNS_SIZE == 3)
 		{
 			RNSe * const ze = _ze;
-			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]).toMonty();
+			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]);
 			_pEngine->writeMemory_ze(_ze);
 		}
 	}

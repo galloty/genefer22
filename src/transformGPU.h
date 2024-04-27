@@ -231,7 +231,7 @@ private:
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
-	bool _first = true;
+	// bool _first = true;
 
 public:
 	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
@@ -598,19 +598,19 @@ public:
 			{
 				lm -= 10;
 				if (i == 0) forward1024_0(); else forward1024(lm);
-				if (_first) std::cout << "forward1024 (" << lm << ") ";
+				// if (_first) std::cout << "forward1024 (" << lm << ") ";
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
 				if (i == 0) forward256_0(); else forward256(lm);
-				if (_first) std::cout << "forward256 (" << lm << ") ";
+				// if (_first) std::cout << "forward256 (" << lm << ") ";
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
 				if (i == 0) forward64_0(); else forward64(lm);
-				if (_first) std::cout << "forward64 (" << lm << ") ";
+				// if (_first) std::cout << "forward64 (" << lm << ") ";
 			}
 		}
 
@@ -622,7 +622,7 @@ public:
 		else if (lm == 7) square128();
 		else if (lm == 6) square64();
 		else if (lm == 5) square32();
-		if (_first) std::cout << "square" << (1u << lm) << " ";
+		// if (_first) std::cout << "square" << (1u << lm) << " ";
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
@@ -630,24 +630,24 @@ public:
 			if (k == 10)
 			{
 				backward1024(lm);
-				if (_first) std::cout << "backward1024 (" << lm << ") ";
+				// if (_first) std::cout << "backward1024 (" << lm << ") ";
 				lm += 10;
 			}
 			else if (k == 8)
 			{
 				backward256(lm);
-				if (_first) std::cout << "backward256 (" << lm << ") ";
+				// if (_first) std::cout << "backward256 (" << lm << ") ";
 				lm += 8;
 			}
 			else // if (k == 6)
 			{
 				backward64(lm);
-				if (_first) std::cout << "backward64 (" << lm << ") ";
+				// if (_first) std::cout << "backward64 (" << lm << ") ";
 				lm += 6;
 			}
 		}
 
-		if (_first) { _first = false; std::cout << std::endl; }
+		// if (_first) { _first = false; std::cout << std::endl; }
 	}
 
 private:

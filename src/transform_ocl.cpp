@@ -26,12 +26,10 @@ transform * transform::create_ocl(const uint32_t b, const uint32_t n, const bool
 	if (b * static_cast<uint64_t>(b) >= (P1_32 * static_cast<uint64_t>(P2_32) / 2) / (size_t(1) << n))
 	{
 		pTransform = new transformGPU<3>(b, n, isBoinc, device, num_regs, boinc_platform_id, boinc_device_id, verbose);
-		std::cout << std::endl << "3 primes" << std::endl;
 	}
 	else
 	{
 		pTransform = new transformGPU<2>(b, n, isBoinc, device, num_regs, boinc_platform_id, boinc_device_id, verbose);
-		std::cout << std::endl << "2 primes" << std::endl;
 	}
 	return pTransform;
 }

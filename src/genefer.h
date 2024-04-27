@@ -1257,7 +1257,7 @@ private:
 		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
 #else
 		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 460000000, 400000000,
-		 									 250000000, 40000000, 9000000, 3500000, 1500000, 400000, 1200000, 500000 };
+											 250000000, 40000000, 9000000, 3500000, 1500000, 400000, 1200000, 500000 };
 #endif
 		const size_t num_regs = 3;
 
@@ -1265,10 +1265,10 @@ private:
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
-		createTransformGPU(b, n, device, num_regs, m == 15, false);
+		createTransformGPU(b, n, device, num_regs, m == 16, false);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 15, false);
+		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 16, false);
 #endif
 
 		transform * const pTransform = _transform;

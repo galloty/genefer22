@@ -1311,8 +1311,10 @@ private:
 			_transform->getCacheSize();
 #endif
 
+			const double error = _transform->getError();
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (size_t(1) << n);
 			ss << ": " << timer::formatTime(estimatedTime) << std::setprecision(3) << ", " << mulTime * 1e3 << " ms/bit, ";
+			if (error != 0) ss << " error = " << std::setprecision(4) << error << ", ";
 			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());

@@ -102,7 +102,11 @@ inline uint _subMod(const uint lhs, const uint rhs, const uint p)
 
 // Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
 
-// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p
+// Montgomery form of n is n * 2^32 mod p. q * p = 1 mod 2^32.
+
+// r = lhs * rhs * 2^-32 mod p
+// If lhs = x * 2^32 and rhs = y * 2^32 then r = (x * y) * 2^32 mod p.
+// If lhs = x and rhs = y * 2^32 then r = x * y mod p.
 inline uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)
 {
 	const uint t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);
@@ -120,7 +124,7 @@ inline uint _toMonty(const uint n, const uint r2, const uint p, const uint q)
 // Conversion out of Montgomery form
 // inline uint _fromMonty(const uint n, const uint p, const uint q)
 // {
-// 	// REDC(n * 2^32, 1)
+// 	// If n = x * 2^32 mod p then _mulMonty(n, 1, p, q) = x.
 // 	const uint mp = mul_hi(n * q, p);
 // 	return (mp != 0) ? p - mp : 0;
 // }
@@ -1128,6 +1132,7 @@ void mul2048(__global RNS * restrict const z, __global RNSe * restrict const ze,
 
 inline uint barrett(const ulong a, const uint b, const uint b_inv, const int b_s, uint * a_p)
 {
+	// Using notations of Modular SIMD arithmetic in Mathemagix, Joris van der Hoeven, Grégoire Lecerf, Guillaume Quintin, 2014, HAL.
 	// n = 31, alpha = 2^{n-2} = 2^29, s = r - 2, t = n + 1 = 32 => h = 1.
 	// b < 2^31, alpha = 2^29 => a < 2^29 b
 	// 2^{r-1} < b <= 2^r then a < 2^{r + 29} = 2^{s + 31} and (a >> s) < 2^31

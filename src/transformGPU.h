@@ -1079,6 +1079,8 @@ public:
 		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
 		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
 
+		src << "#define\tMAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
+
 		if (RNS_SIZE == 2)
 		{
 			if (!_pEngine->readOpenCL("ocl/kernel2.cl", "src/ocl/kernel2.h", "src_ocl_kernel2", src)) src << src_ocl_kernel2;

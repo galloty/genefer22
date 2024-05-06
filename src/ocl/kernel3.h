@@ -17,6 +17,12 @@ static const char * const src_ocl_kernel3 = \
 "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.\n" \
 "*/\n" \
 "\n" \
+"#if __OPENCL_VERSION__ >= 120\n" \
+"	#define INLINE	static inline\n" \
+"#else\n" \
+"	#define INLINE\n" \
+"#endif\n" \
+"\n" \
 "typedef uint	sz_t;\n" \
 "\n" \
 "#define P1P2	(P1 * (ulong)P2)\n" \
@@ -27,30 +33,30 @@ static const char * const src_ocl_kernel3 = \
 "typedef struct { ulong s0; uint s1; } uint96;\n" \
 "typedef struct { ulong s0; int s1; } int96;\n" \
 "\n" \
-"inline int96 int96_set_si(const long n) { int96 r; r.s0 = (ulong)n; r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
-"inline uint96 uint96_set(const ulong s0, const uint s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
+"INLINE int96 int96_set_si(const long n) { int96 r; r.s0 = (ulong)n; r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
+"INLINE uint96 uint96_set(const ulong s0, const uint s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
 "\n" \
-"inline int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int)x.s1; return r; }\n" \
-"inline uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint)x.s1; return r; }\n" \
+"INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int)x.s1; return r; }\n" \
+"INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint)x.s1; return r; }\n" \
 "\n" \
-"inline bool int96_is_neg(const int96 x) { return (x.s1 < 0); }\n" \
+"INLINE bool int96_is_neg(const int96 x) { return (x.s1 < 0); }\n" \
 "\n" \
-"inline bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }\n" \
+"INLINE bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }\n" \
 "\n" \
-"inline int96 int96_neg(const int96 x)\n" \
+"INLINE int96 int96_neg(const int96 x)\n" \
 "{\n" \
 "	const int c = (x.s0 != 0) ? 1 : 0;\n" \
 "	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - c;\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
-"inline uint96 int96_abs(const int96 x)\n" \
+"INLINE uint96 int96_abs(const int96 x)\n" \
 "{\n" \
 "	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;\n" \
 "	return int96_u(t);\n" \
 "}\n" \
 "\n" \
-"inline int96 int96_add(const int96 x, const int96 y)\n" \
+"INLINE int96 int96_add(const int96 x, const int96 y)\n" \
 "{\n" \
 "	int96 r;\n" \
 "#ifdef PTX_ASM\n" \
@@ -64,7 +70,7 @@ static const char * const src_ocl_kernel3 = \
 "	return r;\n" \
 "}\n" \
 "\n" \
-"inline uint96 uint96_add_64(const uint96 x, const ulong y)\n" \
+"INLINE uint96 uint96_add_64(const uint96 x, const ulong y)\n" \
 "{\n" \
 "	uint96 r;\n" \
 "#ifdef PTX_ASM\n" \
@@ -78,7 +84,7 @@ static const char * const src_ocl_kernel3 = \
 "	return r;\n" \
 "}\n" \
 "\n" \
-"inline int96 uint96_subi(const uint96 x, const uint96 y)\n" \
+"INLINE int96 uint96_subi(const uint96 x, const uint96 y)\n" \
 "{\n" \
 "	int96 r;\n" \
 "#ifdef PTX_ASM\n" \
@@ -91,7 +97,7 @@ static const char * const src_ocl_kernel3 = \
 "	return r;\n" \
 "}\n" \
 "\n" \
-"inline uint96 uint96_mul_64_32(const ulong x, const uint y)\n" \
+"INLINE uint96 uint96_mul_64_32(const ulong x, const uint y)\n" \
 "{\n" \
 "	const ulong l = (uint)x * (ulong)y, h = (x >> 32) * y + (l >> 32);\n" \
 "	uint96 r; r.s0 = (h << 32) | (uint)l; r.s1 = (uint)(h >> 32);\n" \
@@ -100,13 +106,13 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "// --- mod arith ---\n" \
 "\n" \
-"inline uint _addMod(const uint lhs, const uint rhs, const uint p)\n" \
+"INLINE uint _addMod(const uint lhs, const uint rhs, const uint p)\n" \
 "{\n" \
 "	const uint c = (lhs >= p - rhs) ? p : 0;\n" \
 "	return lhs + rhs - c;\n" \
 "}\n" \
 "\n" \
-"inline uint _subMod(const uint lhs, const uint rhs, const uint p)\n" \
+"INLINE uint _subMod(const uint lhs, const uint rhs, const uint p)\n" \
 "{\n" \
 "	const uint c = (lhs < rhs) ? p : 0;\n" \
 "	return lhs - rhs + c;\n" \
@@ -114,8 +120,12 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.\n" \
 "\n" \
-"// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p\n" \
-"inline uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)\n" \
+"// Montgomery form of n is n * 2^32 mod p. q * p = 1 mod 2^32.\n" \
+"\n" \
+"// r = lhs * rhs * 2^-32 mod p\n" \
+"// If lhs = x * 2^32 and rhs = y * 2^32 then r = (x * y) * 2^32 mod p.\n" \
+"// If lhs = x and rhs = y * 2^32 then r = x * y mod p.\n" \
+"INLINE uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)\n" \
 "{\n" \
 "	const uint t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);\n" \
 "	const uint mp = mul_hi(t_lo * q, p);\n" \
@@ -123,44 +133,44 @@ static const char * const src_ocl_kernel3 = \
 "}\n" \
 "\n" \
 "// Conversion into Montgomery form\n" \
-"inline uint _toMonty(const uint n, const uint r2, const uint p, const uint q)\n" \
+"INLINE uint _toMonty(const uint n, const uint r2, const uint p, const uint q)\n" \
 "{\n" \
 "	// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)\n" \
 "	return _mulMonty(n, r2, p, q);\n" \
 "}\n" \
 "\n" \
 "// Conversion out of Montgomery form\n" \
-"// inline uint _fromMonty(const uint n, const uint p, const uint q)\n" \
+"// INLINE uint _fromMonty(const uint n, const uint p, const uint q)\n" \
 "// {\n" \
-"// 	// REDC(n * 2^32, 1)\n" \
+"// 	// If n = x * 2^32 mod p then _mulMonty(n, 1, p, q) = x.\n" \
 "// 	const uint mp = mul_hi(n * q, p);\n" \
 "// 	return (mp != 0) ? p - mp : 0;\n" \
 "// }\n" \
 "\n" \
-"inline uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }\n" \
-"inline uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }\n" \
-"inline uint add_P3(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P3); }\n" \
+"INLINE uint add_P1(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P1); }\n" \
+"INLINE uint add_P2(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P2); }\n" \
+"INLINE uint add_P3(const uint lhs, const uint rhs) { return _addMod(lhs, rhs, P3); }\n" \
 "\n" \
-"inline uint sub_P1(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P1); }\n" \
-"inline uint sub_P2(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P2); }\n" \
-"inline uint sub_P3(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P3); }\n" \
+"INLINE uint sub_P1(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P1); }\n" \
+"INLINE uint sub_P2(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P2); }\n" \
+"INLINE uint sub_P3(const uint lhs, const uint rhs) { return _subMod(lhs, rhs, P3); }\n" \
 "\n" \
 "// Montgomery form\n" \
-"inline uint mul_P1(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P1, Q1); }\n" \
-"inline uint mul_P2(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P2, Q2); }\n" \
-"inline uint mul_P3(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P3, Q3); }\n" \
+"INLINE uint mul_P1(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P1, Q1); }\n" \
+"INLINE uint mul_P2(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P2, Q2); }\n" \
+"INLINE uint mul_P3(const uint lhs, const uint rhs) { return _mulMonty(lhs, rhs, P3, Q3); }\n" \
 "\n" \
-"inline uint toMonty_P1(const uint lhs) { return _toMonty(lhs, R1, P1, Q1); }\n" \
-"inline uint toMonty_P2(const uint lhs) { return _toMonty(lhs, R2, P2, Q2); }\n" \
-"inline uint toMonty_P3(const uint lhs) { return _toMonty(lhs, R3, P3, Q3); }\n" \
+"INLINE uint toMonty_P1(const uint lhs) { return _toMonty(lhs, R1, P1, Q1); }\n" \
+"INLINE uint toMonty_P2(const uint lhs) { return _toMonty(lhs, R2, P2, Q2); }\n" \
+"INLINE uint toMonty_P3(const uint lhs) { return _toMonty(lhs, R3, P3, Q3); }\n" \
 "\n" \
-"// inline uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }\n" \
-"// inline uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }\n" \
-"// inline uint fromMonty_P3(const uint lhs) { return _fromMonty(lhs, P3, Q3); }\n" \
+"// INLINE uint fromMonty_P1(const uint lhs) { return _fromMonty(lhs, P1, Q1); }\n" \
+"// INLINE uint fromMonty_P2(const uint lhs) { return _fromMonty(lhs, P2, Q2); }\n" \
+"// INLINE uint fromMonty_P3(const uint lhs) { return _fromMonty(lhs, P3, Q3); }\n" \
 "\n" \
-"inline int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n; }\n" \
+"INLINE int geti_P1(const uint n) { return (n > P1 / 2) ? (int)(n - P1) : (int)n; }\n" \
 "\n" \
-"inline int96 garner3(const uint r1, const uint r2, const uint r3)\n" \
+"INLINE int96 garner3(const uint r1, const uint r2, const uint r3)\n" \
 "{\n" \
 "	const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);\n" \
 "	const uint u23 = mul_P2(sub_P2(r2, r3), InvP3_P2);\n" \
@@ -178,33 +188,33 @@ static const char * const src_ocl_kernel3 = \
 "typedef uint	RNSe;\n" \
 "typedef RNSe	RNS_We;\n" \
 "\n" \
-"inline RNS toRNS(const int i) { return ((RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0))); }\n" \
+"INLINE RNS toRNS(const int i) { return ((RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0))); }\n" \
 "\n" \
-"inline RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }\n" \
-"inline RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }\n" \
-"inline RNS mul(const RNS lhs, const RNS rhs) { return (RNS)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }\n" \
+"INLINE RNS add(const RNS lhs, const RNS rhs) { return (RNS)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }\n" \
+"INLINE RNS sub(const RNS lhs, const RNS rhs) { return (RNS)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }\n" \
+"INLINE RNS mul(const RNS lhs, const RNS rhs) { return (RNS)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }\n" \
 "\n" \
-"inline RNS sqr(const RNS lhs) { return mul(lhs, lhs); }\n" \
+"INLINE RNS sqr(const RNS lhs) { return mul(lhs, lhs); }\n" \
 "\n" \
-"inline RNS mulW(const RNS lhs, const RNS_W w) { return mul(lhs, w); }\n" \
+"INLINE RNS mulW(const RNS lhs, const RNS_W w) { return mul(lhs, w); }\n" \
 "\n" \
-"inline RNS toMonty(const RNS lhs) { return (RNS)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }\n" \
+"INLINE RNS toMonty(const RNS lhs) { return (RNS)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }\n" \
 "\n" \
-"inline RNSe toRNSe(const int i) { return ((RNSe)(i) + ((i < 0) ? (RNSe)(P3) : (RNSe)(0))); }\n" \
+"INLINE RNSe toRNSe(const int i) { return ((RNSe)(i) + ((i < 0) ? (RNSe)(P3) : (RNSe)(0))); }\n" \
 "\n" \
-"inline RNSe adde(const RNSe lhs, const RNSe rhs) { return (RNSe)(add_P3(lhs, rhs)); }\n" \
-"inline RNSe sube(const RNSe lhs, const RNSe rhs) { return (RNSe)(sub_P3(lhs, rhs)); }\n" \
-"inline RNSe mule(const RNSe lhs, const RNSe rhs) { return (RNSe)(mul_P3(lhs, rhs)); }\n" \
+"INLINE RNSe adde(const RNSe lhs, const RNSe rhs) { return (RNSe)(add_P3(lhs, rhs)); }\n" \
+"INLINE RNSe sube(const RNSe lhs, const RNSe rhs) { return (RNSe)(sub_P3(lhs, rhs)); }\n" \
+"INLINE RNSe mule(const RNSe lhs, const RNSe rhs) { return (RNSe)(mul_P3(lhs, rhs)); }\n" \
 "\n" \
-"inline RNSe sqre(const RNSe lhs) { return mule(lhs, lhs); }\n" \
+"INLINE RNSe sqre(const RNSe lhs) { return mule(lhs, lhs); }\n" \
 "\n" \
-"inline RNSe mulWe(const RNSe lhs, const RNS_We w) { return mule(lhs, w); }\n" \
+"INLINE RNSe mulWe(const RNSe lhs, const RNS_We w) { return mule(lhs, w); }\n" \
 "\n" \
-"inline RNSe toMontye(const RNSe lhs) { return (RNSe)toMonty_P3(lhs); }\n" \
+"INLINE RNSe toMontye(const RNSe lhs) { return (RNSe)toMonty_P3(lhs); }\n" \
 "\n" \
 "// --- transform/inline ---\n" \
 "\n" \
-"inline void forward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void forward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const w_j = &w[j];\n" \
@@ -220,7 +230,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[0 * m] = adde(v0e, v1e); Ze[1 * m] = sube(v0e, v1e); Ze[2 * m] = adde(v2e, v3e); Ze[3 * m] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void forward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
@@ -240,7 +250,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[0 * ml] = adde(v0e, v1e); Ze[1 * ml] = sube(v0e, v1e); Ze[2 * ml] = adde(v2e, v3e); Ze[3 * ml] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
@@ -252,13 +262,13 @@ static const char * const src_ocl_kernel3 = \
 "	const RNS_We w1e = we[1], w2e = we[2], w3e = we[3];\n" \
 "	const RNS u0 = toMonty(z0), u2 = mulW(z2, w1), u1 = toMonty(z1), u3 = mulW(z3, w1);\n" \
 "	const RNSe u0e = toMontye(z0e), u2e = mulWe(z2e, w1e), u1e = toMontye(z1e), u3e = mulWe(z3e, w1e);\n" \
-"	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w[2]), v3 = mulW(sub(u1, u3), w[3]);\n" \
-"	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), we[2]), v3e = mulWe(sube(u1e, u3e), we[3]);\n" \
+"	const RNS v0 = add(u0, u2), v2 = sub(u0, u2), v1 = mulW(add(u1, u3), w2), v3 = mulW(sub(u1, u3), w3);\n" \
+"	const RNSe v0e = adde(u0e, u2e), v2e = sube(u0e, u2e), v1e = mulWe(adde(u1e, u3e), w2e), v3e = mulWe(sube(u1e, u3e), w3e);\n" \
 "	Z[0 * ml] = add(v0, v1); Z[1 * ml] = sub(v0, v1); Z[2 * ml] = add(v2, v3); Z[3 * ml] = sub(v2, v3);\n" \
 "	Ze[0 * ml] = adde(v0e, v1e); Ze[1 * ml] = sube(v0e, v1e); Ze[2 * ml] = adde(v2e, v3e); Ze[3 * ml] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void forward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"INLINE void forward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	const sz_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we, const sz_t j)\n" \
 "{\n" \
@@ -277,7 +287,7 @@ static const char * const src_ocl_kernel3 = \
 "	ze[0] = adde(v0e, v1e); ze[mg] = sube(v0e, v1e); z2mge[0] = adde(v2e, v3e); z2mge[mg] = sube(v2e, v3e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void backward_4(const sz_t m, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
 "	__global const RNS_W * restrict const wi_j = &wi[j];\n" \
@@ -293,7 +303,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[0 * m] = adde(v0e, v2e); Ze[2 * m] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * m] = adde(v1e, v3e); Ze[3 * m] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void backward_4i(const sz_t ml, __local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
@@ -311,7 +321,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[0 * ml] = adde(v0e, v2e); Ze[2 * ml] = mulWe(sube(v0e, v2e), wi1e); Ze[1 * ml] = adde(v1e, v3e); Ze[3 * ml] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void backward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"INLINE void backward_4o(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	const sz_t ml, __local const RNS * restrict const Z, __local const RNSe * restrict const Ze,\n" \
 "	__global const RNS_W * restrict const wi, __global const RNS_We * restrict const wie, const sz_t j)\n" \
 "{\n" \
@@ -330,7 +340,7 @@ static const char * const src_ocl_kernel3 = \
 "	ze[0] = adde(v0e, v2e); z2mge[0] = mulWe(sube(v0e, v2e), wi1e); ze[mg] = adde(v1e, v3e); z2mge[mg] = mulWe(sube(v1e, v3e), wi1e);\n" \
 "}\n" \
 "\n" \
-"inline void write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"INLINE void write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__local const RNS * restrict const Z, __local const RNSe * restrict const Ze)\n" \
 "{\n" \
 "	__global RNS * const z2mg = &z[2 * mg];\n" \
@@ -340,7 +350,7 @@ static const char * const src_ocl_kernel3 = \
 "	ze[0] = Ze[0]; ze[mg] = Ze[1]; z2mge[0] = Ze[2]; z2mge[mg] = Ze[3];\n" \
 "}\n" \
 "\n" \
-"inline void fwd2write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
+"INLINE void fwd2write_4(const sz_t mg, __global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__local const RNS * restrict const Z, __local const RNSe * restrict const Ze, const RNS_W w1, const RNS_We w1e)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -354,7 +364,7 @@ static const char * const src_ocl_kernel3 = \
 "	ze[0] = v0e; z2mge[0] = v2e; ze[mg] = v1e; z2mge[mg] = v3e;\n" \
 "}\n" \
 "\n" \
-"inline void square_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze, const RNS_W w0, const RNS_We w0e)\n" \
+"INLINE void square_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze, const RNS_W w0, const RNS_We w0e)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	const RNS u0 = Z[0], u1 = Z[1], u2 = Z[2], u3 = Z[3];\n" \
@@ -365,7 +375,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[2] = sube(sqre(u2e), sqre(mulWe(u3e, w0e))); Ze[3] = mule(adde(u2e, u2e), u3e);\n" \
 "}\n" \
 "\n" \
-"inline void square_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void square_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const RNS_W w1, const RNS_W w1i, const RNS_W w0, const RNS_We w1e, const RNS_We w1ie, const RNS_We w0e)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -381,7 +391,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[0] = adde(s0e, s2e); Ze[2] = mulWe(sube(s0e, s2e), w1ie); Ze[1] = adde(s1e, s3e); Ze[3] = mulWe(sube(s1e, s3e), w1ie);\n" \
 "}\n" \
 "\n" \
-"inline void mul_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void mul_22(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, const RNS_W w0, const RNS_We w0e)\n" \
 "{\n" \
 "	__global const RNS * const z2mg = &z[2 * mg];\n" \
@@ -401,7 +411,7 @@ static const char * const src_ocl_kernel3 = \
 "	Ze[3] = adde(mule(u2e, u3pe), mule(u2pe, u3e));\n" \
 "}\n" \
 "\n" \
-"inline void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
+"INLINE void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const Ze,\n" \
 "	const sz_t mg, __global const RNS * restrict const z, __global const RNSe * restrict const ze, \n" \
 "	const RNS_W w1, const RNS_W w1i, const RNS_W w0, const RNS_We w1e, const RNS_We w1ie, const RNS_We w0e)\n" \
 "{\n" \
@@ -455,7 +465,7 @@ static const char * const src_ocl_kernel3 = \
 "	__global RNSe * __restrict__ const zie = &ze[ko]; \\\n" \
 "	__global RNS * __restrict__ const zo = &z[ki]; \\\n" \
 "	__global RNSe * __restrict__ const zoe = &ze[ki]; \\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0); \\\n" \
+"	const sz_t n_4 = NSIZE / 4; \\\n" \
 "	__global const RNS_W * restrict const wi = &w[4 * n_4]; \\\n" \
 "	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
@@ -487,7 +497,10 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "#define B_64	(64 / 4)\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64\n" \
+"	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"#endif\n" \
 "void forward64(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	 __global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -500,7 +513,10 @@ static const char * const src_ocl_kernel3 = \
 "	FORWARD_O(CHUNK64);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64\n" \
+"	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"#endif\n" \
 "void backward64(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -513,7 +529,10 @@ static const char * const src_ocl_kernel3 = \
 "	BACKWARD_O(B_64, CHUNK64);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64\n" \
+"	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
+"#endif\n" \
 "void forward64_0(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	 __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
@@ -531,7 +550,10 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "#define B_256	(256 / 4)\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256\n" \
+"	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"#endif\n" \
 "void forward256(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -546,7 +568,10 @@ static const char * const src_ocl_kernel3 = \
 "	FORWARD_O(CHUNK256);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256\n" \
+"	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"#endif\n" \
 "void backward256(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -561,7 +586,10 @@ static const char * const src_ocl_kernel3 = \
 "	BACKWARD_O(B_256, CHUNK256);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256\n" \
+"	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
+"#endif\n" \
 "void forward256_0(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
@@ -581,7 +609,10 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "#define B_1024	(1024 / 4)\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024\n" \
+"	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"#endif\n" \
 "void forward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -598,7 +629,10 @@ static const char * const src_ocl_kernel3 = \
 "	FORWARD_O(CHUNK1024);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024\n" \
+"	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"#endif\n" \
 "void backward1024(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we,\n" \
 "	const int lm, const unsigned int s)\n" \
@@ -615,7 +649,10 @@ static const char * const src_ocl_kernel3 = \
 "	BACKWARD_O(B_1024, CHUNK1024);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024\n" \
+"	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
+"#endif\n" \
 "void forward1024_0(__global RNS * restrict const z, __global RNSe * restrict const ze,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
@@ -639,7 +676,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[32 * BLK32]; \\\n" \
 "	__local RNSe Ze[32 * BLK32]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \\\n" \
@@ -656,16 +693,19 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z32[4 * i8]; \\\n" \
 "	__local RNSe * const Z4e = &Z32e[4 * i8];\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32\n" \
+"	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))\n" \
+"#endif\n" \
 "void square32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(8, Zi8, Zi8e, 8, zk, zke, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
 "	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4o(8, zk, zke, 8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "}\n" \
@@ -674,7 +714,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[64 * BLK64]; \\\n" \
 "	__local RNSe Ze[64 * BLK64]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \\\n" \
@@ -691,15 +731,18 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z64[4 * i16]; \\\n" \
 "	__local RNSe * const Z4e = &Z64e[4 * i16];\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64\n" \
+"	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))\n" \
+"#endif\n" \
 "void square64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
+"	__global const RNS_W * const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(16, Zi16, Zi16e, 16, zk, zke, w, we, j / 16);\n" \
 "	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
-"	__global const RNS_W * const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * const wie = &we[4 * n_4];\n" \
 "	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4o(16, zk, zke, 16, Zi16, Zi16e, wi, wie, j / 16);\n" \
@@ -709,7 +752,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[128 * BLK128]; \\\n" \
 "	__local RNSe Ze[128 * BLK128]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \\\n" \
@@ -729,17 +772,20 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z128[4 * i32]; \\\n" \
 "	__local RNSe * const Z4e = &Z128e[4 * i32];\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128\n" \
+"	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))\n" \
+"#endif\n" \
 "void square128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(32, Zi32, Zi32e, 32, zk, zke, w, we, j / 32);\n" \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
 "	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4o(32, zk, zke, 32, Zi32, Zi32e, wi, wie, j / 32);\n" \
@@ -749,7 +795,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[256 * BLK256]; \\\n" \
 "	__local RNSe Ze[256 * BLK256]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i256 = 0, i64 = i; \\\n" \
@@ -769,16 +815,19 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z256[4 * i64]; \\\n" \
 "	__local RNSe * const Z4e = &Z256e[4 * i64];\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256\n" \
+"	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))\n" \
+"#endif\n" \
 "void square256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(64, Zi64, Zi64e, 64, zk, zke, w, we, j / 64);\n" \
 "	forward_4(16, Zi16, Zi16e, w, we, j / 16);\n" \
 "	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);\n" \
@@ -789,7 +838,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[512]; \\\n" \
 "	__local RNSe Ze[512]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -809,18 +858,21 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z[4 * i128]; \\\n" \
 "	__local RNSe * const Z4e = &Ze[4 * i128];\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 512 / 4\n" \
+"	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void square512(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(128, Zi128, Zi128e, 128, zk, zke, w, we, j / 128);\n" \
 "	forward_4(32, Zi32, Zi32e, w, we, j / 32);\n" \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
 "	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);\n" \
@@ -831,7 +883,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[1024]; \\\n" \
 "	__local RNSe Ze[1024]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -851,17 +903,20 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z[4 * i256]; \\\n" \
 "	__local RNSe * const Z4e = &Ze[4 * i256];\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 1024 / 4\n" \
+"	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void square1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(256, Zi256, Zi256e, 256, zk, zke, w, we, j / 256);\n" \
 "	forward_4(64, Zi64, Zi64e, w, we, j / 64);\n" \
 "	forward_4(16, Zi16, Zi16e, w, we, j / 16);\n" \
 "	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	square_4(Z4, Z4e, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);\n" \
@@ -873,7 +928,7 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS Z[2048]; \\\n" \
 "	__local RNSe Ze[2048]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = (sz_t)get_global_size(0), idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -896,10 +951,15 @@ static const char * const src_ocl_kernel3 = \
 "	__local RNS * const Z4 = &Z[4 * i512]; \\\n" \
 "	__local RNSe * const Z4e = &Ze[4 * i512];\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 2048 / 4\n" \
+"	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void square2048(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(512, Zi512, Zi512e, 512, zk, zke, w, we, j / 512);\n" \
 "	forward_4(128, Zi128, Zi128e, w, we, j / 128);\n" \
@@ -907,8 +967,6 @@ static const char * const src_ocl_kernel3 = \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
 "	square_22(Z4, Z4e, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);\n" \
@@ -918,7 +976,10 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "// -----------------\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32\n" \
+"	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))\n" \
+"#endif\n" \
 "void fwd32p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
@@ -928,7 +989,10 @@ static const char * const src_ocl_kernel3 = \
 "	write_4(8, zk, zke, Z4, Z4e);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64\n" \
+"	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))\n" \
+"#endif\n" \
 "void fwd64p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
@@ -938,7 +1002,10 @@ static const char * const src_ocl_kernel3 = \
 "	fwd2write_4(16, zk, zke, Z4, Z4e, w[j], we[j]);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128\n" \
+"	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))\n" \
+"#endif\n" \
 "void fwd128p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
@@ -949,7 +1016,10 @@ static const char * const src_ocl_kernel3 = \
 "	write_4(32, zk, zke, Z4, Z4e);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256\n" \
+"	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))\n" \
+"#endif\n" \
 "void fwd256p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
@@ -960,7 +1030,10 @@ static const char * const src_ocl_kernel3 = \
 "	fwd2write_4(64, zk, zke, Z4, Z4e, w[j], we[j]);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 512 / 4\n" \
+"	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void fwd512p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
@@ -972,7 +1045,10 @@ static const char * const src_ocl_kernel3 = \
 "	write_4(128, zk, zke, Z4, Z4e);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 1024 / 4\n" \
+"	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void fwd1024p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
@@ -984,7 +1060,10 @@ static const char * const src_ocl_kernel3 = \
 "	fwd2write_4(256, zk, zke, Z4, Z4e, w[j], we[j]);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 2048 / 4\n" \
+"	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void fwd2048p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
@@ -999,113 +1078,131 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "// -----------------\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32\n" \
+"	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))\n" \
+"#endif\n" \
 "void mul32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
+"	__global const RNS * restrict const zpk = &zp[k32 + i32 + i8];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k32 + i32 + i8];\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(8, Zi8, Zi8e, 8, zk, zke, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
-"	__global const RNS * restrict const zpk = &zp[k32 + i32 + i8];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k32 + i32 + i8];\n" \
 "	mul_22(Z4, Z4e, 8, zpk, zpke, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4o(8, zk, zke, 8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64\n" \
+"	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))\n" \
+"#endif\n" \
 "void mul64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
+"	__global const RNS * restrict const zpk = &zp[k64 + i64 + i16];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k64 + i64 + i16];\n" \
+"	__global const RNS_W * const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(16, Zi16, Zi16e, 16, zk, zke, w, we, j / 16);\n" \
 "	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
-"	__global const RNS_W * const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * const wie = &we[4 * n_4];\n" \
-"	__global const RNS * restrict const zpk = &zp[k64 + i64 + i16];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k64 + i64 + i16];\n" \
 "	mul_4(Z4, Z4e, 16, zpk, zpke, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4o(16, zk, zke, 16, Zi16, Zi16e, wi, wie, j / 16);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128\n" \
+"	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))\n" \
+"#endif\n" \
 "void mul128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
+"	__global const RNS * restrict const zpk = &zp[k128 + i128 + i32];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k128 + i128 + i32];\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(32, Zi32, Zi32e, 32, zk, zke, w, we, j / 32);\n" \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
-"	__global const RNS * restrict const zpk = &zp[k128 + i128 + i32];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k128 + i128 + i32];\n" \
 "	mul_22(Z4, Z4e, 32, zpk, zpke, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4o(32, zk, zke, 32, Zi32, Zi32e, wi, wie, j / 32);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256\n" \
+"	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))\n" \
+"#endif\n" \
 "void mul256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
-"\n" \
-"	forward_4i(64, Zi64, Zi64e, 64, zk, zke, w, we, j / 64);\n" \
-"	forward_4(16, Zi16, Zi16e, w, we, j / 16);\n" \
-"	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
 "	__global const RNS * restrict const zpk = &zp[k256 + i256 + i64];\n" \
 "	__global const RNSe * restrict const zpke = &zpe[k256 + i256 + i64];\n" \
 "	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
 "	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
+"\n" \
+"	forward_4i(64, Zi64, Zi64e, 64, zk, zke, w, we, j / 64);\n" \
+"	forward_4(16, Zi16, Zi16e, w, we, j / 16);\n" \
+"	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
 "	mul_4(Z4, Z4e, 64, zpk, zpke, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);\n" \
 "	backward_4o(64, zk, zke, 64, Zi64, Zi64e, wi, wie, j / 64);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 512 / 4\n" \
+"	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void mul512(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
+"	__global const RNS * restrict const zpk = &zp[k512 + i128];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k512 + i128];\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(128, Zi128, Zi128e, 128, zk, zke, w, we, j / 128);\n" \
 "	forward_4(32, Zi32, Zi32e, w, we, j / 32);\n" \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
-"	__global const RNS * restrict const zpk = &zp[k512 + i128];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k512 + i128];\n" \
 "	mul_22(Z4, Z4e, 128, zpk, zpke, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);\n" \
 "	backward_4o(128, zk, zke, 128, Zi128, Zi128e, wi, wie, j / 128);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 1024 / 4\n" \
+"	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void mul1024(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
+"	__global const RNS * restrict const zpk = &zp[k1024 + i256];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k1024 + i256];\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(256, Zi256, Zi256e, 256, zk, zke, w, we, j / 256);\n" \
 "	forward_4(64, Zi64, Zi64e, w, we, j / 64);\n" \
 "	forward_4(16, Zi16, Zi16e, w, we, j / 16);\n" \
 "	forward_4(4, Zi4, Zi4e, w, we, j / 4);\n" \
-"	__global const RNS * restrict const zpk = &zp[k1024 + i256];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k1024 + i256];\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	mul_4(Z4, Z4e, 256, zpk, zpke, w[j], wi[j], w[n_4 + j], we[j], wie[j], we[n_4 + j]);\n" \
 "	backward_4(4, Zi4, Zi4e, wi, wie, j / 4);\n" \
 "	backward_4(16, Zi16, Zi16e, wi, wie, j / 16);\n" \
@@ -1113,22 +1210,25 @@ static const char * const src_ocl_kernel3 = \
 "	backward_4o(256, zk, zke, 256, Zi256, Zi256e, wi, wie, j / 256);\n" \
 "}\n" \
 "\n" \
-"__kernel // __attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"__kernel\n" \
+"#if MAX_WORK_GROUP_SIZE >= 2048 / 4\n" \
+"	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))\n" \
+"#endif\n" \
 "void mul2048(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,\n" \
 "	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
+"	__global const RNS * restrict const zpk = &zp[k2048 + i512];\n" \
+"	__global const RNSe * restrict const zpke = &zpe[k2048 + i512];\n" \
+"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
+"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "\n" \
 "	forward_4i(512, Zi512, Zi512e, 512, zk, zke, w, we, j / 512);\n" \
 "	forward_4(128, Zi128, Zi128e, w, we, j / 128);\n" \
 "	forward_4(32, Zi32, Zi32e, w, we, j / 32);\n" \
 "	forward_4(8, Zi8, Zi8e, w, we, j / 8);\n" \
 "	forward_4(2, Zi2, Zi2e, w, we, j / 2);\n" \
-"	__global const RNS * restrict const zpk = &zp[k2048 + i512];\n" \
-"	__global const RNSe * restrict const zpke = &zpe[k2048 + i512];\n" \
 "	mul_22(Z4, Z4e, 512, zpk, zpke, w[n_4 + j], we[n_4 + j]);\n" \
-"	__global const RNS_W * restrict const wi = &w[4 * n_4];\n" \
-"	__global const RNS_We * restrict const wie = &we[4 * n_4];\n" \
 "	backward_4(2, Zi2, Zi2e, wi, wie, j / 2);\n" \
 "	backward_4(8, Zi8, Zi8e, wi, wie, j / 8);\n" \
 "	backward_4(32, Zi32, Zi32e, wi, wie, j / 32);\n" \
@@ -1138,8 +1238,9 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "// -----------------\n" \
 "\n" \
-"inline uint barrett(const ulong a, const uint b, const uint b_inv, const int b_s, uint * a_p)\n" \
+"INLINE uint barrett(const ulong a, const uint b, const uint b_inv, const int b_s, uint * a_p)\n" \
 "{\n" \
+"	// Using notations of Modular SIMD arithmetic in Mathemagix, Joris van der Hoeven, Grégoire Lecerf, Guillaume Quintin, 2014, HAL.\n" \
 "	// n = 31, alpha = 2^{n-2} = 2^29, s = r - 2, t = n + 1 = 32 => h = 1.\n" \
 "	// b < 2^31, alpha = 2^29 => a < 2^29 b\n" \
 "	// 2^{r-1} < b <= 2^r then a < 2^{r + 29} = 2^{s + 31} and (a >> s) < 2^31\n" \
@@ -1156,7 +1257,7 @@ static const char * const src_ocl_kernel3 = \
 "	return o ? r - b : r;\n" \
 "}\n" \
 "\n" \
-"inline int reduce64(long * f, const uint b, const uint b_inv, const int b_s)\n" \
+"INLINE int reduce64(long * f, const uint b, const uint b_inv, const int b_s)\n" \
 "{\n" \
 "	// 1- t < 2^63 => t_h < 2^34. We must have t_h < 2^29 b => b > 32\n" \
 "	// 2- t < 2^22 b^2 => t_h < b^2 / 2^7. If 2 <= b < 32 then t_h < 32^2 / 2^7 = 2^8 < 2^29 b\n" \
@@ -1173,7 +1274,7 @@ static const char * const src_ocl_kernel3 = \
 "	return s ? -(int)r_l : (int)r_l;\n" \
 "}\n" \
 "\n" \
-"inline int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)\n" \
+"INLINE int reduce96(int96 * f, const uint b, const uint b_inv, const int b_s)\n" \
 "{\n" \
 "	const uint96 t = int96_abs(*f);\n" \
 "	const ulong t_h = ((ulong)t.s1 << (64 - 29)) | (t.s0 >> 29);\n" \

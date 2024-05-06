@@ -258,7 +258,7 @@ INLINE void mul_4(__local RNS * restrict const Z, const sz_t mg, __global const 
 #define DECLARE_VAR_BACKWARD() \
 	__global RNS * __restrict__ const zi = &z[ko]; \
 	__global RNS * __restrict__ const zo = &z[ki]; \
-	const sz_t n_4 = NSIZE / 4; \
+	const sz_t n_4 = NSIZE_4; \
 	__global const RNS_W * restrict const wi = &w[4 * n_4];
 
 #define FORWARD_I(B_N, CHUNK_N) \
@@ -452,7 +452,7 @@ void forward1024_0(__global RNS * restrict const z, __global const RNS_W * restr
 #define DECLARE_VAR_32() \
 	__local RNS Z[32 * BLK32]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \
 	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \
@@ -466,7 +466,7 @@ void forward1024_0(__global RNS * restrict const z, __global const RNS_W * restr
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void square32(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -483,7 +483,7 @@ void square32(__global RNS * restrict const z, __global const RNS_W * restrict c
 #define DECLARE_VAR_64() \
 	__local RNS Z[64 * BLK64]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \
 	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \
@@ -497,7 +497,7 @@ void square32(__global RNS * restrict const z, __global const RNS_W * restrict c
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void square64(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -514,7 +514,7 @@ void square64(__global RNS * restrict const z, __global const RNS_W * restrict c
 #define DECLARE_VAR_128() \
 	__local RNS Z[128 * BLK128]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \
 	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \
@@ -530,7 +530,7 @@ void square64(__global RNS * restrict const z, __global const RNS_W * restrict c
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void square128(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -549,7 +549,7 @@ void square128(__global RNS * restrict const z, __global const RNS_W * restrict 
 #define DECLARE_VAR_256() \
 	__local RNS Z[256 * BLK256]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \
 	const sz_t i256 = 0, i64 = i; \
@@ -565,7 +565,7 @@ void square128(__global RNS * restrict const z, __global const RNS_W * restrict 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void square256(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -584,7 +584,7 @@ void square256(__global RNS * restrict const z, __global const RNS_W * restrict 
 #define DECLARE_VAR_512() \
 	__local RNS Z[512]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \
 	\
@@ -621,7 +621,7 @@ void square512(__global RNS * restrict const z, __global const RNS_W * restrict 
 #define DECLARE_VAR_1024() \
 	__local RNS Z[1024]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \
 	\
@@ -658,7 +658,7 @@ void square1024(__global RNS * restrict const z, __global const RNS_W * restrict
 #define DECLARE_VAR_2048() \
 	__local RNS Z[2048]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \
 	\
@@ -700,7 +700,7 @@ void square2048(__global RNS * restrict const z, __global const RNS_W * restrict
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void fwd32p(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -713,7 +713,7 @@ void fwd32p(__global RNS * restrict const z, __global const RNS_W * restrict con
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void fwd64p(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -726,7 +726,7 @@ void fwd64p(__global RNS * restrict const z, __global const RNS_W * restrict con
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void fwd128p(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -740,7 +740,7 @@ void fwd128p(__global RNS * restrict const z, __global const RNS_W * restrict co
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void fwd256p(__global RNS * restrict const z, __global const RNS_W * restrict const w)
 {
@@ -802,7 +802,7 @@ void fwd2048p(__global RNS * restrict const z, __global const RNS_W * restrict c
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void mul32(__global RNS * restrict const z, __global const RNS * restrict const zp, __global const RNS_W * restrict const w)
 {
@@ -819,7 +819,7 @@ void mul32(__global RNS * restrict const z, __global const RNS * restrict const 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void mul64(__global RNS * restrict const z, __global const RNS * restrict const zp, __global const RNS_W * restrict const w)
 {
@@ -836,7 +836,7 @@ void mul64(__global RNS * restrict const z, __global const RNS * restrict const 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void mul128(__global RNS * restrict const z, __global const RNS * restrict const zp, __global const RNS_W * restrict const w)
 {
@@ -855,7 +855,7 @@ void mul128(__global RNS * restrict const z, __global const RNS * restrict const
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void mul256(__global RNS * restrict const z, __global const RNS * restrict const zp, __global const RNS_W * restrict const w)
 {

@@ -453,7 +453,7 @@ INLINE void mul_4(__local RNS * restrict const Z, __local RNSe * restrict const 
 	__global RNSe * __restrict__ const zie = &ze[ko]; \
 	__global RNS * __restrict__ const zo = &z[ki]; \
 	__global RNSe * __restrict__ const zoe = &ze[ki]; \
-	const sz_t n_4 = NSIZE / 4; \
+	const sz_t n_4 = NSIZE_4; \
 	__global const RNS_W * restrict const wi = &w[4 * n_4]; \
 	__global const RNS_We * restrict const wie = &we[4 * n_4];
 
@@ -664,7 +664,7 @@ void forward1024_0(__global RNS * restrict const z, __global RNSe * restrict con
 	__local RNS Z[32 * BLK32]; \
 	__local RNSe Ze[32 * BLK32]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \
 	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \
@@ -683,7 +683,7 @@ void forward1024_0(__global RNS * restrict const z, __global RNSe * restrict con
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void square32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -702,7 +702,7 @@ void square32(__global RNS * restrict const z, __global RNSe * restrict const ze
 	__local RNS Z[64 * BLK64]; \
 	__local RNSe Ze[64 * BLK64]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \
 	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \
@@ -721,7 +721,7 @@ void square32(__global RNS * restrict const z, __global RNSe * restrict const ze
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void square64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -740,7 +740,7 @@ void square64(__global RNS * restrict const z, __global RNSe * restrict const ze
 	__local RNS Z[128 * BLK128]; \
 	__local RNSe Ze[128 * BLK128]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \
 	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \
@@ -762,7 +762,7 @@ void square64(__global RNS * restrict const z, __global RNSe * restrict const ze
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void square128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -783,7 +783,7 @@ void square128(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS Z[256 * BLK256]; \
 	__local RNSe Ze[256 * BLK256]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \
 	const sz_t i256 = 0, i64 = i; \
@@ -805,7 +805,7 @@ void square128(__global RNS * restrict const z, __global RNSe * restrict const z
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void square256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -826,7 +826,7 @@ void square256(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS Z[512]; \
 	__local RNSe Ze[512]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \
 	\
@@ -871,7 +871,7 @@ void square512(__global RNS * restrict const z, __global RNSe * restrict const z
 	__local RNS Z[1024]; \
 	__local RNSe Ze[1024]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \
 	\
@@ -916,7 +916,7 @@ void square1024(__global RNS * restrict const z, __global RNSe * restrict const 
 	__local RNS Z[2048]; \
 	__local RNSe Ze[2048]; \
 	\
-	const sz_t n_4 = NSIZE / 4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
 	\
 	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \
 	\
@@ -966,7 +966,7 @@ void square2048(__global RNS * restrict const z, __global RNSe * restrict const 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void fwd32p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -979,7 +979,7 @@ void fwd32p(__global RNS * restrict const z, __global RNSe * restrict const ze, 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void fwd64p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -992,7 +992,7 @@ void fwd64p(__global RNS * restrict const z, __global RNSe * restrict const ze, 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void fwd128p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -1006,7 +1006,7 @@ void fwd128p(__global RNS * restrict const z, __global RNSe * restrict const ze,
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void fwd256p(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
 {
@@ -1068,7 +1068,7 @@ void fwd2048p(__global RNS * restrict const z, __global RNSe * restrict const ze
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
-	__attribute__((reqd_work_group_size(32 / 4 * BLK32, 1, 1)))
+	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))
 #endif
 void mul32(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
@@ -1088,7 +1088,7 @@ void mul32(__global RNS * restrict const z, __global RNSe * restrict const ze, _
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 64 / 4 * BLK64
-	__attribute__((reqd_work_group_size(64 / 4 * BLK64, 1, 1)))
+	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
 #endif
 void mul64(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
@@ -1108,7 +1108,7 @@ void mul64(__global RNS * restrict const z, __global RNSe * restrict const ze, _
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 128 / 4 * BLK128
-	__attribute__((reqd_work_group_size(128 / 4 * BLK128, 1, 1)))
+	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
 #endif
 void mul128(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)
@@ -1130,7 +1130,7 @@ void mul128(__global RNS * restrict const z, __global RNSe * restrict const ze, 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 256 / 4 * BLK256
-	__attribute__((reqd_work_group_size(256 / 4 * BLK256, 1, 1)))
+	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
 #endif
 void mul256(__global RNS * restrict const z, __global RNSe * restrict const ze, __global const RNS * restrict const zp, __global const RNSe * restrict const zpe,
 	__global const RNS_W * restrict const w, __global const RNS_We * restrict const we)

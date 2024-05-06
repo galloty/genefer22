@@ -1036,7 +1036,14 @@ public:
 		std::ostringstream src;
 
 		src << "#define\tLNSIZE\t" << n << std::endl;
-		src << "#define\tNSIZE\t" << (1u << n) << "u" << std::endl;
+		if (_pEngine->isIntel())	// Fix Intel compiler issue
+		{
+			src << "#define\tNSIZE_4\t((sz_t)get_global_size(0))" << std::endl;
+		}
+		else
+		{
+			src << "#define\tNSIZE_4\t" << (1u << (n - 2)) << "u" << std::endl;
+		}
 
 		MForm1 mf1; MForm2 mf2;
 		src << "#define\tP1\t" << P1_32 << "u" << std::endl;

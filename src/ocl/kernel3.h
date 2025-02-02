@@ -45,7 +45,7 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "INLINE int96 int96_neg(const int96 x)\n" \
 "{\n" \
-"	const int c = (x.s0 != 0) ? 1 : 0;\n" \
+"	const int c = x.s0 != 0;\n" \
 "	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - c;\n" \
 "	return r;\n" \
 "}\n" \
@@ -127,7 +127,9 @@ static const char * const src_ocl_kernel3 = \
 "// If lhs = x and rhs = y * 2^32 then r = x * y mod p.\n" \
 "INLINE uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)\n" \
 "{\n" \
-"	const uint t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);\n" \
+"	const ulong prod = (ulong)lhs * rhs;\n" \
+"	const uint t_lo = (uint)prod;\n" \
+"	const uint t_hi = prod >> 32;\n" \
 "	const uint mp = mul_hi(t_lo * q, p);\n" \
 "	return _subMod(t_hi, mp, p);\n" \
 "}\n" \
@@ -1253,7 +1255,7 @@ static const char * const src_ocl_kernel3 = \
 "\n" \
 "	const uint d = mul_hi((uint)(a >> b_s), b_inv), r = (uint)a - d * b;\n" \
 "	const bool o = (r >= b);\n" \
-"	*a_p = o ? d + 1 : d;\n" \
+"	*a_p = d + (uint)o;\n" \
 "	return o ? r - b : r;\n" \
 "}\n" \
 "\n" \

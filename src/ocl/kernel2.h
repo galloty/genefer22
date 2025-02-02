@@ -50,7 +50,9 @@ static const char * const src_ocl_kernel2 = \
 "// If lhs = x and rhs = y * 2^32 then r = x * y mod p.\n" \
 "INLINE uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)\n" \
 "{\n" \
-"	const uint t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);\n" \
+"	const ulong prod = (ulong)lhs * rhs;\n" \
+"	const uint t_lo = (uint)prod;\n" \
+"	const uint t_hi = prod >> 32;\n" \
 "	const uint mp = mul_hi(t_lo * q, p);\n" \
 "	return _subMod(t_hi, mp, p);\n" \
 "}\n" \
@@ -966,7 +968,7 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "	const uint d = mul_hi((uint)(a >> b_s), b_inv), r = (uint)a - d * b;\n" \
 "	const bool o = (r >= b);\n" \
-"	*a_p = o ? d + 1 : d;\n" \
+"	*a_p = d + (uint)o;\n" \
 "	return o ? r - b : r;\n" \
 "}\n" \
 "\n" \

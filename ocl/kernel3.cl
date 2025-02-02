@@ -33,7 +33,7 @@ INLINE bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y
 
 INLINE int96 int96_neg(const int96 x)
 {
-	const int c = (x.s0 != 0) ? 1 : 0;
+	const int c = x.s0 != 0;
 	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - c;
 	return r;
 }
@@ -115,7 +115,9 @@ INLINE uint _subMod(const uint lhs, const uint rhs, const uint p)
 // If lhs = x and rhs = y * 2^32 then r = x * y mod p.
 INLINE uint _mulMonty(const uint lhs, const uint rhs, const uint p, const uint q)
 {
-	const uint t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);
+	const ulong prod = (ulong)lhs * rhs;
+	const uint t_lo = (uint)prod;
+	const uint t_hi = prod >> 32;
 	const uint mp = mul_hi(t_lo * q, p);
 	return _subMod(t_hi, mp, p);
 }
@@ -1241,7 +1243,7 @@ INLINE uint barrett(const ulong a, const uint b, const uint b_inv, const int b_s
 
 	const uint d = mul_hi((uint)(a >> b_s), b_inv), r = (uint)a - d * b;
 	const bool o = (r >= b);
-	*a_p = o ? d + 1 : d;
+	*a_p = d + (uint)o;
 	return o ? r - b : r;
 }
 

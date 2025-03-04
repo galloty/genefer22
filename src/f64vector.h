@@ -160,7 +160,11 @@ public:
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	finline double operator[](const size_t i) const { return r[i]; }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 	finline void set(const size_t i, const double & f) { r[i] = f; }
+#pragma GCC diagnostic pop
 
 	finline bool isZero() const { return (_mm256_movemask_pd(_mm256_cmp_pd(r, _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0); }
 
@@ -272,7 +276,11 @@ public:
 	finline static Vd broadcast(const double & f_l, const double & f_h) { return Vd(_mm512_set_pd(f_h, f_h, f_h, f_h, f_l, f_l, f_l, f_l)); }
 
 	finline double operator[](const size_t i) const { return r[i]; }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 	finline void set(const size_t i, const double & f) { r[i] = f; }
+#pragma GCC diagnostic pop
 
 	finline bool isZero() const { return (_mm512_cmp_pd_mask(r, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0); }
 

@@ -36,8 +36,9 @@ private:
 	static uint64_t _mul(const uint64_t a, const uint64_t b)
 	{
 		const __uint128_t t = a * __uint128_t(b);
-		const uint64_t lo = uint64_t(t) & _p, hi = uint64_t(t >> 61);
-		return _add(hi, lo);
+		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
+		const uint64_t lo61 = lo & _p, hi61 = (lo >> 61) | (hi << 3);
+		return _add(lo61, hi61);
 	}
 
 public:
@@ -60,30 +61,32 @@ public:
 class GF61
 {
 private:
-	Z61 _a, _b;
+	Z61 _s0, _s1;
 	// a primitive root of order 2^62 which is a root of (0, 1).
 	static const uint64_t _h_order = uint64_t(1) << 62;
-	static const uint64_t _h_a = 264036120304204ull, _h_b = 4677669021635377ull;
+	static const uint64_t _h_0 = 264036120304204ull, _h_1 = 4677669021635377ull;
 public:
 	GF61() {}
-	explicit GF61(const Z61 & a, const Z61 & b) : _a(a), _b(b) {}
+	explicit GF61(const Z61 & s0, const Z61 & s1) : _s0(s0), _s1(s1) {}
 
-	const Z61 & a() const { return _a; }
-	const Z61 & b() const { return _b; }
+	const Z61 & s0() const { return _s0; }
+	const Z61 & s1() const { return _s1; }
 
-	// GF61 conj() const { return GF61(_a, -_b); }
+	GF61 & set_int(const int64_t i0, const int64_t i1) { _s0.set_int(i0); _s1.set_int(i1); return *this; }
 
-	GF61 add(const GF61 & rhs) const { return GF61(_a.add(rhs._a), _b.add(rhs._b)); }
-	GF61 sub(const GF61 & rhs) const { return GF61(_a.sub(rhs._a), _b.sub(rhs._b)); }
-	GF61 muls(const Z61 & rhs) const { return GF61(_a.mul(rhs), _b.mul(rhs)); }
+	// GF61 conj() const { return GF61(_s0, -_s1); }
 
-	GF61 sqr() const { const Z61 t = _a.mul(_b); return GF61(_a.mul(_a).sub(_b.mul(_b)), t.add(t)); }
-	GF61 mul(const GF61 & rhs) const { return GF61(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
-	GF61 mulconj(const GF61 & rhs) const { return GF61(_a.mul(rhs._a).add(_b.mul(rhs._b)), _b.mul(rhs._a).sub(_a.mul(rhs._b))); }
+	GF61 add(const GF61 & rhs) const { return GF61(_s0.add(rhs._s0), _s1.add(rhs._s1)); }
+	GF61 sub(const GF61 & rhs) const { return GF61(_s0.sub(rhs._s0), _s1.sub(rhs._s1)); }
+	GF61 muls(const Z61 & rhs) const { return GF61(_s0.mul(rhs), _s1.mul(rhs)); }
 
-	// GF61 muli() const { return GF61(-_b, _a); }
-	GF61 addi(const GF61 & rhs) const { return GF61(_a.sub(rhs._b), _b.add(rhs._a)); }
-	GF61 subi(const GF61 & rhs) const { return GF61(_a.add(rhs._b), _b.sub(rhs._a)); }
+	GF61 sqr() const { const Z61 t = _s0.mul(_s1); return GF61(_s0.mul(_s0).sub(_s1.mul(_s1)), t.add(t)); }
+	GF61 mul(const GF61 & rhs) const { return GF61(_s0.mul(rhs._s0).sub(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).add(_s0.mul(rhs._s1))); }
+	GF61 mulconj(const GF61 & rhs) const { return GF61(_s0.mul(rhs._s0).add(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).sub(_s0.mul(rhs._s1))); }
+
+	// GF61 muli() const { return GF61(-_s1, _s0); }
+	GF61 addi(const GF61 & rhs) const { return GF61(_s0.sub(rhs._s1), _s1.add(rhs._s0)); }
+	GF61 subi(const GF61 & rhs) const { return GF61(_s0.add(rhs._s1), _s1.sub(rhs._s0)); }
 
 	GF61 pow(const uint64_t e) const
 	{
@@ -93,7 +96,7 @@ public:
 		return r.mul(y);
 	}
 
-	static const GF61 primroot_n(const uint32_t n) { return GF61(Z61(_h_a), Z61(_h_b)).pow(_h_order / n); }
+	static const GF61 primroot_n(const uint32_t n) { return GF61(Z61(_h_0), Z61(_h_1)).pow(_h_order / n); }
 };
 
 // Modulo 2^31 - 1
@@ -142,31 +145,33 @@ public:
 class GF31
 {
 private:
-	Z31 _a, _b;
+	Z31 _s0, _s1;
 	// a primitive root of order 2^31 which is a root of (0, 1).
 	static const uint32_t _h_order = uint32_t(1) << 31;
-	static const uint32_t _h_a = 105066u, _h_b = 333718u;
+	static const uint32_t _h_0 = 105066u, _h_1 = 333718u;
 
 public:
 	GF31() {}
-	explicit GF31(const Z31 & a, const Z31 & b) : _a(a), _b(b) {}
+	explicit GF31(const Z31 & s0, const Z31 & s1) : _s0(s0), _s1(s1) {}
 
-	const Z31 & a() const { return _a; }
-	const Z31 & b() const { return _b; }
+	const Z31 & s0() const { return _s0; }
+	const Z31 & s1() const { return _s1; }
 
-	// GF31 conj() const { return GF31(_a, -_b); }
+	GF31 & set_int(const int32_t i0, const int32_t i1) { _s0.set_int(i0); _s1.set_int(i1); return *this; }
 
-	GF31 add(const GF31 & rhs) const { return GF31(_a.add(rhs._a), _b.add(rhs._b)); }
-	GF31 sub(const GF31 & rhs) const { return GF31(_a.sub(rhs._a), _b.sub(rhs._b)); }
-	GF31 muls(const Z31 & rhs) const { return GF31(_a.mul(rhs), _b.mul(rhs)); }
+	// GF31 conj() const { return GF31(_s0, -_s1); }
 
-	GF31 sqr() const { const Z31 t = _a.mul(_b); return GF31(_a.mul(_a).sub(_b.mul(_b)), t.add(t)); }
-	GF31 mul(const GF31 & rhs) const { return GF31(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
-	GF31 mulconj(const GF31 & rhs) const { return GF31(_a.mul(rhs._a).add(_b.mul(rhs._b)), _b.mul(rhs._a).sub(_a.mul(rhs._b))); }
+	GF31 add(const GF31 & rhs) const { return GF31(_s0.add(rhs._s0), _s1.add(rhs._s1)); }
+	GF31 sub(const GF31 & rhs) const { return GF31(_s0.sub(rhs._s0), _s1.sub(rhs._s1)); }
+	GF31 muls(const Z31 & rhs) const { return GF31(_s0.mul(rhs), _s1.mul(rhs)); }
 
-	// GF31 muli() const { return GF31(-_b, _a); }
-	GF31 addi(const GF31 & rhs) const { return GF31(_a.sub(rhs._b), _b.add(rhs._a)); }
-	GF31 subi(const GF31 & rhs) const { return GF31(_a.add(rhs._b), _b.sub(rhs._a)); }
+	GF31 sqr() const { const Z31 t = _s0.mul(_s1); return GF31(_s0.mul(_s0).sub(_s1.mul(_s1)), t.add(t)); }
+	GF31 mul(const GF31 & rhs) const { return GF31(_s0.mul(rhs._s0).sub(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).add(_s0.mul(rhs._s1))); }
+	GF31 mulconj(const GF31 & rhs) const { return GF31(_s0.mul(rhs._s0).add(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).sub(_s0.mul(rhs._s1))); }
+
+	// GF31 muli() const { return GF31(-_s1, _s0); }
+	GF31 addi(const GF31 & rhs) const { return GF31(_s0.sub(rhs._s1), _s1.add(rhs._s0)); }
+	GF31 subi(const GF31 & rhs) const { return GF31(_s0.add(rhs._s1), _s1.sub(rhs._s0)); }
 
 	GF31 pow(const uint32_t e) const
 	{
@@ -176,7 +181,7 @@ public:
 		return r.mul(y);
 	}
 
-	static const GF31 primroot_n(const uint32_t n) { return GF31(Z31(_h_a), Z31(_h_b)).pow(_h_order / n); }
+	static const GF31 primroot_n(const uint32_t n) { return GF31(Z31(_h_0), Z31(_h_1)).pow(_h_order / n); }
 };
 
 template<class Field, class GField>
@@ -318,34 +323,34 @@ private:
 
 		const Field norm = _norm;
 		const int32_t m = _multiplier, base = _base;
-		int64_t fa = 0, fb = 0, fmax = 0;
+		int64_t f0 = 0, f1 = 0, fmax = 0;
 
 		for (size_t k = 0; k < n; ++k)
 		{
 			const GField u = z[k].muls(norm);
-			int64_t ia = u.a().get_int(), ib = u.b().get_int();
-			if (mul) { ia *= m; ib *= m; }
-			fa += ia; fb += ib;
-			fmax = std::max(fmax, std::max(std::abs(fa), std::abs(fb)));
-			int64_t la = fa / base, lb = fb / base;
-			z[k] = GField(Field().set_int(fa - la * base), Field().set_int(fb - lb * base));
-			fa = la; fb = lb;
+			int64_t i0 = u.s0().get_int(), i1 = u.s1().get_int();
+			if (mul) { i0 *= m; i1 *= m; }
+			f0 += i0; f1 += i1;
+			fmax = std::max(fmax, std::max(std::abs(f0), std::abs(f1)));
+			int64_t l0 = f0 / base, l1 = f1 / base;
+			z[k].set_int(f0 - l0 * base, f1 - l1 * base);
+			f0 = l0; f1 = l1;
 		}
 
 		_fmax = std::max(_fmax, fmax);
 
-		while ((fa != 0) || (fb != 0))
+		while ((f0 != 0) || (f1 != 0))
 		{
-			int64_t t = fa; fa = -fb; fb = t;	// a_n = -a_0
+			int64_t t = f0; f0 = -f1; f1 = t;	// a_n = -a_0
 
 			for (size_t k = 0; k < n; ++k)
 			{
 				const GField u = z[k];
-				fa += u.a().get_int(); fb += u.b().get_int();
-				int64_t la = fa / base, lb = fb / base;
-				z[k] = GField(Field().set_int(fa - la * base), Field().set_int(fb - lb * base));
-				fa = la; fb = lb;
-				if ((la == 0) && (lb == 0)) break;
+				f0 += u.s0().get_int(); f1 += u.s1().get_int();
+				int64_t l0 = f0 / base, l1 = f1 / base;
+				z[k].set_int(f0 - l0 * base, f1 - l1 * base);
+				f0 = l0; f1 = l1;
+				if ((l0 == 0) && (l1 == 0)) break;
 			}
 		}
 	}
@@ -395,8 +400,8 @@ public:
 
 		for (size_t i = 0; i < n; ++i)
 		{
-			zi[i] = z[i].a().get_int();
-			zi[i + n] = z[i].b().get_int();
+			zi[i + 0 * n] = z[i].s0().get_int();
+			zi[i + 1 * n] = z[i].s1().get_int();
 		}
 
 		const int32_t base = _base;

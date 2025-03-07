@@ -16,189 +16,175 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernel2.h"
 #include "ocl/kernel3.h"
+#include "ocl/kernel1g.h"
+#include "ocl/kernel2g.h"
 
-template <cl_uint p, cl_uint prRoot>
-class Zp
+// Modulo 2^61 - 1
+class Z61
 {
 private:
-	cl_uint _n;
+	static const cl_ulong _p = (cl_ulong(1) << 61) - 1;
+	cl_ulong _n;	// 0 <= n <= p
 
-private:
-	explicit Zp(const cl_uint n) : _n(n) {}
-
-	Zp _mulMod(const Zp & rhs) const { return Zp(static_cast<cl_uint>((_n * cl_ulong(rhs._n)) % p)); }
-
-public:
-	Zp() {}
-	explicit Zp(const int32_t i) : _n((i < 0) ? p - static_cast<cl_uint>(-i) : static_cast<cl_uint>(i)) {}
-
-	cl_uint get() const { return _n; }
-	int32_t getInt() const { return (_n > p / 2) ? static_cast<int32_t>(_n - p) : static_cast<int32_t>(_n); }
-
-	void set(const cl_uint n) { _n = n; }
-
-	Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
-
-	Zp & operator*=(const Zp & rhs) { *this = _mulMod(rhs); return *this; }
-	Zp operator*(const Zp & rhs) const { return _mulMod(rhs); }
-
-	Zp pow(const uint32_t e) const
+	static cl_ulong _add(const cl_ulong a, const cl_ulong b)
 	{
-		if (e == 0) return Zp(1);
-
-		Zp r = Zp(1), y = *this;
-		for (uint32_t i = e; i != 1; i /= 2)
-		{
-			if (i % 2 != 0) r *= y;
-			y *= y;
-		}
-		r *= y;
-
-		return r;
+		const cl_ulong t = a + b;
+		const cl_ulong c = (cl_uint(t >> 32) > cl_uint(_p >> 32)) ? _p : 0;	// t > p ?
+		return t - c;
 	}
 
-	static const Zp prRoot_n(const uint32_t n) { return Zp(prRoot).pow((p - 1) / n); }
+	static cl_ulong _sub(const cl_ulong a, const cl_ulong b)
+	{
+		const cl_ulong t = a - b;
+		const cl_ulong c = (cl_int(t >> 32) < 0) ? _p : 0;	// t < 0 ?
+		return t + c;
+	}
+
+	static cl_ulong _mul(const cl_ulong a, const cl_ulong b)
+	{
+		const __uint128_t t = a * __uint128_t(b);
+		const cl_ulong lo = cl_ulong(t) & _p, hi = cl_ulong(t >> 61);
+		return _add(hi, lo);
+	}
+
+public:
+	Z61() {}
+	explicit Z61(const cl_ulong n) : _n(n) {}
+
+	cl_long get_int() const { return (_n >= _p / 2) ? cl_long(_n - _p) : cl_long(_n); }	// if n = p then return 0
+	Z61 & set_int(const cl_long i) { _n = (i < 0) ? cl_ulong(i) + _p : cl_ulong(i); return *this; }
+
+	// Z61 neg() const { return Z61((_n == 0) ? 0 : _p - _n); }
+
+	Z61 add(const Z61 & rhs) const { return Z61(_add(_n, rhs._n)); }
+	Z61 sub(const Z61 & rhs) const { return Z61(_sub(_n, rhs._n)); }
+	Z61 mul(const Z61 & rhs) const { return Z61(_mul(_n, rhs._n)); }
+
+	static Z61 inv(const cl_uint n) { return Z61((_p + 1) / n); }
 };
 
-// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
-
-// Montgomery form: if 0 <= n < p then r is n * 2^32 mod p
-template <cl_uint p>
-class MForm
+// GF((2^61 - 1)^2)
+class GF61
 {
 private:
-	const cl_uint _q;
-	const cl_uint _r2;	// (2^32)^2 mod p
-
-private:
-	// p * p_inv = 1 (mod 2^32) (Newton's method)
-	static constexpr cl_uint invert()
-	{
-		cl_uint p_inv = 1, prev = 0;
-		while (p_inv != prev) { prev = p_inv; p_inv *= 2 - p * p_inv; }
-		return p_inv;
-	}
-
-	// The Montgomery REDC algorithm
-	constexpr cl_uint REDC(const cl_ulong t) const
-	{
-		const cl_uint m = cl_uint(t) * _q, t_hi = cl_uint(t >> 32);
-		const cl_uint mp = cl_uint((m * cl_ulong(p)) >> 32), r = t_hi - mp;
-		return (t_hi < mp) ? r + p : r;
-	}
+	Z61 _a, _b;
+	// a primitive root of order 2^62 which is a root of (0, 1).
+	static const cl_ulong _h_order = cl_ulong(1) << 62;
+	static const cl_ulong _h_a = 2147483648ull, _h_b = 1272521237944691271ull;
 
 public:
-	MForm() : _q(invert()), _r2(cl_uint((((cl_ulong(1) << 32) % p) * ((cl_ulong(1) << 32) % p)) % p)) {}
+	GF61() {}
+	explicit GF61(const Z61 & a, const Z61 & b) : _a(a), _b(b) {}
 
-	constexpr cl_uint q() const { return _q; }
-	constexpr cl_uint r2() const { return _r2; }
+	const Z61 & a() const { return _a; }
+	const Z61 & b() const { return _b; }
 
-	// Conversion into Montgomery form
-	constexpr cl_uint toMonty(const cl_uint lhs) const
+	// GF61 conj() const { return GF61(_a, -_b); }
+
+	GF61 add(const GF61 & rhs) const { return GF61(_a.add(rhs._a), _b.add(rhs._b)); }
+	GF61 sub(const GF61 & rhs) const { return GF61(_a.sub(rhs._a), _b.sub(rhs._b)); }
+	GF61 muls(const Z61 & rhs) const { return GF61(_a.mul(rhs), _b.mul(rhs)); }
+
+	GF61 sqr() const { const Z61 t = _a.mul(_b); return GF61(_a.mul(_a).sub(_b.mul(_b)), t.add(t)); }
+	GF61 mul(const GF61 & rhs) const { return GF61(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
+	GF61 mulconj(const GF61 & rhs) const { return GF61(_a.mul(rhs._a).add(_b.mul(rhs._b)), _b.mul(rhs._a).sub(_a.mul(rhs._b))); }
+
+	// GF61 muli() const { return GF61(-_b, _a); }
+	GF61 addi(const GF61 & rhs) const { return GF61(_a.sub(rhs._b), _b.add(rhs._a)); }
+	GF61 subi(const GF61 & rhs) const { return GF61(_a.add(rhs._b), _b.sub(rhs._a)); }
+
+	GF61 pow(const cl_ulong e) const
 	{
-		// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)
-		return REDC(lhs * cl_ulong(_r2));
+		if (e == 0) return GF61(Z61(1), Z61(0));
+		GF61 r = GF61(Z61(1), Z61(0)), y = *this;
+		for (cl_ulong i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
+		return r.mul(y);
 	}
 
-	// Conversion out of Montgomery form
-	// constexpr cl_uint fromMonty(const cl_uint lhs) const
-	// {
-	// 	// n = REDC(n * 2^32, 1)
-	// 	return REDC(lhs);
-	// }
+	static const GF61 primroot_n(const cl_uint n) { return GF61(Z61(_h_a), Z61(_h_b)).pow(_h_order / n); }
 };
 
-// #define P0_32	4253024257u		// 507 * 2^23 + 1
-#define P1_32	4194304001u		// 125 * 2^25 + 1
-#define P2_32	4076863489u		// 243 * 2^24 + 1
-#define P3_32	3942645761u		// 235 * 2^24 + 1
-
-// typedef Zp<P0_32, 5> Zp0_32;
-typedef Zp<P1_32, 3> Zp1;
-typedef Zp<P2_32, 7> Zp2;
-typedef Zp<P3_32, 3> Zp3;
-
-typedef MForm<P1_32> MForm1;
-typedef MForm<P2_32> MForm2;
-typedef MForm<P3_32> MForm3;
-
-template<class Zp1, class Zp2>
-class RNS_T
+// Modulo 2^31 - 1
+class Z31
 {
 private:
-	cl_uint2 r;	// Zp1, Zp2
+	static const cl_uint _p = (cl_uint(1) << 31) - 1;
+	cl_uint _n;	// 0 <= n < p
 
-private:
-	explicit RNS_T(const Zp1 & n1, const Zp2 & n2) { r.s[0] = n1.get(); r.s[1] = n2.get(); }
-
-public:
-	RNS_T() {}
-	explicit RNS_T(const int32_t i) { r.s[0] = Zp1(i).get(); r.s[1] = Zp2(i).get(); }
-
-	Zp1 r1() const { Zp1 n1; n1.set(r.s[0]); return n1; }
-	Zp2 r2() const { Zp2 n2; n2.set(r.s[1]); return n2; }
-	void set(const cl_uint n1, const cl_uint n2) { r.s[0] = n1; r.s[1] = n2; }
-
-	RNS_T operator-() const { return RNS_T(-r1(), -r2()); }
-
-	RNS_T pow(const uint32_t e) const { return RNS_T(r1().pow(e), r2().pow(e)); }
-
-	// Conversion into Montgomery form
-	RNS_T toMonty() const
+	static cl_uint _add(const cl_uint a, const cl_uint b)
 	{
-		Zp1 n1; n1.set(MForm1().toMonty(r.s[0]));
-		Zp2 n2; n2.set(MForm2().toMonty(r.s[1]));
-		return RNS_T(n1, n2);
+		const cl_uint t = a + b;
+		return t - ((t >= _p) ? _p : 0);
 	}
 
-	// Conversion out of Montgomery form
-	// RNS_T fromMonty() const
-	// {
-	// 	Zp1 n1; n1.set(MForm1().fromMonty(r.s[0]));
-	// 	Zp2 n2; n2.set(MForm2().fromMonty(r.s[1]));
-	// 	return RNS_T(n1, n2);
-	// }
+	static cl_uint _sub(const cl_uint a, const cl_uint b)
+	{
+		const cl_uint t = a - b;
+		return t + ((cl_int(t) < 0) ? _p : 0);
+	}
 
-	static const RNS_T prRoot_n(const uint32_t n) { return RNS_T(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
+	static cl_uint _mul(const cl_uint a, const cl_uint b)
+	{
+		const cl_ulong t = a * cl_ulong(b);
+		const cl_uint lo = cl_uint(t) & _p, hi = cl_uint(t >> 31);
+		return _add(hi, lo);
+	}
+
+public:
+	Z31() {}
+	explicit Z31(const cl_uint n) : _n(n) {}
+
+	cl_int get_int() const { return (_n >= _p / 2) ? cl_int(_n - _p) : cl_int(_n); }
+	Z31 & set_int(const cl_int i) { _n = (i < 0) ? cl_uint(i) + _p : cl_uint(i); return *this; }
+
+	// Z31 neg() const { return Z31((_n == 0) ? 0 : _p - _n); }
+
+	Z31 add(const Z31 & rhs) const { return Z31(_add(_n, rhs._n)); }
+	Z31 sub(const Z31 & rhs) const { return Z31(_sub(_n, rhs._n)); }
+	Z31 mul(const Z31 & rhs) const { return Z31(_mul(_n, rhs._n)); }
+
+	static Z31 inv(const cl_uint n) { return Z31((_p + 1) / n); }
 };
 
-template<class Zp3>
-class RNSe_T
+// GF((2^31 - 1)^2)
+class GF31
 {
 private:
-	cl_uint r;	// Zp3
-
-private:
-	explicit RNSe_T(const Zp3 & n3) { r = n3.get(); }
+	Z31 _a, _b;
+	// a primitive root of order 2^31 which is a root of (0, 1).
+	static const cl_uint _h_order = cl_uint(1) << 31;
+	static const cl_uint _h_a = 105066u, _h_b = 333718u;
 
 public:
-	RNSe_T() {}
-	explicit RNSe_T(const int32_t i) { r = Zp3(i).get(); }
+	GF31() {}
+	explicit GF31(const Z31 & a, const Z31 & b) : _a(a), _b(b) {}
 
-	Zp3 r3() const { Zp3 n3; n3.set(r); return n3; }
-	void set(const cl_uint n3) { r = n3; }
+	const Z31 & a() const { return _a; }
+	const Z31 & b() const { return _b; }
 
-	RNSe_T operator-() const { return RNSe_T(-r3()); }
+	// GF31 conj() const { return GF31(_a, -_b); }
 
-	RNSe_T operator*(const RNSe_T & rhs) const { return RNSe_T(r3() * rhs.r3()); }
+	GF31 add(const GF31 & rhs) const { return GF31(_a.add(rhs._a), _b.add(rhs._b)); }
+	GF31 sub(const GF31 & rhs) const { return GF31(_a.sub(rhs._a), _b.sub(rhs._b)); }
+	GF31 muls(const Z31 & rhs) const { return GF31(_a.mul(rhs), _b.mul(rhs)); }
 
-	RNSe_T pow(const uint32_t e) const { return RNSe_T(r3().pow(e)); }
+	GF31 sqr() const { const Z31 t = _a.mul(_b); return GF31(_a.mul(_a).sub(_b.mul(_b)), t.add(t)); }
+	GF31 mul(const GF31 & rhs) const { return GF31(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
+	GF31 mulconj(const GF31 & rhs) const { return GF31(_a.mul(rhs._a).add(_b.mul(rhs._b)), _b.mul(rhs._a).sub(_a.mul(rhs._b))); }
 
-	// Conversion into Montgomery form
-	RNSe_T toMonty() const
+	// GF31 muli() const { return GF31(-_b, _a); }
+	GF31 addi(const GF31 & rhs) const { return GF31(_a.sub(rhs._b), _b.add(rhs._a)); }
+	GF31 subi(const GF31 & rhs) const { return GF31(_a.add(rhs._b), _b.sub(rhs._a)); }
+
+	GF31 pow(const cl_ulong e) const
 	{
-		Zp3 n3; n3.set(MForm3().toMonty(r));
-		return RNSe_T(n3);
+		if (e == 0) return GF31(Z31(1), Z31(0));
+		GF31 r = GF31(Z31(1), Z31(0)), y = *this;
+		for (cl_ulong i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
+		return r.mul(y);
 	}
 
-	// Conversion out of Montgomery form
-	// RNSe_T fromMonty() const
-	// {
-	// 	Zp3 n3; n3.set(MForm3().fromMonty(r));
-	// 	return RNSe_T(n3);
-	// }
-
-	static const RNSe_T prRoot_n(const uint32_t n) { return RNSe_T(Zp3::prRoot_n(n)); }
+	static const GF31 primroot_n(const cl_uint n) { return GF31(Z31(_h_a), Z31(_h_b)).pow(_h_order / n); }
 };
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
@@ -212,12 +198,12 @@ public:
 #define CHUNK256	4
 #define CHUNK1024	2
 
-template<class RNS, class RNSe, class RNS_W, class RNS_We, size_t RNS_SIZE>
-class engine : public device
+template<size_t GF_SIZE>
+class engineg : public device
 {
 private:
-	const size_t _n;
-	const int _ln;
+	const size_t _n_2;
+	const int _ln_m1;
 	const bool _isBoinc;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr;
 	cl_mem _ze = nullptr, _zpe = nullptr, _we = nullptr;
@@ -234,9 +220,9 @@ private:
 	// bool _first = true;
 
 public:
-	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
-		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc) {}
-	virtual ~engine() {}
+	engineg(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
+		: device(platform, d, verbose), _n_2(size_t(1) << (ln - 1)), _ln_m1(ln - 1), _isBoinc(isBoinc) {}
+	virtual ~engineg() {}
 
 ///////////////////////////////
 
@@ -290,19 +276,19 @@ public:
 		std::ostringstream ss; ss << "Alloc gpu memory." << std::endl;
 		pio::display(ss.str());
 #endif
-		const size_t n = _n;
-		if (n != 0)
+		const size_t n_2 = _n_2;
+		if (n_2 != 0)
 		{
-			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n * num_regs);
-			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNS) * n);
-			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_W) * 2 * n);
-			if (RNS_SIZE == 3)
+			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF61) * n_2 * num_regs);
+			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF61) * n_2);
+			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(GF61) * n_2 / 2);
+			if (GF_SIZE == 2)
 			{
-				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n * num_regs);
-				_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(RNSe) * n);
-				_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(RNS_We) * 2 * n);
+				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31) * n_2 * num_regs);
+				_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31) * n_2);
+				_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(GF31) * n_2 / 2);
 			}
-			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long) * n / 4);
+			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long) * n_2 / 4);
 		}
 	}
 
@@ -312,12 +298,12 @@ public:
 		std::ostringstream ss; ss << "Free gpu memory." << std::endl;
 		pio::display(ss.str());
 #endif
-		if (_n != 0)
+		if (_n_2 != 0)
 		{
 			_releaseBuffer(_z);
 			_releaseBuffer(_zp); 
 			_releaseBuffer(_w);  
-			if (RNS_SIZE == 3)
+			if (GF_SIZE == 2)
 			{
 				_releaseBuffer(_ze);
 				_releaseBuffer(_zpe);
@@ -335,9 +321,9 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
@@ -346,7 +332,7 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_c);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &b);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &b_inv);
@@ -359,11 +345,11 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
@@ -372,7 +358,7 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -381,7 +367,7 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -390,9 +376,9 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
+		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -448,7 +434,7 @@ public:
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
-		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln_m1), CHUNK256, CHUNK1024, sizeof(GF61) + ((GF_SIZE == 2) ? sizeof(GF31) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -475,24 +461,24 @@ public:
 
 ///////////////////////////////
 
-	void readMemory_z(RNS * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(RNS) * _n * count); }
-	void readMemory_ze(RNSe  * const zPtre, const size_t count = 1) { _readBuffer(_ze, zPtre, sizeof(RNSe) * _n * count); }
+	void readMemory_z(GF61 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(GF61) * _n_2 * count); }
+	void readMemory_ze(GF31  * const zPtre, const size_t count = 1) { _readBuffer(_ze, zPtre, sizeof(GF31) * _n_2 * count); }
 
-	void writeMemory_z(const RNS * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(RNS) * _n * count); }
-	void writeMemory_ze(const RNSe * const zPtre, const size_t count = 1) { _writeBuffer(_ze, zPtre, sizeof(RNSe) * _n * count); }
+	void writeMemory_z(const GF61 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(GF61) * _n_2 * count); }
+	void writeMemory_ze(const GF31 * const zPtre, const size_t count = 1) { _writeBuffer(_ze, zPtre, sizeof(GF31) * _n_2 * count); }
 
-	void writeMemory_w(const RNS_W * const wPtr) { _writeBuffer(_w, wPtr, sizeof(RNS_W) * 2 * _n); }
-	void writeMemory_we(const RNS_We * const wPtre) { _writeBuffer(_we, wPtre, sizeof(RNS_We) * 2 * _n); }
+	void writeMemory_w(const GF61 * const wPtr) { _writeBuffer(_w, wPtr, sizeof(GF61) * _n_2 / 2); }
+	void writeMemory_we(const GF31 * const wPtre) { _writeBuffer(_we, wPtre, sizeof(GF31) * _n_2 / 2); }
 
 ///////////////////////////////
 
 private:
 	void fb(cl_kernel & kernel, const int lm, const size_t localWorkSize)
 	{
-		const size_t n_4 = _n / 4;
+		const size_t n_4 = _n_2 / 4;
 		const cl_int ilm = static_cast<cl_int>(lm);
 		const cl_uint is = static_cast<cl_uint>(n_4 >> lm);
-		cl_uint index = (RNS_SIZE == 3) ? 4 : 2;
+		cl_uint index = (GF_SIZE == 2) ? 4 : 2;
 		_setKernelArg(kernel, index++, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &is);
 		_executeKernel(kernel, n_4, localWorkSize);
@@ -505,38 +491,38 @@ private:
 	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024); }
 	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024); }
 
-	void forward64_0() { const size_t n_4 = _n / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64); }
-	void forward256_0() { const size_t n_4 = _n / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256); }
-	void forward1024_0() { const size_t n_4 = _n / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024); }
+	void forward64_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64); }
+	void forward256_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256); }
+	void forward1024_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024); }
 	
-	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void square256() { const size_t n_4 = _n / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void square512() { const size_t n_4 = _n / 4; _executeKernel(_square512, n_4, 512 / 4); }
-	void square1024() { const size_t n_4 = _n / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
-	void square2048() { const size_t n_4 = _n / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
+	void square32() { const size_t n_4 = _n_2 / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void square64() { const size_t n_4 = _n_2 / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void square128() { const size_t n_4 = _n_2 / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void square256() { const size_t n_4 = _n_2 / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void square512() { const size_t n_4 = _n_2 / 4; _executeKernel(_square512, n_4, 512 / 4); }
+	void square1024() { const size_t n_4 = _n_2 / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
+	void square2048() { const size_t n_4 = _n_2 / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
 
-	void fwd32p() { const size_t n_4 = _n / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void fwd64p() { const size_t n_4 = _n / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void fwd128p() { const size_t n_4 = _n / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void fwd256p() { const size_t n_4 = _n / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void fwd512p() { const size_t n_4 = _n / 4; _executeKernel(_fwd512p, n_4, 512 / 4); }
-	void fwd1024p() { const size_t n_4 = _n / 4; _executeKernel(_fwd1024p, n_4, 1024 / 4); }
-	void fwd2048p() { const size_t n_4 = _n / 4; _executeKernel(_fwd2048p, n_4, 2048 / 4); }
+	void fwd32p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void fwd64p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void fwd128p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void fwd256p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void fwd512p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd512p, n_4, 512 / 4); }
+	void fwd1024p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd1024p, n_4, 1024 / 4); }
+	void fwd2048p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd2048p, n_4, 2048 / 4); }
 
-	void mul32() { const size_t n_4 = _n / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void mul64() { const size_t n_4 = _n / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void mul128() { const size_t n_4 = _n / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void mul256() { const size_t n_4 = _n / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void mul512() { const size_t n_4 = _n / 4; _executeKernel(_mul512, n_4, 512 / 4); }
-	void mul1024() { const size_t n_4 = _n / 4; _executeKernel(_mul1024, n_4, 1024 / 4); }
-	void mul2048() { const size_t n_4 = _n / 4; _executeKernel(_mul2048, n_4, 2048 / 4); }
+	void mul32() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
+	void mul64() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
+	void mul128() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
+	void mul256() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void mul512() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul512, n_4, 512 / 4); }
+	void mul1024() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul1024, n_4, 1024 / 4); }
+	void mul2048() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul2048, n_4, 2048 / 4); }
 
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
 		_setKernelArg(kernel, 0, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		if (RNS_SIZE == 3) _setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
+		if (GF_SIZE == 2) _setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
 	}
 
 	void forward64p(const int lm)
@@ -589,7 +575,7 @@ public:
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
-		int lm = _ln;
+		int lm = _ln_m1;
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
@@ -651,18 +637,18 @@ public:
 	}
 
 private:
-	void squareTune(const size_t count, const size_t sIndex, const RNS * const Z, RNSe * const Ze)
+	void squareTune(const size_t count, const size_t sIndex, const GF61 * const Z, GF31 * const Ze)
 	{
 		const splitter * const pSplit = _pSplit;
 
 		for (size_t j = 0; j != count; ++j)
 		{
 			writeMemory_z(Z);
-			if (RNS_SIZE == 3) writeMemory_ze(Ze);
+			if (GF_SIZE == 2) writeMemory_ze(Ze);
 
 			const size_t s = pSplit->getPartSize(sIndex);
 
-			int lm = _ln;
+			int lm = _ln_m1;
 
 			for (size_t i = 0; i < s - 1; ++i)
 			{
@@ -718,16 +704,16 @@ private:
 public:
 	void initMultiplicand(const size_t src)
 	{
-		const cl_uint isrc = static_cast<cl_uint>(src * _n);
-		_setKernelArg(_copyp, (RNS_SIZE == 3) ? 4 : 2, sizeof(cl_uint), &isrc);
-		_executeKernel(_copyp, _n);
+		const cl_uint isrc = static_cast<cl_uint>(src * _n_2);
+		_setKernelArg(_copyp, (GF_SIZE == 2) ? 4 : 2, sizeof(cl_uint), &isrc);
+		_executeKernel(_copyp, _n_2);
 
 		const splitter * const pSplit = _pSplit;
 
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
-		int lm = _ln;
+		int lm = _ln_m1;
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
@@ -766,7 +752,7 @@ public:
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
-		int lm = _ln;
+		int lm = _ln_m1;
 
 		for (size_t i = 0; i < s - 1; ++i)
 		{
@@ -821,18 +807,18 @@ public:
 	void set(const int32_t a)
 	{
 		const cl_int ia = static_cast<cl_int>(a);
-		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
+		cl_uint index = (GF_SIZE == 2) ? 2 : 1;
 		_setKernelArg(_set, index++, sizeof(cl_int), &ia);
-		_executeKernel(_set, _n);
+		_executeKernel(_set, _n_2);
 	}
 
 	void copy(const size_t dst, const size_t src)
 	{
-		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
-		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
+		const cl_uint idst = static_cast<cl_uint>(dst * _n_2), isrc = static_cast<cl_uint>(src * _n_2);
+		cl_uint index = (GF_SIZE == 2) ? 2 : 1;
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &idst);
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &isrc);
-		_executeKernel(_copy, _n);
+		_executeKernel(_copy, _n_2);
 	}
 
 public:
@@ -840,12 +826,12 @@ public:
 	{
 		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
 		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
+		const size_t size = _n_2 / blk;
 
-		_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
+		_setKernelArg(_normalize1, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_int), &sblk);
 		_executeKernel(_normalize1, size, std::min(size, _naLocalWS));
 
-		_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &blk);
+		_setKernelArg(_normalize2, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
@@ -855,35 +841,35 @@ public:
 		baseMod(false);
 
 		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
-		const size_t size = _n / blk;
+		const size_t size = _n_2 / blk;
 		const cl_int ia = static_cast<cl_int>(a);
 
-		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
+		cl_uint index1 = (GF_SIZE == 2) ? 6 : 5;
 		_setKernelArg(_mul1, index1++, sizeof(cl_int), &blk);
 		_setKernelArg(_mul1, index1++, sizeof(cl_int), &ia);
 		_executeKernel(_mul1, size, std::min(size, _naLocalWS));
 
-		cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
+		cl_uint index2 = (GF_SIZE == 2) ? 6 : 5;
 		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
 private:
-	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const RNS * const Z, const RNSe * const Ze)
+	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const GF61 * const Z, const GF31 * const Ze)
 	{
 		const cl_uint cblk = static_cast<cl_uint>(blk);
 		const cl_int sblk = static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
+		const size_t size = _n_2 / blk;
 
 		for (size_t i = 0; i != count; ++i)
 		{
 			writeMemory_z(Z);
-			if (RNS_SIZE == 3) writeMemory_ze(Ze);
+			if (GF_SIZE == 2) writeMemory_ze(Ze);
 
-			_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
+			_setKernelArg(_normalize1, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_int), &sblk);
 			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
 
-			_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &cblk);
+			_setKernelArg(_normalize2, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_uint), &cblk);
 			_executeKernel(_normalize2, size, std::min(size, n3bLocalWS));
 		}
 	}
@@ -891,15 +877,22 @@ private:
 public:
 	void tune(const uint32_t base)
 	{
-		const size_t n = _n;
+		const size_t n_2 = _n_2;
 
-		RNS * const Z = new RNS[n];
-		RNSe * const Ze = (RNS_SIZE == 3) ? new RNSe[n] : nullptr;
-		const double v_max = 1e9;
-		for (size_t i = 0; i != n; ++i)
+		GF61 * const Z = new GF61[n_2];
+		GF31 * const Ze = (GF_SIZE == 2) ? new GF31[n_2] : nullptr;
+		const double v61_max = pow(2.0, 60), v31_max = pow(2.0, 30);
+		for (size_t i = 0; i != n_2; ++i)
 		{
-			const int v = static_cast<int>(v_max * cos(static_cast<double>(i)));
-			Z[i] = RNS(v); if (RNS_SIZE == 3) Ze[i] = RNSe(v);
+			const cl_long va61 = static_cast<int>(v61_max * cos(static_cast<double>(i))), vb61 = static_cast<int>(v61_max * cos(static_cast<double>(i) + 0.5));
+			const Z61 a61 = Z61().set_int(va61), b61 = Z61().set_int(vb61);
+			Z[i] = GF61(a61, b61);
+			if (GF_SIZE == 2)
+			{
+				const cl_long va31 = static_cast<int>(v31_max * cos(static_cast<double>(i))), vb31 = static_cast<int>(v31_max * cos(static_cast<double>(i) + 0.5));
+				const Z31 a31 = Z31().set_int(va31), b31 = Z31().set_int(vb31);
+				Ze[i] = GF31(a31, b31);
+			}
 		}
 
 		setProfiling(true);
@@ -907,15 +900,15 @@ public:
 		resetProfiles();
 		baseModTune(1, 16, 0, 0, Z, Ze);
 		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z; if (RNS_SIZE == 3) delete[] Ze; setProfiling(false); return; }
+		if (time == 0) { delete[] Z; if (GF_SIZE == 2) delete[] Ze; setProfiling(false); return; }
 		const size_t count = std::min(std::max(size_t(100 * getTimerResolution() / time), size_t(2)), size_t(100));
 
 		cl_ulong minT = cl_ulong(-1);
 
 		size_t bMin = 4;
-		while (bMin < log(n * static_cast<double>(base + 2)) / log(static_cast<double>(base))) bMin *= 2;
+		while (bMin < log(n_2 * static_cast<double>(base + 2)) / log(static_cast<double>(base))) bMin *= 2;
 
-		const double maxSqr = n * (base * static_cast<double>(base));
+		const double maxSqr = n_2 * (base * static_cast<double>(base));
 		for (size_t b = bMin; b <= 64; b *= 2)
 		{
 			// Check convergence
@@ -999,40 +992,35 @@ public:
 #endif
 
 		delete[] Z;
-		if (RNS_SIZE == 3) delete[] Ze;
+		if (GF_SIZE == 2) delete[] Ze;
 
 		setProfiling(false);
 	}
 };
 
-template<size_t RNS_SIZE>
-class transformGPU : public transform
+template<size_t GF_SIZE>
+class transformGPUg : public transform
 {
-	using RNS = RNS_T<Zp1, Zp2>;
-	using RNSe = RNSe_T<Zp3>;
-	using RNS_W = RNS;
-	using RNS_We = RNSe;
-
 private:
 	const size_t _mem_size;
 	const size_t _num_regs;
-	RNS * const _z;
-	RNSe * const _ze;
-	engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE> * _pEngine = nullptr;
+	GF61 * const _z;
+	GF31 * const _ze;
+	engineg<GF_SIZE> * _pEngine = nullptr;
 
 public:
-	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
+	transformGPUg(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(size_t(1) << n, n, b, (RNS_SIZE == 3) ? EKind::NTT3 : EKind::NTT2),
-		_mem_size((size_t(1) << n) * num_regs * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
-		_z(new RNS[(size_t(1) << n) * num_regs]), _ze((RNS_SIZE == 3) ? new RNSe[(size_t(1) << n) * num_regs] : nullptr)
+		: transform(size_t(1) << (n - 1), n, b, (GF_SIZE == 2) ? EKind::NTT3g : EKind::NTT2g),
+		_mem_size((size_t(1) << (n - 1)) * num_regs * (sizeof(GF61) + ((GF_SIZE == 2) ? sizeof(GF31) : 0))), _num_regs(num_regs),
+		_z(new GF61[(size_t(1) << (n - 1)) * num_regs]), _ze((GF_SIZE == 2) ? new GF31[(size_t(1) << (n - 1)) * num_regs] : nullptr)
 	{
 		const size_t size = getSize();
 
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engine<RNS, RNSe, RNS_W, RNS_We, RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, verbose);
+		_pEngine = new engineg<GF_SIZE>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, verbose);
 
 		std::ostringstream src;
 
@@ -1046,37 +1034,7 @@ public:
 			src << "#define\tNSIZE_4\t" << (1u << (n - 2)) << "u" << std::endl;
 		}
 
-		MForm1 mf1; MForm2 mf2;
-		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
-		src << "#define\tP2\t" << P2_32 << "u" << std::endl;
-		src << "#define\tQ1\t" << mf1.q() << "u" << std::endl;
-		src << "#define\tQ2\t" << mf2.q() << "u" << std::endl;
-		src << "#define\tR1\t" << mf1.r2() << "u" << std::endl;
-		src << "#define\tR2\t" << mf2.r2() << "u" << std::endl;
-		src << "#define\tNORM1\t" << (P1_32 - ((P1_32 - 1) >> (n - 1))) << "u" << std::endl;
-		src << "#define\tNORM2\t" << (P2_32 - ((P2_32 - 1) >> (n - 1))) << "u" << std::endl;
-		Zp1 invP2modP1; invP2modP1.set(P2_32 % P1_32); invP2modP1 = invP2modP1.pow(P1_32 - 2);
-		src << "#define\tInvP2_P1\t" << mf1.toMonty(invP2modP1.get()) << "u" << std::endl;
-
-		if (RNS_SIZE == 3)
-		{
-			MForm3 mf3;
-			src << "#define\tP3\t" << P3_32 << "u" << std::endl;
-			src << "#define\tQ3\t" << mf3.q() << "u" << std::endl;
-			src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
-			src << "#define\tNORM3\t" << (P3_32 - ((P3_32 - 1) >> (n - 1))) << "u" << std::endl;
-			Zp1 invP3modP1; invP3modP1.set(P3_32 % P1_32); invP3modP1 = invP3modP1.pow(P1_32 - 2);
-			src << "#define\tInvP3_P1\t" << mf1.toMonty(invP3modP1.get()) << "u" << std::endl;
-			Zp2 invP3modP2; invP3modP2.set(P3_32 % P2_32); invP3modP2 = invP3modP2.pow(P2_32 - 2);
-			src << "#define\tInvP3_P2\t" << mf2.toMonty(invP3modP2.get()) << "u" << std::endl;
-			const uint64_t P1P2 = P1_32 * static_cast<uint64_t>(P2_32);
-			const uint64_t l123 = static_cast<uint32_t>(P1P2) * static_cast<uint64_t>(P3_32), h123 = (P1P2 >> 32) * P3_32 + (l123 >> 32);
-			const uint64_t P1P2P3l = (h123 << 32) | static_cast<uint32_t>(l123); const uint32_t P1P2P3h = static_cast<uint32_t>(h123 >> 32);
-			src << "#define\tP1P2P3l\t" << P1P2P3l << "ul" << std::endl;
-			src << "#define\tP1P2P3h\t" << P1P2P3h << "u" << std::endl;
-			src << "#define\tP1P2P3_2l\t" << ((P1P2P3l >> 1) | (static_cast<uint64_t>(P1P2P3h) << 63)) << "ul" << std::endl;
-			src << "#define\tP1P2P3_2h\t" << (P1P2P3h >> 1) << "u" << std::endl << std::endl;
-		}
+		src << "#define\tM61\t" << P1_32 << "u" << std::endl;
 
 		src << "#define\tBLK32\t" << BLK32 << std::endl;
 		src << "#define\tBLK64\t" << BLK64 << std::endl;
@@ -1089,70 +1047,44 @@ public:
 
 		src << "#define\tMAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
-		if (RNS_SIZE == 2)
+		if (GF_SIZE == 1)
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel2.cl", "src/ocl/kernel2.h", "src_ocl_kernel2", src)) src << src_ocl_kernel2;
+			if (!_pEngine->readOpenCL("ocl/kernel1g.cl", "src/ocl/kernel1g.h", "src_ocl_kernel1g", src)) src << src_ocl_kernel1g;
 		}
-		else	// RNS_SIZE == 3
+		else	// GF_SIZE == 2
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel3.cl", "src/ocl/kernel3.h", "src_ocl_kernel3", src)) src << src_ocl_kernel3;
+			if (!_pEngine->readOpenCL("ocl/kernel2g.cl", "src/ocl/kernel2g.h", "src_ocl_kernel2g", src)) src << src_ocl_kernel2g;
 		}
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory(num_regs);
 		_pEngine->createKernels(b);
 
-		RNS_W * const wr = new RNS_W[2 * size];
-		RNS_W * const wri = &wr[size];
+		GF61 * const wr = new GF61[size / 2];
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const size_t m = 4 * s;
-			const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
-			for (size_t i = 0; i < s; ++i)
+			const GF61 r_s = GF61::primroot_n(cl_uint(2 * m));
+			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t e = bitRev(i, 2 * s) + 1;
-				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(e));
-				wr[s + i] = wrsi.toMonty(); wri[s + s - i - 1] = RNS(-wrsi).toMonty();
-				if (s == 1) wr[s + i] = wr[s + i].toMonty(); // toMonty is applied twice to convert input into Montgomery form
+				wr[s + j] = r_s.pow(bitRev(j, m) + 1);
 			}
 		}
-
-		const size_t m = 4 * size / 2;
-		const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
-		for (size_t i = 0; i != size / 4; ++i)
-		{
-			const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-			wr[size / 2 + i] = prRoot_m.pow(static_cast<uint32_t>(e)).toMonty();
-		}
-
 		_pEngine->writeMemory_w(wr);
 		delete[] wr;
 
-		if (RNS_SIZE == 3)
+		if (GF_SIZE == 2)
 		{
-			RNS_We * const wre = new RNS_We[2 * size];
-			RNS_We * const wrie = &wre[size];
+			GF31 * const wre = new GF31[size / 2];
 			for (size_t s = 1; s < size / 2; s *= 2)
 			{
 				const size_t m = 4 * s;
-				const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
-				for (size_t i = 0; i < s; ++i)
+				const GF31 r_s = GF31::primroot_n(cl_uint(2 * m));
+				for (size_t j = 0; j < s; ++j)
 				{
-					const size_t e = bitRev(i, 2 * s) + 1;
-					const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(e));
-					wre[s + i] = wrsie.toMonty(); wrie[s + s - i - 1] = RNSe(-wrsie).toMonty();
-					if (s == 1) wre[s + i] = wre[s + i].toMonty();
+					wre[s + j] = r_s.pow(bitRev(j, m) + 1);
 				}
 			}
-
-			const size_t m = 4 * size / 2;
-			const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
-			for (size_t i = 0; i != size / 4; ++i)
-			{
-				const size_t e = bitRev(2 * i, 2 * size / 2) + 1;
-				wre[size / 2 + i] = prRoot_me.pow(static_cast<uint32_t>(e)).toMonty();
-			}
-
 			_pEngine->writeMemory_we(wre);
 			delete[] wre;
 		}
@@ -1160,7 +1092,7 @@ public:
 		_pEngine->tune(b);
 	}
 
-	virtual ~transformGPU()
+	virtual ~transformGPUg()
 	{
 		_pEngine->releaseKernels();
 		_pEngine->releaseMemory();
@@ -1168,7 +1100,7 @@ public:
 		delete _pEngine;
 
 		delete[] _z;
-		if (RNS_SIZE == 3) delete[] _ze;
+		if (GF_SIZE == 2) delete[] _ze;
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -1181,22 +1113,26 @@ protected:
 
 		const size_t size = getSize();
 
-		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) zi[i] = z[i].r1().getInt();
+		GF61 * const z = _z;
+		for (size_t i = 0; i < size; ++i)
+		{
+			zi[i + 0 * size] = z[i].a().get_int();
+			zi[i + 1 * size] = z[i].b().get_int();
+		}
 	}
 
 	void setZi(const int32_t * const zi) override
 	{
 		const size_t size = getSize();
 
-		RNS * const z = _z;
-		for (size_t i = 0; i < size; ++i) z[i] = RNS(zi[i]);
+		GF61 * const z = _z;
+		for (size_t i = 0; i < size; ++i) z[i] = GF61(Z61().set_int(zi[i + 0 * size]), Z61().set_int(zi[i + 1 * size]));
 		_pEngine->writeMemory_z(z);
 
-		if (RNS_SIZE == 3)
+		if (GF_SIZE == 2)
 		{
-			RNSe * const ze = _ze;
-			for (size_t i = 0; i < size; ++i) ze[i] = RNSe(zi[i]);
+			GF31 * const ze = _ze;
+			for (size_t i = 0; i < size; ++i) ze[i] = GF31(Z31().set_int(zi[i + 0 * size]), Z31().set_int(zi[i + 1 * size]));
 			_pEngine->writeMemory_ze(_ze);
 		}
 	}
@@ -1210,12 +1146,12 @@ public:
 
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
-		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(RNS) * size * num_regs)) return false;
+		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(GF61) * size * num_regs)) return false;
 		_pEngine->writeMemory_z(_z, num_regs);
 
-		if (RNS_SIZE == 3)
+		if (GF_SIZE == 2)
 		{
-			if (!cFile.read(reinterpret_cast<char *>(_ze), sizeof(RNSe) * size * num_regs)) return false;
+			if (!cFile.read(reinterpret_cast<char *>(_ze), sizeof(GF31) * size * num_regs)) return false;
 			_pEngine->writeMemory_ze(_ze, num_regs);
 		}
 
@@ -1230,12 +1166,12 @@ public:
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
 		_pEngine->readMemory_z(_z, num_regs);
-		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(RNS) * size * num_regs)) return;
+		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(GF61) * size * num_regs)) return;
 
-		if (RNS_SIZE == 3)
+		if (GF_SIZE == 2)
 		{
 			_pEngine->readMemory_ze(_ze, num_regs);
-			if (!cFile.write(reinterpret_cast<const char *>(_ze), sizeof(RNSe) * size * num_regs)) return;
+			if (!cFile.write(reinterpret_cast<const char *>(_ze), sizeof(GF31) * size * num_regs)) return;
 		}
 	}
 

@@ -157,15 +157,15 @@ public:
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32		8
-#define BLK64		4
-#define BLK128		2
-#define BLK256		1
+#define BLK32g		8
+#define BLK64g		4
+#define BLK128g		2
+#define BLK256g		1
 
 // TODO /2
-#define CHUNK64		8
-#define CHUNK256	4
-#define CHUNK1024	2
+#define CHUNK64g	8
+#define CHUNK256g	4
+#define CHUNK1024g	2
 
 template<size_t GF_SIZE>
 class engineg : public device
@@ -179,7 +179,6 @@ private:
 	cl_mem _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _square22 = nullptr, _square4 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
-	cl_kernel _forward64_0 = nullptr, _forward256_0 = nullptr, _forward1024_0 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mul1 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
@@ -372,10 +371,6 @@ public:
 		_forward1024 = createTransformKernel("forward1024");
 		_backward1024 = createTransformKernel("backward1024");
 
-		_forward64_0 = createTransformKernel("forward64_0");
-		_forward256_0 = createTransformKernel("forward256_0");
-		_forward1024_0 = createTransformKernel("forward1024_0");
-
 		_square32 = createTransformKernel("square32");
 		_square64 = createTransformKernel("square64");
 		_square128 = createTransformKernel("square128");
@@ -425,7 +420,6 @@ public:
 		_releaseKernel(_forward64); _releaseKernel(_backward64);
 		_releaseKernel(_forward256); _releaseKernel(_backward256);
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024);
-		_releaseKernel(_forward64_0); _releaseKernel(_forward256_0); _releaseKernel(_forward1024_0);
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mul1);
@@ -466,37 +460,33 @@ private:
 	void square22() { const size_t n_4 = _n_2 / 4; _executeKernel(_square22, n_4, 0); }
 	void square4() { const size_t n_4 = _n_2 / 4; _executeKernel(_square4, n_4, 0); }
 
-	void forward64(const int lm) { fb(_forward64, lm, 64 / 4 * CHUNK64); }
-	void backward64(const int lm) { fb(_backward64, lm, 64 / 4 * CHUNK64); }
-	void forward256(const int lm) { fb(_forward256, lm, 256 / 4 * CHUNK256); }
-	void backward256(const int lm) { fb(_backward256, lm, 256 / 4 * CHUNK256); }
-	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024); }
-	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024); }
+	void forward64(const int lm) { fb(_forward64, lm, 64 / 4 * CHUNK64g); }
+	void backward64(const int lm) { fb(_backward64, lm, 64 / 4 * CHUNK64g); }
+	void forward256(const int lm) { fb(_forward256, lm, 256 / 4 * CHUNK256g); }
+	void backward256(const int lm) { fb(_backward256, lm, 256 / 4 * CHUNK256g); }
+	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024g); }
+	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024g); }
 
-	void forward64_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64); }
-	void forward256_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256); }
-	void forward1024_0() { const size_t n_4 = _n_2 / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024); }
-
-	void square32() { const size_t n_4 = _n_2 / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void square64() { const size_t n_4 = _n_2 / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void square128() { const size_t n_4 = _n_2 / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void square256() { const size_t n_4 = _n_2 / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void square32() { const size_t n_4 = _n_2 / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32g))); }
+	void square64() { const size_t n_4 = _n_2 / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64g))); }
+	void square128() { const size_t n_4 = _n_2 / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128g))); }
+	void square256() { const size_t n_4 = _n_2 / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256g))); }
 	void square512() { const size_t n_4 = _n_2 / 4; _executeKernel(_square512, n_4, 512 / 4); }
 	void square1024() { const size_t n_4 = _n_2 / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
 	void square2048() { const size_t n_4 = _n_2 / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
 
-	void fwd32p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void fwd64p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void fwd128p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void fwd256p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void fwd32p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32g))); }
+	void fwd64p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64g))); }
+	void fwd128p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128g))); }
+	void fwd256p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256g))); }
 	void fwd512p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd512p, n_4, 512 / 4); }
 	void fwd1024p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd1024p, n_4, 1024 / 4); }
 	void fwd2048p() { const size_t n_4 = _n_2 / 4; _executeKernel(_fwd2048p, n_4, 2048 / 4); }
 
-	void mul32() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void mul64() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void mul128() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void mul256() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
+	void mul32() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32g))); }
+	void mul64() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64g))); }
+	void mul128() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128g))); }
+	void mul256() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256g))); }
 	void mul512() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul512, n_4, 512 / 4); }
 	void mul1024() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul1024, n_4, 1024 / 4); }
 	void mul2048() { const size_t n_4 = _n_2 / 4; _executeKernel(_mul2048, n_4, 2048 / 4); }
@@ -528,27 +518,6 @@ private:
 		setTransformArgs(_forward1024);
 	}
 
-	void forward64p_0()
-	{
-		setTransformArgs(_forward64_0, false);
-		forward64_0();
-		setTransformArgs(_forward64_0);
-	}
-
-	void forward256p_0()
-	{
-		setTransformArgs(_forward256_0, false);
-		forward256_0();
-		setTransformArgs(_forward256_0);
-	}
-
-	void forward1024p_0()
-	{
-		setTransformArgs(_forward1024_0, false);
-		forward1024_0();
-		setTransformArgs(_forward1024_0);
-	}
-
 public:
 	void square()
 	{
@@ -565,20 +534,20 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				/*if (i == 0) forward1024_0(); else*/ forward1024(lm);
+				forward1024(lm);
 				if (_first) std::cout << "forward1024 (" << lm << ") ";
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				/*if (i == 0) forward256_0(); else*/ forward256(lm);
+				forward256(lm);
 				if (_first) std::cout << "forward256 (" << lm << ") ";
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				// /*if (i == 0) forward64_0(); else*/ forward64(lm);
-				forward4(lm + 4); forward4(lm + 2); forward4(lm);
+				forward64(lm);
+				// forward4(lm + 4); forward4(lm + 2); forward4(lm);
 				if (_first) std::cout << "forward64 (" << lm << ") ";
 			}
 		}
@@ -592,12 +561,12 @@ public:
 		else if (lm == 6) square64();
 		else if (lm == 5)
 		{
-			// square32();
-			forward4(3);
-			forward4(1);
-			square22();
-			backward4(1);
-			backward4(3);
+			square32();
+			// forward4(3);
+			// forward4(1);
+			// square22();
+			// backward4(1);
+			// backward4(3);
 		}
 		if (_first) std::cout << "square" << (1u << lm) << " ";
 
@@ -618,8 +587,8 @@ public:
 			}
 			else // if (k == 6)
 			{
-				// backward64(lm);
-				backward4(lm); backward4(lm + 2); backward4(lm + 4);
+				backward64(lm);
+				// backward4(lm); backward4(lm + 2); backward4(lm + 4);
 				if (_first) std::cout << "backward64 (" << lm << ") ";
 				lm += 6;
 			}
@@ -648,17 +617,17 @@ private:
 				if (k == 10)
 				{
 					lm -= 10;
-					if (i == 0) forward1024_0(); else forward1024(lm);
+					forward1024(lm);
 				}
 				else if (k == 8)
 				{
 					lm -= 8;
-					if (i == 0) forward256_0(); else forward256(lm);
+					forward256(lm);
 				}
 				else // if (k == 6)
 				{
 					lm -= 6;
-					if (i == 0) forward64_0(); else forward64(lm);
+					forward64(lm);
 				}
 			}
 
@@ -713,17 +682,17 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				if (i == 0) forward1024p_0(); else forward1024p(lm);
+				forward1024p(lm);
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				if (i == 0) forward256p_0(); else forward256p(lm);
+				forward256p(lm);
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				if (i == 0) forward64p_0(); else forward64p(lm);
+				forward64p(lm);
 			}
 		}
 
@@ -752,17 +721,17 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				if (i == 0) forward1024_0(); else forward1024(lm);
+				forward1024(lm);
 			}
 			else if (k == 8)
 			{
 				lm -= 8;
-				if (i == 0) forward256_0(); else forward256(lm);
+				forward256(lm);
 			}
 			else // if (k == 6)
 			{
 				lm -= 6;
-				if (i == 0) forward64_0(); else forward64(lm);
+				forward64(lm);
 			}
 		}
 
@@ -1017,26 +986,19 @@ public:
 		std::ostringstream src;
 
 		src << "#define\tLNSIZE\t" << n - 1 << std::endl;
-		if (_pEngine->isIntel())	// Fix Intel compiler issue
-		{
-			src << "#define\tNSIZE_4\t((sz_t)get_global_size(0))" << std::endl;
-		}
-		else
-		{
-			src << "#define\tNSIZE_4\t" << (1u << (n - 3)) << "u" << std::endl;
-		}
+		src << "#define\tNSIZE_4\t" << (1u << (n - 3)) << "u" << std::endl;
 
 		src << "#define\tSNORM61\t" << 61 - n + 2 << std::endl;
 		src << "#define\tSNORM31\t" << 31 - n + 2 << std::endl;
 
-		src << "#define\tBLK32\t" << BLK32 << std::endl;
-		src << "#define\tBLK64\t" << BLK64 << std::endl;
-		src << "#define\tBLK128\t" << BLK128 << std::endl;
-		src << "#define\tBLK256\t" << BLK256 << std::endl << std::endl;
+		src << "#define\tBLK32\t" << BLK32g << std::endl;
+		src << "#define\tBLK64\t" << BLK64g << std::endl;
+		src << "#define\tBLK128\t" << BLK128g << std::endl;
+		src << "#define\tBLK256\t" << BLK256g << std::endl << std::endl;
 
-		src << "#define\tCHUNK64\t" << CHUNK64 << std::endl;
-		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
-		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
+		src << "#define\tCHUNK64\t" << CHUNK64g << std::endl;
+		src << "#define\tCHUNK256\t" << CHUNK256g << std::endl;
+		src << "#define\tCHUNK1024\t" << CHUNK1024g << std::endl << std::endl;
 
 		src << "#define\tMAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 

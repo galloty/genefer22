@@ -137,16 +137,6 @@ INLINE void forward_4i(const sz_t ml, __local GF61 * restrict const Z, const sz_
 	Z[0 * ml] = add61(v0, v1); Z[1 * ml] = sub61(v0, v1); Z[2 * ml] = addi61(v2, v3); Z[3 * ml] = subi61(v2, v3);
 }
 
-INLINE void forward_4i_0(const sz_t ml, __local GF61 * restrict const Z, const sz_t mg, __global const GF61 * restrict const z, __global const GF61 * restrict const w)
-{
-	__global const GF61 * const z2mg = &z[2 * mg];
-	const GF61 z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
-	const GF61 w1 = w[1], w2 = w[2], w3 = mul61(w1, w2);
-	const GF61 u0 = z0, u1 = mul61(z1, w2), u2 = mul61(z2, w1), u3 = mul61(z3, w3);
-	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
-	Z[0 * ml] = add61(v0, v1); Z[1 * ml] = sub61(v0, v1); Z[2 * ml] = addi61(v2, v3); Z[3 * ml] = subi61(v2, v3);
-}
-
 INLINE void forward_4o(const sz_t mg, __global GF61 * restrict const z, const sz_t ml, __local const GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
 	__global const GF61 * restrict const w_j = &w[j];
@@ -288,6 +278,8 @@ void square4(__global GF61 * restrict const z, __global const GF61 * restrict co
 	square_4io(&z[k], w[n_4 + j]);
 }
 
+// -----------------
+
 #define DECLARE_VAR(B_N, CHUNK_N) \
 	__local GF61 Z[4 * B_N * CHUNK_N]; \
 	\
@@ -308,20 +300,13 @@ void square4(__global GF61 * restrict const z, __global const GF61 * restrict co
 
 #define DECLARE_VAR_BACKWARD() \
 	__global GF61 * __restrict__ const zi = &z[ko]; \
-	__global GF61 * __restrict__ const zo = &z[ki]; \
-	const sz_t n_4 = NSIZE_4;
+	__global GF61 * __restrict__ const zo = &z[ki];
 
 #define FORWARD_I(B_N, CHUNK_N) \
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_FORWARD(); \
 	\
 	forward_4i(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);
-
-#define FORWARD_I_0(B_N, CHUNK_N) \
-	DECLARE_VAR(B_N, CHUNK_N); \
-	DECLARE_VAR_FORWARD(); \
-	\
-	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w);
 
 #define FORWARD_O(CHUNK_N) \
 	forward_4o((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);
@@ -367,22 +352,6 @@ void backward64(__global GF61 * restrict const z, __global const GF61 * restrict
 	BACKWARD_O(B_64, CHUNK64);
 }
 
-__kernel
-#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
-	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
-#endif
-void forward64_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)
-{
-	const int lm = LNSIZE - 6; const unsigned int s = 64 / 4;
-
-	FORWARD_I_0(B_64, CHUNK64);
-
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
-
-	FORWARD_O(CHUNK64);
-}
-
 // -----------------
 
 #define B_256	(256 / 4)
@@ -417,24 +386,6 @@ void backward256(__global GF61 * restrict const z, __global const GF61 * restric
 	backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
 
 	BACKWARD_O(B_256, CHUNK256);
-}
-
-__kernel
-#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256
-	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
-#endif
-void forward256_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)
-{
-	const int lm = LNSIZE - 8; const unsigned int s = 256 / 4;
-
-	FORWARD_I_0(B_256, CHUNK256);
-
-	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);
-
-	FORWARD_O(CHUNK256);
 }
 
 // -----------------
@@ -477,32 +428,12 @@ void backward1024(__global GF61 * restrict const z, __global const GF61 * restri
 	BACKWARD_O(B_1024, CHUNK1024);
 }
 
-__kernel
-#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024
-	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
-#endif
-void forward1024_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)
-{
-	const int lm = LNSIZE - 10; const unsigned int s = 1024 / 4;
-
-	FORWARD_I_0(B_1024, CHUNK1024);
-
-	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
-	forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
-	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);
-
-	FORWARD_O(CHUNK1024);
-}
-
 // -----------------
 
 #define DECLARE_VAR_32() \
 	__local GF61 Z[32 * BLK32]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \
 	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \
@@ -524,7 +455,7 @@ void square32(__global GF61 * restrict const z, __global const GF61 * restrict c
 
 	forward_4i(8, Zi8, 8, zk, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	square_22(Z4, w[n_4 + j]);
+	square_22(Z4, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4o(8, zk, 8, Zi8, w, j / 8);
 }
@@ -532,7 +463,7 @@ void square32(__global GF61 * restrict const z, __global const GF61 * restrict c
 #define DECLARE_VAR_64() \
 	__local GF61 Z[64 * BLK64]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \
 	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \
@@ -554,7 +485,7 @@ void square64(__global GF61 * restrict const z, __global const GF61 * restrict c
 
 	forward_4i(16, Zi16, 16, zk, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	square_4(Z4, w[n_4 + j]);
+	square_4(Z4, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4o(16, zk, 16, Zi16, w, j / 16);
 }
@@ -562,7 +493,7 @@ void square64(__global GF61 * restrict const z, __global const GF61 * restrict c
 #define DECLARE_VAR_128() \
 	__local GF61 Z[128 * BLK128]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \
 	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \
@@ -587,7 +518,7 @@ void square128(__global GF61 * restrict const z, __global const GF61 * restrict 
 	forward_4i(32, Zi32, 32, zk, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	square_22(Z4, w[n_4 + j]);
+	square_22(Z4, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4o(32, zk, 32, Zi32, w, j / 32);
@@ -596,7 +527,7 @@ void square128(__global GF61 * restrict const z, __global const GF61 * restrict 
 #define DECLARE_VAR_256() \
 	__local GF61 Z[256 * BLK256]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \
 	const sz_t i256 = 0, i64 = i; \
@@ -621,7 +552,7 @@ void square256(__global GF61 * restrict const z, __global const GF61 * restrict 
 	forward_4i(64, Zi64, 64, zk, w, j / 64);
 	forward_4(16, Zi16, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	square_4(Z4, w[n_4 + j]);
+	square_4(Z4, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4(16, Zi16, w, j / 16);
 	backward_4o(64, zk, 64, Zi64, w, j / 64);
@@ -630,7 +561,7 @@ void square256(__global GF61 * restrict const z, __global const GF61 * restrict 
 #define DECLARE_VAR_512() \
 	__local GF61 Z[512]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \
 	\
@@ -656,7 +587,7 @@ void square512(__global GF61 * restrict const z, __global const GF61 * restrict 
 	forward_4(32, Zi32, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	square_22(Z4, w[n_4 + j]);
+	square_22(Z4, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4(32, Zi32, w, j / 32);
@@ -666,7 +597,7 @@ void square512(__global GF61 * restrict const z, __global const GF61 * restrict 
 #define DECLARE_VAR_1024() \
 	__local GF61 Z[1024]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \
 	\
@@ -692,7 +623,7 @@ void square1024(__global GF61 * restrict const z, __global const GF61 * restrict
 	forward_4(64, Zi64, w, j / 64);
 	forward_4(16, Zi16, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	square_4(Z4, w[n_4 + j]);
+	square_4(Z4, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4(16, Zi16, w, j / 16);
 	backward_4(64, Zi64, w, j / 64);
@@ -702,7 +633,7 @@ void square1024(__global GF61 * restrict const z, __global const GF61 * restrict
 #define DECLARE_VAR_2048() \
 	__local GF61 Z[2048]; \
 	\
-	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \
 	\
 	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \
 	\
@@ -731,7 +662,7 @@ void square2048(__global GF61 * restrict const z, __global const GF61 * restrict
 	forward_4(32, Zi32, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	square_22(Z4, w[n_4 + j]);
+	square_22(Z4, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4(32, Zi32, w, j / 32);
@@ -854,7 +785,7 @@ void mul32(__global GF61 * restrict const z, __global const GF61 * restrict cons
 
 	forward_4i(8, Zi8, 8, zk, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	mul_22(Z4, 8, zpk, w[n_4 + j]);
+	mul_22(Z4, 8, zpk, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4o(8, zk, 8, Zi8, w, j / 8);
 }
@@ -870,7 +801,7 @@ void mul64(__global GF61 * restrict const z, __global const GF61 * restrict cons
 
 	forward_4i(16, Zi16, 16, zk, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	mul_4(Z4, 16, zpk, w[n_4 + j]);
+	mul_4(Z4, 16, zpk, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4o(16, zk, 16, Zi16, w, j / 16);
 }
@@ -887,7 +818,7 @@ void mul128(__global GF61 * restrict const z, __global const GF61 * restrict con
 	forward_4i(32, Zi32, 32, zk, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	mul_22(Z4, 32, zpk, w[n_4 + j]);
+	mul_22(Z4, 32, zpk, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4o(32, zk, 32, Zi32, w, j / 32);
@@ -905,7 +836,7 @@ void mul256(__global GF61 * restrict const z, __global const GF61 * restrict con
 	forward_4i(64, Zi64, 64, zk, w, j / 64);
 	forward_4(16, Zi16, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	mul_4(Z4, 64, zpk, w[n_4 + j]);
+	mul_4(Z4, 64, zpk, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4(16, Zi16, w, j / 16);
 	backward_4o(64, zk, 64, Zi64, w, j / 64);
@@ -924,7 +855,7 @@ void mul512(__global GF61 * restrict const z, __global const GF61 * restrict con
 	forward_4(32, Zi32, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	mul_22(Z4, 128, zpk, w[n_4 + j]);
+	mul_22(Z4, 128, zpk, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4(32, Zi32, w, j / 32);
@@ -944,7 +875,7 @@ void mul1024(__global GF61 * restrict const z, __global const GF61 * restrict co
 	forward_4(64, Zi64, w, j / 64);
 	forward_4(16, Zi16, w, j / 16);
 	forward_4(4, Zi4, w, j / 4);
-	mul_4(Z4, 256, zpk, w[n_4 + j]);
+	mul_4(Z4, 256, zpk, w[j]);
 	backward_4(4, Zi4, w, j / 4);
 	backward_4(16, Zi16, w, j / 16);
 	backward_4(64, Zi64, w, j / 64);
@@ -965,7 +896,7 @@ void mul2048(__global GF61 * restrict const z, __global const GF61 * restrict co
 	forward_4(32, Zi32, w, j / 32);
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
-	mul_22(Z4, 512, zpk, w[n_4 + j]);
+	mul_22(Z4, 512, zpk, w[j]);
 	backward_4(2, Zi2, w, j / 2);
 	backward_4(8, Zi8, w, j / 8);
 	backward_4(32, Zi32, w, j / 32);

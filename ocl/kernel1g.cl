@@ -33,13 +33,20 @@ INLINE ulong _sub61(const ulong lhs, const ulong rhs)
 
 INLINE ulong _mul61(const ulong lhs, const ulong rhs)
 {
-		const ulong lo = lhs * rhs, hi = mul_hi(lhs, rhs);
-		const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);
-		return _add61(lo61, hi61);
+	const ulong lo = lhs * rhs, hi = mul_hi(lhs, rhs);
+	const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);
+	return _add61(lo61, hi61);
+}
+
+INLINE ulong _lshift61(const ulong lhs, const int s)
+{
+	const ulong lo = lhs << s, hi = lhs >> (64 - s);
+	const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);
+	return _add61(lo61, hi61);
 }
 
 INLINE long get_int61(const ulong n) { return (n > M61 / 2) ? (long)(n - M61) : (long)(n); }
-INLINE ulong set_int61(const int i) { return (i < 0) ? (ulong)(i + M61) : (ulong)(i); }
+INLINE ulong set_int61(const int i) { return (i < 0) ? ((ulong)(i) + M61) : (ulong)(i); }
 
 // --- GF61 ---
 
@@ -49,7 +56,7 @@ INLINE GF61 toGF61(const int ia, const int ib) { return (GF61)(set_int61(ia), se
 
 INLINE GF61 add61(const GF61 lhs, const GF61 rhs) { return (GF61)(_add61(lhs.s0, rhs.s0), _add61(lhs.s1, rhs.s1)); }
 INLINE GF61 sub61(const GF61 lhs, const GF61 rhs) { return (GF61)(_sub61(lhs.s0, rhs.s0), _sub61(lhs.s1, rhs.s1)); }
-INLINE GF61 muls61(const GF61 lhs, const ulong rhs) { return (GF61)(_mul61(lhs.s0, rhs), _mul61(lhs.s1, rhs)); }
+INLINE GF61 lshift61(const GF61 lhs, const int s) { return (GF61)(_lshift61(lhs.s0, s), _lshift61(lhs.s1, s)); }
 
 INLINE GF61 sqr61(const GF61 lhs)
 {
@@ -69,6 +76,45 @@ INLINE GF61 addi61(const GF61 lhs, const GF61 rhs) { return (GF61)(_sub61(lhs.s0
 INLINE GF61 subi61(const GF61 lhs, const GF61 rhs) { return (GF61)(_add61(lhs.s0, rhs.s1), _sub61(lhs.s1, rhs.s0)); }
 
 // --- transform/inline ---
+
+INLINE void forward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)
+{
+	__global const GF61 * restrict const w_j = &w[j];
+	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 u0 = z[0 * m], u1 = mul61(z[1 * m], w2), u2 = mul61(z[2 * m], w1), u3 = mul61(z[3 * m], w3);
+	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
+	z[0 * m] = add61(v0, v1); z[1 * m] = sub61(v0, v1); z[2 * m] = addi61(v2, v3); z[3 * m] = subi61(v2, v3);
+}
+
+INLINE void backward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)
+{
+	__global const GF61 * restrict const w_j = &w[j];
+	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 u0 = z[0 * m], u1 = z[1 * m], u2 = z[2 * m], u3 = z[3 * m];
+	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);
+	z[0 * m] = add61(v0, v2); z[2 * m] = mulconj61(sub61(v0, v2), w1);
+	z[1 * m] = mulconj61(addi61(v1, v3), w2); z[3 * m] = mulconj61(subi61(v1, v3), w3);
+}
+
+INLINE void square_22io(__global GF61 * restrict const z, const GF61 w)
+{
+	const GF61 u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];
+	z[0] = add61(sqr61(u0), mul61(sqr61(u1), w)); z[1] = mul61(add61(u0, u0), u1);
+	z[2] = sub61(sqr61(u2), mul61(sqr61(u3), w)); z[3] = mul61(add61(u2, u2), u3);
+}
+
+INLINE void square_4io(__global GF61 * restrict const z, const GF61 w)
+{
+	barrier(CLK_LOCAL_MEM_FENCE);
+	const GF61 u0 = z[0], u1 = z[1], u2 = mul61(z[2], w), u3 = mul61(z[3], w);
+	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
+	const GF61 s0 = add61(sqr61(v0), mul61(sqr61(v1), w)), s1 = mul61(add61(v0, v0), v1);
+	const GF61 s2 = sub61(sqr61(v2), mul61(sqr61(v3), w)), s3 = mul61(add61(v2, v2), v3);
+	z[0] = add61(s0, s2); z[2] = mulconj61(sub61(s0, s2), w);
+	z[1] = add61(s1, s3); z[3] = mulconj61(sub61(s1, s3), w);
+}
+
+// -----------------
 
 INLINE void forward_4(const sz_t m, __local GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
@@ -209,6 +255,38 @@ INLINE void mul_4(__local GF61 * restrict const Z, const sz_t mg, __global const
 }
 
 // --- transform ---
+
+__kernel
+void forward4(__global GF61 * restrict const z, __global const GF61 * restrict const w, const int lm, const unsigned int s)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	const sz_t j = idx >> lm, k = 3 * (j << lm) + idx;
+	forward_4io((sz_t)(1) << lm, &z[k], w, s + j);
+}
+
+__kernel
+void backward4(__global GF61 * restrict const z, __global const GF61 * restrict const w, const int lm, const unsigned int s)
+{
+	const sz_t idx = (sz_t)get_global_id(0);
+	const sz_t j = idx >> lm, k = 3 * (j << lm) + idx;
+	backward_4io((sz_t)(1) << lm, &z[k], w, s + j);
+}
+
+__kernel
+void square22(__global GF61 * restrict const z, __global const GF61 * restrict const w)
+{
+	const sz_t idx = (sz_t)get_global_id(0), n_4 = (sz_t)get_global_size(0);
+	const sz_t j = idx, k = 4 * idx;
+	square_22io(&z[k], w[n_4 + j]);
+}
+
+__kernel
+void square4(__global GF61 * restrict const z, __global const GF61 * restrict const w)
+{
+	const sz_t idx = (sz_t)get_global_id(0), n_4 = (sz_t)get_global_size(0);
+	const sz_t j = idx, k = 4 * idx;
+	square_4io(&z[k], w[n_4 + j]);
+}
 
 #define DECLARE_VAR(B_N, CHUNK_N) \
 	__local GF61 Z[4 * B_N * CHUNK_N]; \
@@ -934,7 +1012,7 @@ INLINE int reduce64(long * f, const uint b, const uint b_inv, const int b_s)
 }
 
 __kernel
-void normalize1(__global GF61 * restrict const z, __global long * restrict const c,
+void normalize1(__global GF61 * restrict const z, __global long2 * restrict const c,
 	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
@@ -943,31 +1021,27 @@ void normalize1(__global GF61 * restrict const z, __global long * restrict const
 
 	prefetch(zi, (size_t)blk);
 
-	// Not converted into Montgomery form such that output is converted out of Montgomery form
-	const RNS norm = (RNS)(NORM1, NORM2);
-
-	long f = 0;
+	long f0 = 0, f1 = 0;
 
 	sz_t j = 0;
 	do
 	{
-		const RNS zj = mul(zi[j], norm);
-		long l = garner2(zj.s0, zj.s1);
-		if (sblk < 0) l += l;
-		f += l;
-
-		const int r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = toRNS(r);
-
+		const GF61 u = lshift61(zi[j], SNORM61);
+		long l0 = get_int61(u.s0), l1 = get_int61(u.s1);
+		if (sblk < 0) { l0 += l0; l1 += l1; }
+		f0 += l0; f1 += l1;
+		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);
+		zi[j] = toGF61(r0, r1);
 		++j;
 	} while (j != blk);
 
 	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
-	c[i] = (i == 0) ? -f : f;
+	if (i == 0) { const long t = f0; f0 = -f1; f1 = t; }	// a_n = -a_0
+	c[i] = (long2)(f0, f1);
 }
 
 __kernel
-void mul1(__global GF61 * restrict const z, __global long * restrict const c,
+void mul1(__global GF61 * restrict const z, __global long2 * restrict const c,
 	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk, const int a)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
@@ -975,49 +1049,56 @@ void mul1(__global GF61 * restrict const z, __global long * restrict const c,
 
 	prefetch(zi, (size_t)blk);
 
-	long f = 0;
+	long f0 = 0, f1 = 0;
 
 	sz_t j = 0;
 	do
 	{
-		f += geti_P1(zi[j].s0) * (long)a;
-		const int r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = toRNS(r);
+		const GF61 u = zi[j];
+		long l0 = get_int61(u.s0), l1 = get_int61(u.s1);
+		l0 *= a; l1 *= a;
+		f0 += l0; f1 += l1;
+		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);
+		zi[j] = toGF61(r0, r1);
 		++j;
 	} while (j != blk);
 
 	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
-	c[i] = (i == 0) ? -f : f;
+	if (i == 0) { const long t = f0; f0 = -f1; f1 = t; }	// a_n = -a_0
+	c[i] = (long2)(f0, f1);
 }
 
 __kernel
-void normalize2(__global GF61 * restrict const z, __global const long * restrict const c, 
+void normalize2(__global GF61 * restrict const z, __global const long2 * restrict const c, 
 	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	__global GF61 * restrict const zi = &z[blk * idx];
 
-	long f = c[idx];
+	long f0 = c[idx].s0, f1 = c[idx].s1;
 
 	sz_t j = 0;
 	do
 	{
-		f += geti_P1(zi[j].s0);
-		const int r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = toRNS(r);
-		if (f == 0) return;
+		const GF61 u = zi[j];
+		const long l0 = get_int61(u.s0), l1 = get_int61(u.s1);
+		f0 += l0; f1 += l1;
+		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);
+		zi[j] = toGF61(r0, r1);
+		if ((f0 == 0) && (f1 == 0)) return;
 		++j;
 	} while (j != blk - 1);
 
-	const int r = (int)f;
-	zi[blk - 1] = add(zi[blk - 1], toRNS(r));
+	const GF61 r = toGF61((int)(f0), (int)(f1));
+	zi[blk - 1] = add61(zi[blk - 1], r);
 }
 
 __kernel
-void set(__global RNS * restrict const z, const int a)
+void set(__global GF61 * restrict const z, const int a)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
-	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);
+	const int ai = (idx == 0) ? a : 0;
+	z[idx] = toGF61(ai, 0);
 }
 
 __kernel

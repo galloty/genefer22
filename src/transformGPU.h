@@ -960,7 +960,7 @@ public:
 		}
 #if defined(ocl_debug)
 		{
-			std::ostringstream ss; ss << "n3aLocalWS = " << _naLocalWS << ", n3bLocalWS = " << _nbLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
+			std::ostringstream ss; ss << "naLocalWS = " << _naLocalWS << ", nbLocalWS = " << _nbLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
 			pio::display(ss.str());
 		}
 #endif

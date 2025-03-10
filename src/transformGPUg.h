@@ -17,12 +17,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernel1g.h"
 #include "ocl/kernel2g.h"
 
-// Modulo 2^61 - 1
-class Z61
+// GF((2^61 - 1)^2)
+class GF61
 {
 private:
 	static const cl_ulong _p = (cl_ulong(1) << 61) - 1;
-	cl_ulong _n;	// 0 <= n <= p
+	cl_ulong2 _n;
+	// a primitive root of order 2^62 which is a root of (0, 1).
+	static const cl_ulong _h_order = cl_ulong(1) << 62;
+	static const cl_ulong _h_a = 2147483648ull, _h_b = 1272521237944691271ull;
 
 	static cl_ulong _add(const cl_ulong a, const cl_ulong b)
 	{
@@ -43,55 +46,55 @@ private:
 		return _add(hi, lo);
 	}
 
-public:
-	Z61() {}
-	explicit Z61(const cl_ulong n) : _n(n) {}
-
-	cl_long get_int() const { return (_n >= _p / 2) ? cl_long(_n - _p) : cl_long(_n); }	// if n = p then return 0
-	Z61 & set_int(const cl_long i) { _n = (i < 0) ? cl_ulong(i) + _p : cl_ulong(i); return *this; }
-
-	Z61 add(const Z61 & rhs) const { return Z61(_add(_n, rhs._n)); }
-	Z61 sub(const Z61 & rhs) const { return Z61(_sub(_n, rhs._n)); }
-	Z61 mul(const Z61 & rhs) const { return Z61(_mul(_n, rhs._n)); }
-};
-
-// GF((2^61 - 1)^2)
-class GF61
-{
-private:
-	Z61 _a, _b;
-	// a primitive root of order 2^62 which is a root of (0, 1).
-	static const cl_ulong _h_order = cl_ulong(1) << 62;
-	static const cl_ulong _h_a = 2147483648ull, _h_b = 1272521237944691271ull;
+	explicit GF61(const cl_ulong a, const cl_ulong b) { _n.s[0] = a; _n.s[1] = b; }
 
 public:
 	GF61() {}
-	explicit GF61(const Z61 & a, const Z61 & b) : _a(a), _b(b) {}
 
-	const Z61 & a() const { return _a; }
-	const Z61 & b() const { return _b; }
+	void get_int(int32_t & a, int32_t & b) const
+	{
+		a = (_n.s[0] >= _p / 2) ? int32_t(_n.s[0] - _p) : int32_t(_n.s[0]);
+		b = (_n.s[1] >= _p / 2) ? int32_t(_n.s[1] - _p) : int32_t(_n.s[1]);
+	}
 
-	GF61 add(const GF61 & rhs) const { return GF61(_a.add(rhs._a), _b.add(rhs._b)); }
-	GF61 sub(const GF61 & rhs) const { return GF61(_a.sub(rhs._a), _b.sub(rhs._b)); }
-	GF61 mul(const GF61 & rhs) const { return GF61(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
+	GF61 & set_int(const int32_t a, const int32_t b)
+	{
+		_n.s[0] = (a < 0) ? (cl_ulong(a) + _p) : cl_ulong(a);
+		_n.s[1] = (b < 0) ? (cl_ulong(b) + _p) : cl_ulong(b);
+		return *this;
+	}
+
+	GF61 & set_long(const cl_long a, const cl_long b)
+	{
+		_n.s[0] = (a < 0) ? (cl_ulong(a) + _p) : cl_ulong(a);
+		_n.s[1] = (b < 0) ? (cl_ulong(b) + _p) : cl_ulong(b);
+		return *this;
+	}
+
+	GF61 add(const GF61 & rhs) const { return GF61(_add(_n.s[0], rhs._n.s[0]), _add(_n.s[1], rhs._n.s[1])); }
+	GF61 sub(const GF61 & rhs) const { return GF61(_sub(_n.s[0], rhs._n.s[0]), _sub(_n.s[1], rhs._n.s[1])); }
+	GF61 mul(const GF61 & rhs) const { return GF61(_sub(_mul(_n.s[0], rhs._n.s[0]), _mul(_n.s[1], rhs._n.s[1])), _add(_mul(_n.s[1], rhs._n.s[0]), _mul(_n.s[0], rhs._n.s[1]))); }
 
 	GF61 pow(const cl_ulong e) const
 	{
-		if (e == 0) return GF61(Z61(1), Z61(0));
-		GF61 r = GF61(Z61(1), Z61(0)), y = *this;
+		if (e == 0) return GF61(1, 0);
+		GF61 r = GF61(1, 0), y = *this;
 		for (cl_ulong i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.mul(y); }
 		return r.mul(y);
 	}
 
-	static const GF61 primroot_n(const cl_uint n) { return GF61(Z61(_h_a), Z61(_h_b)).pow(_h_order / n); }
+	static const GF61 primroot_n(const cl_uint n) { return GF61(_h_a, _h_b).pow(_h_order / n); }
 };
 
-// Modulo 2^31 - 1
-class Z31
+// GF((2^31 - 1)^2)
+class GF31
 {
 private:
 	static const cl_uint _p = (cl_uint(1) << 31) - 1;
-	cl_uint _n;	// 0 <= n < p
+	cl_uint2 _n;
+	// a primitive root of order 2^31 which is a root of (0, 1).
+	static const cl_uint _h_order = cl_uint(1) << 31;
+	static const cl_uint _h_a = 105066u, _h_b = 333718u;
 
 	static cl_uint _add(const cl_uint a, const cl_uint b)
 	{
@@ -112,47 +115,37 @@ private:
 		return _add(hi, lo);
 	}
 
-public:
-	Z31() {}
-	explicit Z31(const cl_uint n) : _n(n) {}
-
-	cl_int get_int() const { return (_n >= _p / 2) ? cl_int(_n - _p) : cl_int(_n); }
-	Z31 & set_int(const cl_int i) { _n = (i < 0) ? cl_uint(i) + _p : cl_uint(i); return *this; }
-
-	Z31 add(const Z31 & rhs) const { return Z31(_add(_n, rhs._n)); }
-	Z31 sub(const Z31 & rhs) const { return Z31(_sub(_n, rhs._n)); }
-	Z31 mul(const Z31 & rhs) const { return Z31(_mul(_n, rhs._n)); }
-};
-
-// GF((2^31 - 1)^2)
-class GF31
-{
-private:
-	Z31 _a, _b;
-	// a primitive root of order 2^31 which is a root of (0, 1).
-	static const cl_uint _h_order = cl_uint(1) << 31;
-	static const cl_uint _h_a = 105066u, _h_b = 333718u;
+	explicit GF31(const cl_uint a, const cl_uint b) { _n.s[0] = a; _n.s[1] = b; }
 
 public:
 	GF31() {}
-	explicit GF31(const Z31 & a, const Z31 & b) : _a(a), _b(b) {}
 
-	const Z31 & a() const { return _a; }
-	const Z31 & b() const { return _b; }
-
-	GF31 add(const GF31 & rhs) const { return GF31(_a.add(rhs._a), _b.add(rhs._b)); }
-	GF31 sub(const GF31 & rhs) const { return GF31(_a.sub(rhs._a), _b.sub(rhs._b)); }
-	GF31 mul(const GF31 & rhs) const { return GF31(_a.mul(rhs._a).sub(_b.mul(rhs._b)), _b.mul(rhs._a).add(_a.mul(rhs._b))); }
-
-	GF31 pow(const cl_ulong e) const
+	void get_int(int32_t & a, int32_t & b) const
 	{
-		if (e == 0) return GF31(Z31(1), Z31(0));
-		GF31 r = GF31(Z31(1), Z31(0)), y = *this;
-		for (cl_ulong i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.mul(y); }
+		a = (_n.s[0] >= _p / 2) ? int32_t(_n.s[0] - _p) : int32_t(_n.s[0]);
+		b = (_n.s[1] >= _p / 2) ? int32_t(_n.s[1] - _p) : int32_t(_n.s[1]);
+	}
+
+	GF31 & set_int(const int32_t a, const int32_t b)
+	{
+		_n.s[0] = (a < 0) ? (cl_uint(a) + _p) : cl_uint(a);
+		_n.s[1] = (b < 0) ? (cl_uint(b) + _p) : cl_uint(b);
+		return *this;
+	}
+
+	GF31 add(const GF31 & rhs) const { return GF31(_add(_n.s[0], rhs._n.s[0]), _add(_n.s[1], rhs._n.s[1])); }
+	GF31 sub(const GF31 & rhs) const { return GF31(_sub(_n.s[0], rhs._n.s[0]), _sub(_n.s[1], rhs._n.s[1])); }
+	GF31 mul(const GF31 & rhs) const { return GF31(_sub(_mul(_n.s[0], rhs._n.s[0]), _mul(_n.s[1], rhs._n.s[1])), _add(_mul(_n.s[1], rhs._n.s[0]), _mul(_n.s[0], rhs._n.s[1]))); }
+
+	GF31 pow(const cl_uint e) const
+	{
+		if (e == 0) return GF31(1, 0);
+		GF31 r = GF31(1, 0), y = *this;
+		for (cl_uint i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.mul(y); }
 		return r.mul(y);
 	}
 
-	static const GF31 primroot_n(const cl_uint n) { return GF31(Z31(_h_a), Z31(_h_b)).pow(_h_order / n); }
+	static const GF31 primroot_n(const cl_uint n) { return GF31(_h_a, _h_b).pow(_h_order / n); }
 };
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
@@ -194,49 +187,6 @@ public:
 	virtual ~engineg() {}
 
 ///////////////////////////////
-
-public:
-	bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::ostringstream & src) const
-	{
-		if (_isBoinc) return false;
-
-		std::ifstream clFile(clFileName);
-		if (!clFile.is_open()) return false;
-		
-		// if .cl file exists then generate header file
-		std::ofstream hFile(headerFileName, std::ios::binary);	// binary: don't convert line endings to `CRLF` 
-		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
-
-		hFile << "/*" << std::endl;
-		hFile << "Copyright 2022, Yves Gallot" << std::endl << std::endl;
-		hFile << "genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
-		hFile << "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful." << std::endl;
-		hFile << "*/" << std::endl << std::endl;
-
-		hFile << "#pragma once" << std::endl << std::endl;
-		hFile << "#include <cstdint>" << std::endl << std::endl;
-
-		hFile << "static const char * const " << varName << " = \\" << std::endl;
-
-		std::string line;
-		while (std::getline(clFile, line))
-		{
-			hFile << "\"";
-			for (char c : line)
-			{
-				if ((c == '\\') || (c == '\"')) hFile << '\\';
-				hFile << c;
-			}
-			hFile << "\\n\" \\" << std::endl;
-
-			src << line << std::endl;
-		}
-		hFile << "\"\";" << std::endl;
-
-		hFile.close();
-		clFile.close();
-		return true;
-	}
 
 public:
 	void allocMemory(const size_t num_regs)
@@ -845,14 +795,13 @@ public:
 		const double v61_max = pow(2.0, 60), v31_max = pow(2.0, 30);
 		for (size_t i = 0; i != n_2; ++i)
 		{
-			const cl_long va61 = static_cast<int>(v61_max * cos(static_cast<double>(i))), vb61 = static_cast<int>(v61_max * cos(static_cast<double>(i) + 0.5));
-			const Z61 a61 = Z61().set_int(va61), b61 = Z61().set_int(vb61);
-			Z[i] = GF61(a61, b61);
+			const double id = static_cast<double>(i);
+			const cl_long va61 = static_cast<cl_long>(v61_max * cos(id)), vb61 = static_cast<cl_long>(v61_max * cos(id + 0.5));
+			Z[i].set_long(va61, vb61);
 			if (GF_SIZE == 2)
 			{
-				const cl_long va31 = static_cast<int>(v31_max * cos(static_cast<double>(i))), vb31 = static_cast<int>(v31_max * cos(static_cast<double>(i) + 0.5));
-				const Z31 a31 = Z31().set_int(va31), b31 = Z31().set_int(vb31);
-				Ze[i] = GF31(a31, b31);
+				const cl_int va31 = static_cast<cl_int>(v31_max * sin(id)), vb31 = static_cast<cl_int>(v31_max * sin(id + 0.5));
+				Ze[i].set_int(va31, vb31);
 			}
 		}
 
@@ -862,7 +811,8 @@ public:
 		baseModTune(1, 16, 0, 0, Z, Ze);
 		const cl_ulong time = getProfileTime();
 		if (time == 0) { delete[] Z; if (GF_SIZE == 2) delete[] Ze; setProfiling(false); return; }
-		const size_t count = std::min(std::max(size_t(100 * getTimerResolution() / time), size_t(2)), size_t(100));
+		// 410 tests, 0.1 second = 10^8 ns
+		const size_t count = std::min(std::max(size_t(100000000 / (410 * time)), size_t(2)), size_t(100));
 
 		cl_ulong minT = cl_ulong(-1);
 
@@ -914,7 +864,7 @@ public:
 		}
 // #if defined(ocl_debug)
 		{
-			std::ostringstream ss; ss << "naLocalWS = " << _naLocalWS << ", nbLocalWS = " << _nbLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
+			std::ostringstream ss; ss << "baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
 			pio::display(ss.str());
 		}
 // #endif
@@ -930,12 +880,12 @@ public:
 				squareTune(2, i, Z, Ze);
 				const cl_ulong t = getProfileTime();
 
-#if defined(ocl_debug)
+// #if defined(ocl_debug)
 				std::ostringstream ss; ss << "[" << i << "]";
 				for (size_t j = 0, nps = pSplit->getPartSize(i); j < nps; ++j) ss << " " << pSplit->getPart(i, j);
 				ss << ": " << t << std::endl;
 				pio::display(ss.str());
-#endif
+// #endif
 				if (t < minT)
 				{
 					minT = t;
@@ -943,14 +893,14 @@ public:
 				}
 			}
 		}
-#if defined(ocl_debug)
+// #if defined(ocl_debug)
 		{
 			std::ostringstream ss;
 			for (size_t j = 0, nps = pSplit->getPartSize(_splitIndex); j < nps; ++j) ss << " " << pSplit->getPart(_splitIndex, j);
 			ss << std::endl;
 			pio::display(ss.str());
 		}
-#endif
+// #endif
 
 		delete[] Z;
 		if (GF_SIZE == 2) delete[] Ze;
@@ -985,7 +935,6 @@ public:
 
 		std::ostringstream src;
 
-		src << "#define\tLNSIZE\t" << n - 1 << std::endl;
 		src << "#define\tNSIZE_4\t" << (1u << (n - 3)) << "u" << std::endl;
 
 		src << "#define\tSNORM61\t" << 61 - n + 2 << std::endl;
@@ -1004,11 +953,11 @@ public:
 
 		if (GF_SIZE == 1)
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel1g.cl", "src/ocl/kernel1g.h", "src_ocl_kernel1g", src)) src << src_ocl_kernel1g;
+			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel1g.cl", "src/ocl/kernel1g.h", "src_ocl_kernel1g", src)) src << src_ocl_kernel1g;
 		}
 		else	// GF_SIZE == 2
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel2g.cl", "src/ocl/kernel2g.h", "src_ocl_kernel2g", src)) src << src_ocl_kernel2g;
+			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel2g.cl", "src/ocl/kernel2g.h", "src_ocl_kernel2g", src)) src << src_ocl_kernel2g;
 		}
 
 		_pEngine->loadProgram(src.str());
@@ -1071,8 +1020,8 @@ protected:
 		GF61 * const z = _z;
 		for (size_t i = 0; i < size; ++i)
 		{
-			zi[i + 0 * size] = z[i].a().get_int();
-			zi[i + 1 * size] = z[i].b().get_int();
+			int a, b; z[i].get_int(a, b);
+			zi[i + 0 * size] = a; zi[i + 1 * size] = b;
 		}
 	}
 
@@ -1081,13 +1030,13 @@ protected:
 		const size_t size = getSize();
 
 		GF61 * const z = _z;
-		for (size_t i = 0; i < size; ++i) z[i] = GF61(Z61().set_int(zi[i + 0 * size]), Z61().set_int(zi[i + 1 * size]));
+		for (size_t i = 0; i < size; ++i) z[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
 		_pEngine->writeMemory_z(z);
 
 		if (GF_SIZE == 2)
 		{
 			GF31 * const ze = _ze;
-			for (size_t i = 0; i < size; ++i) ze[i] = GF31(Z31().set_int(zi[i + 0 * size]), Z31().set_int(zi[i + 1 * size]));
+			for (size_t i = 0; i < size; ++i) ze[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
 			_pEngine->writeMemory_ze(_ze);
 		}
 	}

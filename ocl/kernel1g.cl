@@ -11,11 +11,25 @@ Please give feedback to the authors if improvement is realized. It is distribute
 	#define INLINE
 #endif
 
+#ifndef NSIZE_4
+#define	NSIZE_4		262144
+#define	SNORM61		42
+#define	SNORM31		12
+#define BLK32		8
+#define BLK64		4
+#define BLK128		2
+#define BLK256		1
+#define CHUNK64		8
+#define CHUNK256	4
+#define CHUNK1024	2
+#define MAX_WORK_GROUP_SIZE	1024
+#endif
+
 typedef uint	sz_t;
 
-// --- mod arith ---
+// --- Z/(2^61 - 1)Z ---
 
-#define	M61	((1ul << 61) - 1)
+#define	M61		0x1ffffffffffffffful
 
 INLINE ulong _add61(const ulong lhs, const ulong rhs)
 {
@@ -45,10 +59,10 @@ INLINE ulong _lshift61(const ulong lhs, const int s)
 	return _add61(lo61, hi61);
 }
 
-INLINE long get_int61(const ulong n) { return (n > M61 / 2) ? (long)(n - M61) : (long)(n); }
+INLINE long get_int61(const ulong n) { return ((uint)(n >> 32) > (uint)((M61 / 2) >> 32)) ? (long)(n - M61) : (long)(n); }
 INLINE ulong set_int61(const int i) { return (i < 0) ? ((ulong)(i) + M61) : (ulong)(i); }
 
-// --- GF61 ---
+// --- GF((2^61 - 1)^2) ---
 
 typedef ulong2	GF61;
 

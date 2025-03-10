@@ -241,49 +241,6 @@ public:
 ///////////////////////////////
 
 public:
-	bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::ostringstream & src) const
-	{
-		if (_isBoinc) return false;
-
-		std::ifstream clFile(clFileName);
-		if (!clFile.is_open()) return false;
-		
-		// if .cl file exists then generate header file
-		std::ofstream hFile(headerFileName, std::ios::binary);	// binary: don't convert line endings to `CRLF` 
-		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
-
-		hFile << "/*" << std::endl;
-		hFile << "Copyright 2022, Yves Gallot" << std::endl << std::endl;
-		hFile << "genefer is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
-		hFile << "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful." << std::endl;
-		hFile << "*/" << std::endl << std::endl;
-
-		hFile << "#pragma once" << std::endl << std::endl;
-		hFile << "#include <cstdint>" << std::endl << std::endl;
-
-		hFile << "static const char * const " << varName << " = \\" << std::endl;
-
-		std::string line;
-		while (std::getline(clFile, line))
-		{
-			hFile << "\"";
-			for (char c : line)
-			{
-				if ((c == '\\') || (c == '\"')) hFile << '\\';
-				hFile << c;
-			}
-			hFile << "\\n\" \\" << std::endl;
-
-			src << line << std::endl;
-		}
-		hFile << "\"\";" << std::endl;
-
-		hFile.close();
-		clFile.close();
-		return true;
-	}
-
-public:
 	void allocMemory(const size_t num_regs)
 	{
 #if defined(ocl_debug)
@@ -895,7 +852,7 @@ public:
 
 		RNS * const Z = new RNS[n];
 		RNSe * const Ze = (RNS_SIZE == 3) ? new RNSe[n] : nullptr;
-		const double v_max = 1e9;
+		const double v_max = P3_32 / 2;
 		for (size_t i = 0; i != n; ++i)
 		{
 			const int v = static_cast<int>(v_max * cos(static_cast<double>(i)));
@@ -908,7 +865,8 @@ public:
 		baseModTune(1, 16, 0, 0, Z, Ze);
 		const cl_ulong time = getProfileTime();
 		if (time == 0) { delete[] Z; if (RNS_SIZE == 3) delete[] Ze; setProfiling(false); return; }
-		const size_t count = std::min(std::max(size_t(100 * getTimerResolution() / time), size_t(2)), size_t(100));
+		// 410 tests, 0.1 second = 10^8 ns
+		const size_t count = std::min(std::max(size_t(100000000 / (410 * time)), size_t(2)), size_t(100));
 
 		cl_ulong minT = cl_ulong(-1);
 
@@ -960,7 +918,7 @@ public:
 		}
 #if defined(ocl_debug)
 		{
-			std::ostringstream ss; ss << "naLocalWS = " << _naLocalWS << ", nbLocalWS = " << _nbLocalWS << ", baseModBlk = " << _baseModBlk << "." << std::endl;
+			std::ostringstream ss; ss << "baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
 			pio::display(ss.str());
 		}
 #endif
@@ -1091,11 +1049,11 @@ public:
 
 		if (RNS_SIZE == 2)
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel2.cl", "src/ocl/kernel2.h", "src_ocl_kernel2", src)) src << src_ocl_kernel2;
+			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel2.cl", "src/ocl/kernel2.h", "src_ocl_kernel2", src)) src << src_ocl_kernel2;
 		}
 		else	// RNS_SIZE == 3
 		{
-			if (!_pEngine->readOpenCL("ocl/kernel3.cl", "src/ocl/kernel3.h", "src_ocl_kernel3", src)) src << src_ocl_kernel3;
+			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel3.cl", "src/ocl/kernel3.h", "src_ocl_kernel3", src)) src << src_ocl_kernel3;
 		}
 
 		_pEngine->loadProgram(src.str());

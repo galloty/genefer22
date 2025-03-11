@@ -23,11 +23,26 @@ static const char * const src_ocl_kernel1g = \
 "	#define INLINE\n" \
 "#endif\n" \
 "\n" \
+"#ifndef NSIZE_2\n" \
+"#define NSIZE_2		524288\n" \
+"#define	NSIZE_4		262144\n" \
+"#define	SNORM61		42\n" \
+"#define	SNORM31		12\n" \
+"#define BLK32		8	// 4KB\n" \
+"#define BLK64		4\n" \
+"#define BLK128		2\n" \
+"#define BLK256		1\n" \
+"#define CHUNK64		4	// 4KB\n" \
+"#define CHUNK256	2\n" \
+"#define CHUNK1024	1\n" \
+"#define MAX_WORK_GROUP_SIZE	1024\n" \
+"#endif\n" \
+"\n" \
 "typedef uint	sz_t;\n" \
 "\n" \
-"// --- mod arith ---\n" \
+"// --- Z/(2^61 - 1)Z ---\n" \
 "\n" \
-"#define	M61	((1ul << 61) - 1)\n" \
+"#define	M61		0x1ffffffffffffffful\n" \
 "\n" \
 "INLINE ulong _add61(const ulong lhs, const ulong rhs)\n" \
 "{\n" \
@@ -45,15 +60,22 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "INLINE ulong _mul61(const ulong lhs, const ulong rhs)\n" \
 "{\n" \
-"		const ulong lo = lhs * rhs, hi = mul_hi(lhs, rhs);\n" \
-"		const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);\n" \
-"		return _add61(lo61, hi61);\n" \
+"	const ulong lo = lhs * rhs, hi = mul_hi(lhs, rhs);\n" \
+"	const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);\n" \
+"	return _add61(lo61, hi61);\n" \
 "}\n" \
 "\n" \
-"INLINE long get_int61(const ulong n) { return (n > M61 / 2) ? (long)(n - M61) : (long)(n); }\n" \
-"INLINE ulong set_int61(const int i) { return (i < 0) ? (ulong)(i + M61) : (ulong)(i); }\n" \
+"INLINE ulong _lshift61(const ulong lhs, const int s)\n" \
+"{\n" \
+"	const ulong lo = lhs << s, hi = lhs >> (64 - s);\n" \
+"	const ulong lo61 = lo & M61, hi61 = (lo >> 61) | (hi << 3);\n" \
+"	return _add61(lo61, hi61);\n" \
+"}\n" \
 "\n" \
-"// --- GF61 ---\n" \
+"INLINE long get_int61(const ulong n) { return ((uint)(n >> 32) > (uint)((M61 / 2) >> 32)) ? (long)(n - M61) : (long)(n); }\n" \
+"INLINE ulong set_int61(const int i) { return (i < 0) ? ((ulong)(i) + M61) : (ulong)(i); }\n" \
+"\n" \
+"// --- GF((2^61 - 1)^2) ---\n" \
 "\n" \
 "typedef ulong2	GF61;\n" \
 "\n" \
@@ -61,7 +83,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "INLINE GF61 add61(const GF61 lhs, const GF61 rhs) { return (GF61)(_add61(lhs.s0, rhs.s0), _add61(lhs.s1, rhs.s1)); }\n" \
 "INLINE GF61 sub61(const GF61 lhs, const GF61 rhs) { return (GF61)(_sub61(lhs.s0, rhs.s0), _sub61(lhs.s1, rhs.s1)); }\n" \
-"INLINE GF61 muls61(const GF61 lhs, const ulong rhs) { return (GF61)(_mul61(lhs.s0, rhs), _mul61(lhs.s1, rhs)); }\n" \
+"INLINE GF61 lshift61(const GF61 lhs, const int s) { return (GF61)(_lshift61(lhs.s0, s), _lshift61(lhs.s1, s)); }\n" \
 "\n" \
 "INLINE GF61 sqr61(const GF61 lhs)\n" \
 "{\n" \
@@ -82,10 +104,46 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "// --- transform/inline ---\n" \
 "\n" \
+"INLINE void forward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)\n" \
+"{\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
+"	const GF61 u0 = z[0 * m], u1 = mul61(z[1 * m], w2), u2 = mul61(z[2 * m], w1), u3 = mul61(z[3 * m], w3);\n" \
+"	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
+"	z[0 * m] = add61(v0, v1); z[1 * m] = sub61(v0, v1); z[2 * m] = addi61(v2, v3); z[3 * m] = subi61(v2, v3);\n" \
+"}\n" \
+"\n" \
+"INLINE void backward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)\n" \
+"{\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
+"	const GF61 u0 = z[0 * m], u1 = z[1 * m], u2 = z[2 * m], u3 = z[3 * m];\n" \
+"	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);\n" \
+"	z[0 * m] = add61(v0, v2); z[2 * m] = mulconj61(sub61(v0, v2), w1);\n" \
+"	z[1 * m] = mulconj61(addi61(v1, v3), w2); z[3 * m] = mulconj61(subi61(v1, v3), w3);\n" \
+"}\n" \
+"\n" \
+"INLINE void square_22io(__global GF61 * restrict const z, const GF61 w)\n" \
+"{\n" \
+"	const GF61 u0 = z[0], u1 = z[1], u2 = z[2], u3 = z[3];\n" \
+"	z[0] = add61(sqr61(u0), mul61(sqr61(u1), w)); z[1] = mul61(add61(u0, u0), u1);\n" \
+"	z[2] = sub61(sqr61(u2), mul61(sqr61(u3), w)); z[3] = mul61(add61(u2, u2), u3);\n" \
+"}\n" \
+"\n" \
+"INLINE void square_4io(__global GF61 * restrict const z, const GF61 w)\n" \
+"{\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	const GF61 u0 = z[0], u1 = z[1], u2 = mul61(z[2], w), u3 = mul61(z[3], w);\n" \
+"	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
+"	const GF61 s0 = add61(sqr61(v0), mul61(sqr61(v1), w)), s1 = mul61(add61(v0, v0), v1);\n" \
+"	const GF61 s2 = sub61(sqr61(v2), mul61(sqr61(v3), w)), s3 = mul61(add61(v2, v2), v3);\n" \
+"	z[0] = add61(s0, s2); z[2] = mulconj61(sub61(s0, s2), w);\n" \
+"	z[1] = add61(s1, s3); z[3] = mulconj61(sub61(s1, s3), w);\n" \
+"}\n" \
+"\n" \
+"// -----------------\n" \
+"\n" \
 "INLINE void forward_4(const sz_t m, __local GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	const GF61 u0 = Z[0 * m], u1 = mul61(Z[1 * m], w2), u2 = mul61(Z[2 * m], w1), u3 = mul61(Z[3 * m], w3);\n" \
 "	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
@@ -96,18 +154,7 @@ static const char * const src_ocl_kernel1g = \
 "{\n" \
 "	__global const GF61 * const z2mg = &z[2 * mg];\n" \
 "	const GF61 z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
-"	const GF61 u0 = z0, u1 = mul61(z1, w2), u2 = mul61(z2, w1), u3 = mul61(z3, w3);\n" \
-"	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
-"	Z[0 * ml] = add61(v0, v1); Z[1 * ml] = sub61(v0, v1); Z[2 * ml] = addi61(v2, v3); Z[3 * ml] = subi61(v2, v3);\n" \
-"}\n" \
-"\n" \
-"INLINE void forward_4i_0(const sz_t ml, __local GF61 * restrict const Z, const sz_t mg, __global const GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
-"{\n" \
-"	__global const GF61 * const z2mg = &z[2 * mg];\n" \
-"	const GF61 z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];\n" \
-"	const GF61 w1 = w[1], w2 = w[2], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	const GF61 u0 = z0, u1 = mul61(z1, w2), u2 = mul61(z2, w1), u3 = mul61(z3, w3);\n" \
 "	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
 "	Z[0 * ml] = add61(v0, v1); Z[1 * ml] = sub61(v0, v1); Z[2 * ml] = addi61(v2, v3); Z[3 * ml] = subi61(v2, v3);\n" \
@@ -115,8 +162,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "INLINE void forward_4o(const sz_t mg, __global GF61 * restrict const z, const sz_t ml, __local const GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	const GF61 u0 = Z[0 * ml], u1 = mul61(Z[1 * ml], w2), u2 = mul61(Z[2 * ml], w1), u3 = mul61(Z[3 * ml], w3);\n" \
 "	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);\n" \
@@ -126,8 +172,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "INLINE void backward_4(const sz_t m, __local GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	const GF61 u0 = Z[0 * m], u1 = Z[1 * m], u2 = Z[2 * m], u3 = Z[3 * m];\n" \
 "	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);\n" \
@@ -139,8 +184,7 @@ static const char * const src_ocl_kernel1g = \
 "{\n" \
 "	__global const GF61 * const z2mg = &z[2 * mg];\n" \
 "	const GF61 u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);\n" \
 "	Z[0 * ml] = add61(v0, v2); Z[2 * ml] = mulconj61(sub61(v0, v2), w1);\n" \
 "	Z[1 * ml] = mulconj61(addi61(v1, v3), w2); Z[3 * ml] = mulconj61(subi61(v1, v3), w3);\n" \
@@ -148,8 +192,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "INLINE void backward_4o(const sz_t mg, __global GF61 * restrict const z, const sz_t ml, __local const GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	__global const GF61 * restrict const w_j = &w[j];\n" \
-"	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);\n" \
+"	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	const GF61 u0 = Z[0 * ml], u1 = Z[1 * ml], u2 = Z[2 * ml], u3 = Z[3 * ml];\n" \
 "	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);\n" \
@@ -222,6 +265,40 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "// --- transform ---\n" \
 "\n" \
+"__kernel\n" \
+"void forward4(__global GF61 * restrict const z, __global const GF61 * restrict const w, const int lm, const unsigned int s)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	const sz_t j = idx >> lm, k = 3 * (j << lm) + idx;\n" \
+"	forward_4io((sz_t)(1) << lm, &z[k], w, s + j);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void backward4(__global GF61 * restrict const z, __global const GF61 * restrict const w, const int lm, const unsigned int s)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0);\n" \
+"	const sz_t j = idx >> lm, k = 3 * (j << lm) + idx;\n" \
+"	backward_4io((sz_t)(1) << lm, &z[k], w, s + j);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void square22(__global GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), n_4 = (sz_t)get_global_size(0);\n" \
+"	const sz_t j = idx, k = 4 * idx;\n" \
+"	square_22io(&z[k], w[n_4 + j]);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void square4(__global GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
+"{\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), n_4 = (sz_t)get_global_size(0);\n" \
+"	const sz_t j = idx, k = 4 * idx;\n" \
+"	square_4io(&z[k], w[n_4 + j]);\n" \
+"}\n" \
+"\n" \
+"// -----------------\n" \
+"\n" \
 "#define DECLARE_VAR(B_N, CHUNK_N) \\\n" \
 "	__local GF61 Z[4 * B_N * CHUNK_N]; \\\n" \
 "	\\\n" \
@@ -242,20 +319,13 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "#define DECLARE_VAR_BACKWARD() \\\n" \
 "	__global GF61 * __restrict__ const zi = &z[ko]; \\\n" \
-"	__global GF61 * __restrict__ const zo = &z[ki]; \\\n" \
-"	const sz_t n_4 = NSIZE_4;\n" \
+"	__global GF61 * __restrict__ const zo = &z[ki];\n" \
 "\n" \
 "#define FORWARD_I(B_N, CHUNK_N) \\\n" \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
 "	DECLARE_VAR_FORWARD(); \\\n" \
 "	\\\n" \
 "	forward_4i(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);\n" \
-"\n" \
-"#define FORWARD_I_0(B_N, CHUNK_N) \\\n" \
-"	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
-"	DECLARE_VAR_FORWARD(); \\\n" \
-"	\\\n" \
-"	forward_4i_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w);\n" \
 "\n" \
 "#define FORWARD_O(CHUNK_N) \\\n" \
 "	forward_4o((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);\n" \
@@ -301,22 +371,6 @@ static const char * const src_ocl_kernel1g = \
 "	BACKWARD_O(B_64, CHUNK64);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
-"#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64\n" \
-"	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
-"#endif\n" \
-"void forward64_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
-"{\n" \
-"	const int lm = LNSIZE - 6; const unsigned int s = 64 / 4;\n" \
-"\n" \
-"	FORWARD_I_0(B_64, CHUNK64);\n" \
-"\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	forward_4(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);\n" \
-"\n" \
-"	FORWARD_O(CHUNK64);\n" \
-"}\n" \
-"\n" \
 "// -----------------\n" \
 "\n" \
 "#define B_256	(256 / 4)\n" \
@@ -351,24 +405,6 @@ static const char * const src_ocl_kernel1g = \
 "	backward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);\n" \
 "\n" \
 "	BACKWARD_O(B_256, CHUNK256);\n" \
-"}\n" \
-"\n" \
-"__kernel\n" \
-"#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256\n" \
-"	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
-"#endif\n" \
-"void forward256_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
-"{\n" \
-"	const int lm = LNSIZE - 8; const unsigned int s = 256 / 4;\n" \
-"\n" \
-"	FORWARD_I_0(B_256, CHUNK256);\n" \
-"\n" \
-"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
-"	forward_4(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	forward_4(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);\n" \
-"\n" \
-"	FORWARD_O(CHUNK256);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -411,32 +447,12 @@ static const char * const src_ocl_kernel1g = \
 "	BACKWARD_O(B_1024, CHUNK1024);\n" \
 "}\n" \
 "\n" \
-"__kernel\n" \
-"#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024\n" \
-"	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
-"#endif\n" \
-"void forward1024_0(__global GF61 * restrict const z, __global const GF61 * restrict const w)\n" \
-"{\n" \
-"	const int lm = LNSIZE - 10; const unsigned int s = 1024 / 4;\n" \
-"\n" \
-"	FORWARD_I_0(B_1024, CHUNK1024);\n" \
-"\n" \
-"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );\n" \
-"	forward_4(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);\n" \
-"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
-"	forward_4(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	forward_4(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);\n" \
-"\n" \
-"	FORWARD_O(CHUNK1024);\n" \
-"}\n" \
-"\n" \
 "// -----------------\n" \
 "\n" \
 "#define DECLARE_VAR_32() \\\n" \
 "	__local GF61 Z[32 * BLK32]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \\\n" \
@@ -458,7 +474,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	forward_4i(8, Zi8, 8, zk, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	square_22(Z4, w[n_4 + j]);\n" \
+"	square_22(Z4, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4o(8, zk, 8, Zi8, w, j / 8);\n" \
 "}\n" \
@@ -466,7 +482,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_64() \\\n" \
 "	__local GF61 Z[64 * BLK64]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k64 = (sz_t)get_group_id(0) * 64 * BLK64, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i64 = (i & (sz_t)~(64 / 4 - 1)) * 4, i16 = i % (64 / 4); \\\n" \
@@ -488,7 +504,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	forward_4i(16, Zi16, 16, zk, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	square_4(Z4, w[n_4 + j]);\n" \
+"	square_4(Z4, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4o(16, zk, 16, Zi16, w, j / 16);\n" \
 "}\n" \
@@ -496,7 +512,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_128() \\\n" \
 "	__local GF61 Z[128 * BLK128]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k128 = (sz_t)get_group_id(0) * 128 * BLK128, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i128 = (i & (sz_t)~(128 / 4 - 1)) * 4, i32 = i % (128 / 4); \\\n" \
@@ -521,7 +537,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4i(32, Zi32, 32, zk, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	square_22(Z4, w[n_4 + j]);\n" \
+"	square_22(Z4, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4o(32, zk, 32, Zi32, w, j / 32);\n" \
@@ -530,7 +546,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_256() \\\n" \
 "	__local GF61 Z[256 * BLK256]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k256 = (sz_t)get_group_id(0) * 256 * BLK256, i = (sz_t)get_local_id(0); \\\n" \
 "	const sz_t i256 = 0, i64 = i; \\\n" \
@@ -555,7 +571,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4i(64, Zi64, 64, zk, w, j / 64);\n" \
 "	forward_4(16, Zi16, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	square_4(Z4, w[n_4 + j]);\n" \
+"	square_4(Z4, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4(16, Zi16, w, j / 16);\n" \
 "	backward_4o(64, zk, 64, Zi64, w, j / 64);\n" \
@@ -564,7 +580,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_512() \\\n" \
 "	__local GF61 Z[512]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k512 = (sz_t)get_group_id(0) * 512, i128 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -590,7 +606,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(32, Zi32, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	square_22(Z4, w[n_4 + j]);\n" \
+"	square_22(Z4, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4(32, Zi32, w, j / 32);\n" \
@@ -600,7 +616,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_1024() \\\n" \
 "	__local GF61 Z[1024]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k1024 = (sz_t)get_group_id(0) * 1024, i256 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -626,7 +642,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(64, Zi64, w, j / 64);\n" \
 "	forward_4(16, Zi16, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	square_4(Z4, w[n_4 + j]);\n" \
+"	square_4(Z4, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4(16, Zi16, w, j / 16);\n" \
 "	backward_4(64, Zi64, w, j / 64);\n" \
@@ -636,7 +652,7 @@ static const char * const src_ocl_kernel1g = \
 "#define DECLARE_VAR_2048() \\\n" \
 "	__local GF61 Z[2048]; \\\n" \
 "	\\\n" \
-"	const sz_t n_4 = NSIZE_4, idx = (sz_t)get_global_id(0), j = n_4 + idx; \\\n" \
+"	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE_4 + idx; \\\n" \
 "	\\\n" \
 "	const sz_t k2048 = (sz_t)get_group_id(0) * 2048, i512 = (sz_t)get_local_id(0); \\\n" \
 "	\\\n" \
@@ -665,7 +681,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(32, Zi32, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	square_22(Z4, w[n_4 + j]);\n" \
+"	square_22(Z4, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4(32, Zi32, w, j / 32);\n" \
@@ -788,7 +804,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	forward_4i(8, Zi8, 8, zk, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	mul_22(Z4, 8, zpk, w[n_4 + j]);\n" \
+"	mul_22(Z4, 8, zpk, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4o(8, zk, 8, Zi8, w, j / 8);\n" \
 "}\n" \
@@ -804,7 +820,7 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	forward_4i(16, Zi16, 16, zk, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	mul_4(Z4, 16, zpk, w[n_4 + j]);\n" \
+"	mul_4(Z4, 16, zpk, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4o(16, zk, 16, Zi16, w, j / 16);\n" \
 "}\n" \
@@ -821,7 +837,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4i(32, Zi32, 32, zk, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	mul_22(Z4, 32, zpk, w[n_4 + j]);\n" \
+"	mul_22(Z4, 32, zpk, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4o(32, zk, 32, Zi32, w, j / 32);\n" \
@@ -839,7 +855,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4i(64, Zi64, 64, zk, w, j / 64);\n" \
 "	forward_4(16, Zi16, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	mul_4(Z4, 64, zpk, w[n_4 + j]);\n" \
+"	mul_4(Z4, 64, zpk, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4(16, Zi16, w, j / 16);\n" \
 "	backward_4o(64, zk, 64, Zi64, w, j / 64);\n" \
@@ -858,7 +874,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(32, Zi32, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	mul_22(Z4, 128, zpk, w[n_4 + j]);\n" \
+"	mul_22(Z4, 128, zpk, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4(32, Zi32, w, j / 32);\n" \
@@ -878,7 +894,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(64, Zi64, w, j / 64);\n" \
 "	forward_4(16, Zi16, w, j / 16);\n" \
 "	forward_4(4, Zi4, w, j / 4);\n" \
-"	mul_4(Z4, 256, zpk, w[n_4 + j]);\n" \
+"	mul_4(Z4, 256, zpk, w[j]);\n" \
 "	backward_4(4, Zi4, w, j / 4);\n" \
 "	backward_4(16, Zi16, w, j / 16);\n" \
 "	backward_4(64, Zi64, w, j / 64);\n" \
@@ -899,7 +915,7 @@ static const char * const src_ocl_kernel1g = \
 "	forward_4(32, Zi32, w, j / 32);\n" \
 "	forward_4(8, Zi8, w, j / 8);\n" \
 "	forward_4(2, Zi2, w, j / 2);\n" \
-"	mul_22(Z4, 512, zpk, w[n_4 + j]);\n" \
+"	mul_22(Z4, 512, zpk, w[j]);\n" \
 "	backward_4(2, Zi2, w, j / 2);\n" \
 "	backward_4(8, Zi8, w, j / 8);\n" \
 "	backward_4(32, Zi32, w, j / 32);\n" \
@@ -946,7 +962,7 @@ static const char * const src_ocl_kernel1g = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void normalize1(__global GF61 * restrict const z, __global long * restrict const c,\n" \
+"void normalize1(__global GF61 * restrict const z, __global long2 * restrict const c,\n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const int sblk)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
@@ -955,31 +971,27 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	prefetch(zi, (size_t)blk);\n" \
 "\n" \
-"	// Not converted into Montgomery form such that output is converted out of Montgomery form\n" \
-"	const RNS norm = (RNS)(NORM1, NORM2);\n" \
-"\n" \
-"	long f = 0;\n" \
+"	long f0 = 0, f1 = 0;\n" \
 "\n" \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		const RNS zj = mul(zi[j], norm);\n" \
-"		long l = garner2(zj.s0, zj.s1);\n" \
-"		if (sblk < 0) l += l;\n" \
-"		f += l;\n" \
-"\n" \
-"		const int r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = toRNS(r);\n" \
-"\n" \
+"		const GF61 u = lshift61(zi[j], SNORM61);\n" \
+"		long l0 = get_int61(u.s0), l1 = get_int61(u.s1);\n" \
+"		if (sblk < 0) { l0 += l0; l1 += l1; }\n" \
+"		f0 += l0; f1 += l1;\n" \
+"		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);\n" \
+"		zi[j] = toGF61(r0, r1);\n" \
 "		++j;\n" \
 "	} while (j != blk);\n" \
 "\n" \
 "	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
-"	c[i] = (i == 0) ? -f : f;\n" \
+"	if (i == 0) { const long t = f0; f0 = -f1; f1 = t; }	// a_n = -a_0\n" \
+"	c[i] = (long2)(f0, f1);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void mul1(__global GF61 * restrict const z, __global long * restrict const c,\n" \
+"void mul1(__global GF61 * restrict const z, __global long2 * restrict const c,\n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk, const int a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
@@ -987,49 +999,56 @@ static const char * const src_ocl_kernel1g = \
 "\n" \
 "	prefetch(zi, (size_t)blk);\n" \
 "\n" \
-"	long f = 0;\n" \
+"	long f0 = 0, f1 = 0;\n" \
 "\n" \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(zi[j].s0) * (long)a;\n" \
-"		const int r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = toRNS(r);\n" \
+"		const GF61 u = zi[j];\n" \
+"		long l0 = get_int61(u.s0), l1 = get_int61(u.s1);\n" \
+"		l0 *= a; l1 *= a;\n" \
+"		f0 += l0; f1 += l1;\n" \
+"		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);\n" \
+"		zi[j] = toGF61(r0, r1);\n" \
 "		++j;\n" \
 "	} while (j != blk);\n" \
 "\n" \
 "	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
-"	c[i] = (i == 0) ? -f : f;\n" \
+"	if (i == 0) { const long t = f0; f0 = -f1; f1 = t; }	// a_n = -a_0\n" \
+"	c[i] = (long2)(f0, f1);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void normalize2(__global GF61 * restrict const z, __global const long * restrict const c, \n" \
+"void normalize2(__global GF61 * restrict const z, __global const long2 * restrict const c, \n" \
 "	const unsigned int b, const unsigned int b_inv, const int b_s, const unsigned int blk)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	__global GF61 * restrict const zi = &z[blk * idx];\n" \
 "\n" \
-"	long f = c[idx];\n" \
+"	long f0 = c[idx].s0, f1 = c[idx].s1;\n" \
 "\n" \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += geti_P1(zi[j].s0);\n" \
-"		const int r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = toRNS(r);\n" \
-"		if (f == 0) return;\n" \
+"		const GF61 u = zi[j];\n" \
+"		const long l0 = get_int61(u.s0), l1 = get_int61(u.s1);\n" \
+"		f0 += l0; f1 += l1;\n" \
+"		const int r0 = reduce64(&f0, b, b_inv, b_s), r1 = reduce64(&f1, b, b_inv, b_s);\n" \
+"		zi[j] = toGF61(r0, r1);\n" \
+"		if ((f0 == 0) && (f1 == 0)) return;\n" \
 "		++j;\n" \
 "	} while (j != blk - 1);\n" \
 "\n" \
-"	const int r = (int)f;\n" \
-"	zi[blk - 1] = add(zi[blk - 1], toRNS(r));\n" \
+"	const GF61 r = toGF61((int)(f0), (int)(f1));\n" \
+"	zi[blk - 1] = add61(zi[blk - 1], r);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global RNS * restrict const z, const int a)\n" \
+"void set(__global GF61 * restrict const z, const int a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
-"	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);\n" \
+"	const int ai = (idx == 0) ? a : 0;\n" \
+"	z[idx] = toGF61(ai, 0);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

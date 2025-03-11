@@ -11,17 +11,18 @@ Please give feedback to the authors if improvement is realized. It is distribute
 	#define INLINE
 #endif
 
-#ifndef NSIZE_4
+#ifndef NSIZE_2
+#define NSIZE_2		524288
 #define	NSIZE_4		262144
 #define	SNORM61		42
 #define	SNORM31		12
-#define BLK32		8
+#define BLK32		8	// 4KB
 #define BLK64		4
 #define BLK128		2
 #define BLK256		1
-#define CHUNK64		8
-#define CHUNK256	4
-#define CHUNK1024	2
+#define CHUNK64		4	// 4KB
+#define CHUNK256	2
+#define CHUNK1024	1
 #define MAX_WORK_GROUP_SIZE	1024
 #endif
 
@@ -93,8 +94,7 @@ INLINE GF61 subi61(const GF61 lhs, const GF61 rhs) { return (GF61)(_add61(lhs.s0
 
 INLINE void forward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	const GF61 u0 = z[0 * m], u1 = mul61(z[1 * m], w2), u2 = mul61(z[2 * m], w1), u3 = mul61(z[3 * m], w3);
 	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
 	z[0 * m] = add61(v0, v1); z[1 * m] = sub61(v0, v1); z[2 * m] = addi61(v2, v3); z[3 * m] = subi61(v2, v3);
@@ -102,8 +102,7 @@ INLINE void forward_4io(const sz_t m, __global GF61 * restrict const z, __global
 
 INLINE void backward_4io(const sz_t m, __global GF61 * restrict const z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	const GF61 u0 = z[0 * m], u1 = z[1 * m], u2 = z[2 * m], u3 = z[3 * m];
 	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);
 	z[0 * m] = add61(v0, v2); z[2 * m] = mulconj61(sub61(v0, v2), w1);
@@ -132,8 +131,7 @@ INLINE void square_4io(__global GF61 * restrict const z, const GF61 w)
 
 INLINE void forward_4(const sz_t m, __local GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const GF61 u0 = Z[0 * m], u1 = mul61(Z[1 * m], w2), u2 = mul61(Z[2 * m], w1), u3 = mul61(Z[3 * m], w3);
 	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
@@ -144,8 +142,7 @@ INLINE void forward_4i(const sz_t ml, __local GF61 * restrict const Z, const sz_
 {
 	__global const GF61 * const z2mg = &z[2 * mg];
 	const GF61 z0 = z[0], z2 = z2mg[0], z1 = z[mg], z3 = z2mg[mg];
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	const GF61 u0 = z0, u1 = mul61(z1, w2), u2 = mul61(z2, w1), u3 = mul61(z3, w3);
 	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
 	Z[0 * ml] = add61(v0, v1); Z[1 * ml] = sub61(v0, v1); Z[2 * ml] = addi61(v2, v3); Z[3 * ml] = subi61(v2, v3);
@@ -153,8 +150,7 @@ INLINE void forward_4i(const sz_t ml, __local GF61 * restrict const Z, const sz_
 
 INLINE void forward_4o(const sz_t mg, __global GF61 * restrict const z, const sz_t ml, __local const GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const GF61 u0 = Z[0 * ml], u1 = mul61(Z[1 * ml], w2), u2 = mul61(Z[2 * ml], w1), u3 = mul61(Z[3 * ml], w3);
 	const GF61 v0 = add61(u0, u2), v1 = add61(u1, u3), v2 = sub61(u0, u2), v3 = sub61(u1, u3);
@@ -164,8 +160,7 @@ INLINE void forward_4o(const sz_t mg, __global GF61 * restrict const z, const sz
 
 INLINE void backward_4(const sz_t m, __local GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const GF61 u0 = Z[0 * m], u1 = Z[1 * m], u2 = Z[2 * m], u3 = Z[3 * m];
 	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);
@@ -177,8 +172,7 @@ INLINE void backward_4i(const sz_t ml, __local GF61 * restrict const Z, const sz
 {
 	__global const GF61 * const z2mg = &z[2 * mg];
 	const GF61 u0 = z[0], u1 = z[mg], u2 = z2mg[0], u3 = z2mg[mg];
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);
 	Z[0 * ml] = add61(v0, v2); Z[2 * ml] = mulconj61(sub61(v0, v2), w1);
 	Z[1 * ml] = mulconj61(addi61(v1, v3), w2); Z[3 * ml] = mulconj61(subi61(v1, v3), w3);
@@ -186,8 +180,7 @@ INLINE void backward_4i(const sz_t ml, __local GF61 * restrict const Z, const sz
 
 INLINE void backward_4o(const sz_t mg, __global GF61 * restrict const z, const sz_t ml, __local const GF61 * restrict const Z, __global const GF61 * restrict const w, const sz_t j)
 {
-	__global const GF61 * restrict const w_j = &w[j];
-	const GF61 w1 = w_j[0], w2 = w_j[j], w3 = mul61(w1, w2);
+	const GF61 w1 = w[j], w2 = w[NSIZE_2 + j], w3 = w[2 * NSIZE_2 + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	const GF61 u0 = Z[0 * ml], u1 = Z[1 * ml], u2 = Z[2 * ml], u3 = Z[3 * ml];
 	const GF61 v0 = add61(u0, u1), v1 = sub61(u0, u1), v2 = add61(u2, u3), v3 = sub61(u3, u2);

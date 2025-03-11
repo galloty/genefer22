@@ -44,8 +44,7 @@ private:
 
 	static uint64_t _lshift(const uint64_t a, const int s)
 	{
-		const __uint128_t t = __uint128_t(a) << s;
-		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
+		const uint64_t lo = a << s, hi = a >> (64 - s);
 		const uint64_t lo61 = lo & _p, hi61 = (lo >> 61) | (hi << 3);
 		return _add(lo61, hi61);
 	}
@@ -439,11 +438,10 @@ public:
 
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
-			const size_t m = 4 * s;
-			const GF61_31 r_s = GF61_31::primroot_n(2 * m);
+			const GF61_31 r_s = GF61_31::primroot_n(2 * 4 * s);
 			for (size_t j = 0; j < s; ++j)
 			{
-				wr[s + j] = r_s.pow(bitrev(j, m) + 1);
+				wr[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
 			}
 		}
 

@@ -70,16 +70,46 @@ public:
 	GF31 addi(const GF31 & rhs) const { return GF31(_sub(_s[0], rhs._s[1]), _add(_s[1], rhs._s[0])); }
 	GF31 subi(const GF31 & rhs) const { return GF31(_add(_s[0], rhs._s[1]), _sub(_s[1], rhs._s[0])); }
 
-	static void forward2(GF31 & z0, GF31 & z1, const GF31 & w)
+/*	static void forward2(GF31 & z0, GF31 & z1, const GF31 & w)
 	{
 		const GF31 u0 = z0, u1 = z1.mul(w);
 		z0 = u0.add(u1); z1 = u0.sub(u1);
-	}
+	}*/
 
-	static void backward2(GF31 & z0, GF31 & z1, const GF31 & w)
+/*	static void backward2(GF31 & z0, GF31 & z1, const GF31 & w)
 	{
 		const GF31 u0 = z0, u1 = z1;
 		z0 = u0.add(u1); z1 = u0.sub(u1).mulconj(w);
+	}*/
+
+	static void forward4(GF31 & z0, GF31 & z1, GF31 & z2, GF31 & z3, const GF31 & w1, const GF31 & w2, const GF31 & w3)
+	{
+		const GF31 u0 = z0, u2 = z2.mul(w1), u1 = z1.mul(w2), u3 = z3.mul(w3);
+		const GF31 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3), v3 = u1.sub(u3);
+		z0 = v0.add(v1); z1 = v0.sub(v1); z2 = v2.addi(v3); z3 = v2.subi(v3);
+	}
+
+	static void backward4(GF31 & z0, GF31 & z1, GF31 & z2, GF31 & z3, const GF31 & w1, const GF31 & w2, const GF31 & w3)
+	{
+		const GF31 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const GF31 v0 = u0.add(u1), v1 = u0.sub(u1), v2 = u2.add(u3), v3 = u3.sub(u2);
+		z0 = v0.add(v2); z2 = v0.sub(v2).mulconj(w1); z1 = v1.addi(v3).mulconj(w2); z3 = v1.subi(v3).mulconj(w3);
+	}
+
+	static void square22(GF31 & z0, GF31 & z1, GF31 & z2, GF31 & z3, const GF31 & w)
+	{
+		const GF31 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		z0 = u0.sqr().add(u1.sqr().mul(w)); z1 = u0.mul(u1.add(u1));
+		z2 = u2.sqr().sub(u3.sqr().mul(w)); z3 = u2.mul(u3.add(u3));
+	}
+
+	static void square4(GF31 & z0, GF31 & z1, GF31 & z2, GF31 & z3, const GF31 & w)
+	{
+		const GF31 u0 = z0, u2 = z2.mul(w), u1 = z1, u3 = z3.mul(w);
+		const GF31 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3), v3 = u1.sub(u3);
+		const GF31 s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
+		const GF31 s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
+		z0 = s0.add(s2); z2 = s0.sub(s2).mulconj(w); z1 = s1.add(s3); z3 = s1.sub(s3).mulconj(w);
 	}
 
 	GF31 pow(const size_t e) const
@@ -167,16 +197,46 @@ public:
 	 	return *this;
 	}
 
-	static void forward2(Zp1 & z0, Zp1 & z1, const Zp1 & w)
+/*	static void forward2(Zp1 & z0, Zp1 & z1, const Zp1 & w)
 	{
 		const Zp1 u0 = z0, u1 = z1.mul(w);
 		z0 = u0.add(u1); z1 = u0.sub(u1);
-	}
+	}*/
 
-	static void backward2(Zp1 & z0, Zp1 & z1, const Zp1 & wi)
+/*	static void backward2(Zp1 & z0, Zp1 & z1, const Zp1 & wi)
 	{
 		const Zp1 u0 = z0, u1 = z1;
 		z0 = u0.add(u1); z1 = u0.sub(u1).mul(wi);
+	}*/
+
+	static void forward4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w1, const Zp1 & w20, const Zp1 & w21)
+	{
+		const Zp1 u0 = z0, u2 = z2.mul(w1), u1 = z1, u3 = z3.mul(w1);
+		const Zp1 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3).mul(w20), v3 = u1.sub(u3).mul(w21);
+		z0 = v0.add(v1); z1 = v0.sub(v1); z2 = v2.add(v3); z3 = v2.sub(v3);
+	}
+
+	static void backward4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & wi1, const Zp1 & wi20, const Zp1 & wi21)
+	{
+		const Zp1 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const Zp1 v0 = u0.add(u1), v1 = u0.sub(u1).mul(wi20), v2 = u2.add(u3), v3 = u2.sub(u3).mul(wi21);
+		z0 = v0.add(v2); z2 = v0.sub(v2).mul(wi1); z1 = v1.add(v3); z3 = v1.sub(v3).mul(wi1);
+	}
+
+	static void square22(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w)
+	{
+		const Zp1 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		z0 = u0.sqr().add(u1.sqr().mul(w)); z1 = u0.mul(u1.add(u1));
+		z2 = u2.sqr().sub(u3.sqr().mul(w)); z3 = u2.mul(u3.add(u3));
+	}
+
+	static void square4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w, const Zp1 & wi)
+	{
+		const Zp1 u0 = z0, u2 = z2.mul(w), u1 = z1, u3 = z3.mul(w);
+		const Zp1 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3), v3 = u1.sub(u3);
+		const Zp1 s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
+		const Zp1 s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
+		z0 = s0.add(s2); z2 = s0.sub(s2).mul(wi); z1 = s1.add(s3); z3 = s1.sub(s3).mul(wi);
 	}
 
 	Zp1 pow_mul_sqr(const size_t e) const { Zp1 r = pow(e); r._s[1] = _mulMonty(r._s[0], _s[1]); return r; }
@@ -223,7 +283,7 @@ private:
 		for (size_t k = 0; k < n; ++k) z[k].backward2();
 	}
 
-	void forward2_31(const size_t m, const size_t s)
+/*	void forward2_31(const size_t m, const size_t s)
 	{
 		GF31 * const z = _vz31.data();
 		const GF31 * const wr = _vwr31.data();
@@ -238,9 +298,9 @@ private:
 				GF31::forward2(z[k + 0 * m], z[k + 1 * m], w);
 			}
 		}
-	}
+	}*/
 
-	void forward2_1(const size_t m, const size_t s)
+/*	void forward2_1(const size_t m, const size_t s)
 	{
 		Zp1 * const z = _vz1.data();
 		const Zp1 * const wr = _vwr1.data();
@@ -255,9 +315,9 @@ private:
 				Zp1::forward2(z[k + 0 * m], z[k + 1 * m], w);
 			}
 		}
-	}
+	}*/
 
-	void backward2_31(const size_t m, const size_t s)
+/*	void backward2_31(const size_t m, const size_t s)
 	{
 		GF31 * const z = _vz31.data();
 		const GF31 * const wr = _vwr31.data();
@@ -272,9 +332,9 @@ private:
 				GF31::backward2(z[k + 0 * m], z[k + 1 * m], w);
 			}
 		}
-	}
+	}*/
 
-	void backward2_1(const size_t m, const size_t s)
+/*	void backward2_1(const size_t m, const size_t s)
 	{
 		Zp1 * const z = _vz1.data();
 		const Zp1 * const wri = _vwri1.data();
@@ -289,7 +349,7 @@ private:
 				Zp1::backward2(z[k + 0 * m], z[k + 1 * m], wi);
 			}
 		}
-	}
+	}*/
 
 	void forward4_31(const size_t m, const size_t s)
 	{
@@ -298,15 +358,29 @@ private:
 
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF31 w1 = wr[s + j], w2 = wr[2 * (s + j)], w3 = w1.mul(w2);
+			const GF31 w1 = wr[s + j], w2 = wr[2 * (s + j) + 0], w3 = w1.mul(w2);
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 4 * m * j + i;
-				const GF31 u0 = z[k + 0 * m], u1 = z[k + 1 * m].mul(w2), u2 = z[k + 2 * m].mul(w1), u3 = z[k + 3 * m].mul(w3);
-				const GF31 v0 = u0.add(u2), v1 = u1.add(u3), v2 = u0.sub(u2), v3 = u1.sub(u3);
-				z[k + 0 * m] = v0.add(v1); z[k + 1 * m] = v0.sub(v1);
-				z[k + 2 * m] = v2.addi(v3); z[k + 3 * m] = v2.subi(v3);
+				GF31::forward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w2, w3);
+			}
+		}
+	}
+
+	void forward4_1(const size_t m, const size_t s)
+	{
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wr = _vwr1.data();
+
+		for (size_t j = 0; j < s; ++j)
+		{
+			const Zp1 w1 = wr[s + j], w20 = wr[2 * (s + j) + 0], w21 = wr[2 * (s + j) + 1];
+
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 4 * m * j + i;
+				Zp1::forward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w20, w21);
 			}
 		}
 	}
@@ -318,49 +392,70 @@ private:
 
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF31 w1 = wr[s + j], w2 = wr[2 * (s + j)], w3 = w1.mul(w2);
+			const GF31 w1 = wr[s + j], w2 = wr[2 * (s + j) + 0], w3 = wr[2 * (s + j) + 1];	//w1.mul(w2);
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 4 * m * j + i;
-				const GF31 u0 = z[k + 0 * m], u1 = z[k + 1 * m], u2 = z[k + 2 * m], u3 = z[k + 3 * m];
-				const GF31 v0 = u0.add(u1), v1 = u0.sub(u1), v2 = u2.add(u3), v3 = u3.sub(u2);
-				z[k + 0 * m] = v0.add(v2); z[k + 2 * m] = v0.sub(v2).mulconj(w1);
-				z[k + 1 * m] = v1.addi(v3).mulconj(w2); z[k + 3 * m] = v1.subi(v3).mulconj(w3);
+				GF31::backward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w2, w3);
 			}
 		}
 	}
 
-	void square_31()
+	void backward4_1(const size_t m, const size_t s)
+	{
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wri = _vwri1.data();
+
+		for (size_t j = 0; j < s; ++j)
+		{
+			const Zp1 wi1 = wri[s + j], wi20 = wri[2 * (s + j) + 0], wi21 = wri[2 * (s + j) + 1];
+
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 4 * m * j + i;
+				Zp1::backward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], wi1, wi20, wi21);
+			}
+		}
+	}
+
+/*	void square_31()
 	{
 		const size_t n = _size;
 		GF31 * const z = _vz31.data();
 
 		for (size_t k = 0; k < n; ++k) z[k] = z[k].sqr();
-	}
+	}*/
 
-	void square_1()
+/*	void square_1()
 	{
 		const size_t n = _size;
 		Zp1 * const z = _vz1.data();
 
 		for (size_t k = 0; k < n; ++k) z[k] = z[k].sqr();
-	}
+	}*/
 
 	void square2_31()
 	{
 		const size_t n = _size;
 		GF31 * const z = _vz31.data();
-		const GF31 * const wr = _vwr31.data();
+		const GF31 * const wrs = &_vwr31.data()[n / 2];
 
 		for (size_t j = 0; j < n / 4; ++j)
 		{
-			const GF31 w = wr[n / 4 + j];
+			GF31::square22(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], wrs[j]);
+		}
+	}
 
-			const size_t k = 4 * j;
-			const GF31 u0 = z[k + 0], u1 = z[k + 1], u2 = z[k + 2], u3 = z[k + 3];
-			z[k + 0] = u0.sqr().add(u1.sqr().mul(w)); z[k + 1] = u0.mul(u1.add(u1));
-			z[k + 2] = u2.sqr().sub(u3.sqr().mul(w)); z[k + 3] = u2.mul(u3.add(u3));
+	void square2_1()
+	{
+		const size_t n = _size;
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wrs = &_vwr1.data()[n / 4];
+
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			Zp1::square22(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], wrs[j]);
 		}
 	}
 
@@ -368,19 +463,24 @@ private:
 	{
 		const size_t n = _size;
 		GF31 * const z = _vz31.data();
-		const GF31 * const wr = _vwr31.data();
+		const GF31 * const wrs = &_vwr31.data()[n / 2];
 
 		for (size_t j = 0; j < n / 4; ++j)
 		{
-			const GF31 w = wr[n / 4 + j];
+			GF31::square4(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], wrs[j]);
+		}
+	}
 
-			const size_t k = 4 * j;
-			const GF31 u0 = z[k + 0], u1 = z[k + 1], u2 = z[k + 2].mul(w), u3 = z[k + 3].mul(w);
-			const GF31 v0 = u0.add(u2), v1 = u1.add(u3), v2 = u0.sub(u2), v3 = u1.sub(u3);
-			const GF31 s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
-			const GF31 s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
-			z[k + 0] = s0.add(s2); z[k + 2] = s0.sub(s2).mulconj(w);
-			z[k + 1] = s1.add(s3); z[k + 3] = s1.sub(s3).mulconj(w);
+	void square4_1()
+	{
+		const size_t n = _size;
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wrs = &_vwr1.data()[n / 4];
+		const Zp1 * const wrsi = &_vwri1.data()[n / 4];
+
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			Zp1::square4(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], wrs[j], wrsi[j]);
 		}
 	}
 
@@ -445,24 +545,32 @@ private:
 
 public:
 	Transform(const uint32_t b, const int n, const uint32_t a)
-		: _size(size_t(1) << (n - 1)), _vz31(_size), _vz1(_size), _vwr31(_size / 1), _vwr1(_size / 1), _vwri1(_size / 1),
-		_base(int32(b)), _multiplier(int32(a)), _snorm31(31 - n + 1), _norm1(Zp1::norm(uint32(2 * _size)))
+		: _size(size_t(1) << (n - 1)), _vz31(_size), _vz1(_size), _vwr31(_size), _vwr1(_size / 2), _vwri1(_size / 2),
+		_base(int32(b)), _multiplier(int32(a)), _snorm31(31 - n + 2), _norm1(Zp1::norm(uint32(_size)))
 	{
 		const size_t size = _size;
 
 		GF31 * const wr31 = _vwr31.data();
-		for (size_t s = 1; s < size / 1; s *= 2)
+		bool first = true;
+		for (size_t s = 1; s < size / 2; s *= 2, first = !first)
 		{
 			const GF31 r_s = GF31::primroot_n(2 * 4 * s);
 			for (size_t j = 0; j < s; ++j)
 			{
-				wr31[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
+				if (first || (j % 2 == 0)) wr31[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
+				else wr31[s + j] = wr31[s + j - 1].mul(wr31[(s + j) / 2]);
 			}
+		}
+		const size_t s = size / 4;
+		const GF31 r_s = GF31::primroot_n(2 * 4 * s);
+		for (size_t j = 0; j < s; ++j)
+		{
+			wr31[2 * s + j] = r_s.pow(bitrev(j, 4 * s) + 1);	// store in size / 2
 		}
 
 		Zp1 * const wr1 = _vwr1.data();
 		Zp1 * const wri1 = _vwri1.data();
-		for (size_t s = 1; s < size / 1; s *= 2)
+		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const Zp1 r_s = Zp1::primroot_n(2 * 4 * s);
 			for (size_t j = 0; j < s; ++j)
@@ -486,22 +594,16 @@ public:
 	{
 		const size_t n = _size;
 
-		// size_t m = n / 4, s = 1;
-		// for (; m > 1; m /= 4, s *= 4) forward4_31(m, s);
-		// if (m == 1) square4_31(); else square2_31();
-		// for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4_31(m, s);
-		// carry(mul);
+		size_t m = n / 4, s = 1;
+		for (; m > 1; m /= 4, s *= 4) forward4_31(m, s);
+		if (m == 1) square4_31(); else square2_31();
+		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4_31(m, s);
 
-		size_t m = n / 2, s = 1;
-		for (; m >= 1; m /= 2, s *= 2) forward2_31(m, s);
-		square_31(); 
-		for (m = 1, s = n / 2; m <= n / 2; m *= 2, s /= 2) backward2_31(m, s);
-
-		m = n / 2, s = 1;
 		forward2_1_0();
-		for (; m >= 1; m /= 2, s *= 2) forward2_1(m, s);
-		square_1(); 
-		for (m = 1, s = n / 2; m <= n / 2; m *= 2, s /= 2) backward2_1(m, s);
+		m = n / 4, s = 1;
+		for (; m > 1; m /= 4, s *= 4) forward4_1(m, s);
+		if (m == 1) square4_1(); else square2_1();
+		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4_1(m, s);
 		backward2_1_0();
 
 		carry(mul);

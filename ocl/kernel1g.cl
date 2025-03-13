@@ -15,7 +15,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define NSIZE_2		524288
 #define	NSIZE_4		262144
 #define	SNORM61		42
-#define	SNORM31		12
 #define BLK32		8	// 4KB
 #define BLK64		4
 #define BLK128		2

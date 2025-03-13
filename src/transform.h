@@ -17,7 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class transform
 {
 protected:
-	enum class EKind { DTvec2, DTvec4, DTvec8, IBDTvec2, IBDTvec4, IBDTvec8, NTT2, NTT3, NTT3cpu, SBDTvec2, SBDTvec4, SBDTvec8, NTT2g, NTT3g }; 
+	enum class EKind { DTvec2, DTvec4, DTvec8, IBDTvec2, IBDTvec4, IBDTvec8, NTT2, NTT3, NTT3cpu, SBDTvec2, SBDTvec4, SBDTvec8, NTT1g }; 
 
 private:
 	const size_t _size;

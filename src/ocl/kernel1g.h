@@ -27,7 +27,6 @@ static const char * const src_ocl_kernel1g = \
 "#define NSIZE_2		524288\n" \
 "#define	NSIZE_4		262144\n" \
 "#define	SNORM61		42\n" \
-"#define	SNORM31		12\n" \
 "#define BLK32		8	// 4KB\n" \
 "#define BLK64		4\n" \
 "#define BLK128		2\n" \

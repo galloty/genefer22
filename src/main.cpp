@@ -117,7 +117,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << name << ext << " version 24.04.1 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 25.00.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -390,7 +390,8 @@ public:
 			// internal test
 			/*static const size_t count = 20 - 12 + 1;
 			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
-			static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 1154623840, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
+			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 1154623840, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
+			// static constexpr uint32_t bp[count] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496, 5710946, 4038248, 2855472 };	// gfn NTT-2 limits
 			// static constexpr uint32_t bp[count] = { 484, 22, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
 			// static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
 
@@ -400,16 +401,20 @@ public:
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 
-			for (size_t i = 0; i < count; ++i)
-			{
-				if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
+			// if (g.check(824, 10, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(150, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+
+			// for (size_t i = 0; i < count; ++i)
+			// {
+				// g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth);
+				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Proof, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Server, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Check, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
 
 				// if (g.check(bp[i] + 0, 12 + i, genefer::EMode::Prime, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-			}*/
+			// }*/
 
 			pio::print(usage());
 #if defined(GPU)

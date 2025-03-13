@@ -15,7 +15,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "transform.h"
 
 #include "ocl/kernel1g.h"
-#include "ocl/kernel2g.h"
 
 // GF((2^61 - 1)^2)
 class GF61
@@ -86,68 +85,6 @@ public:
 	static const GF61 primroot_n(const cl_uint n) { return GF61(_h_a, _h_b).pow(_h_order / n); }
 };
 
-// GF((2^31 - 1)^2)
-class GF31
-{
-private:
-	static const cl_uint _p = (cl_uint(1) << 31) - 1;
-	cl_uint2 _n;
-	// a primitive root of order 2^31 which is a root of (0, 1).
-	static const cl_uint _h_order = cl_uint(1) << 31;
-	static const cl_uint _h_a = 105066u, _h_b = 333718u;
-
-	static cl_uint _add(const cl_uint a, const cl_uint b)
-	{
-		const cl_uint t = a + b;
-		return t - ((t >= _p) ? _p : 0);
-	}
-
-	static cl_uint _sub(const cl_uint a, const cl_uint b)
-	{
-		const cl_uint t = a - b;
-		return t + ((cl_int(t) < 0) ? _p : 0);
-	}
-
-	static cl_uint _mul(const cl_uint a, const cl_uint b)
-	{
-		const cl_ulong t = a * cl_ulong(b);
-		const cl_uint lo = cl_uint(t) & _p, hi = cl_uint(t >> 31);
-		return _add(hi, lo);
-	}
-
-	explicit GF31(const cl_uint a, const cl_uint b) { _n.s[0] = a; _n.s[1] = b; }
-
-public:
-	GF31() {}
-
-	void get_int(int32_t & a, int32_t & b) const
-	{
-		a = (_n.s[0] >= _p / 2) ? int32_t(_n.s[0] - _p) : int32_t(_n.s[0]);
-		b = (_n.s[1] >= _p / 2) ? int32_t(_n.s[1] - _p) : int32_t(_n.s[1]);
-	}
-
-	GF31 & set_int(const int32_t a, const int32_t b)
-	{
-		_n.s[0] = (a < 0) ? (cl_uint(a) + _p) : cl_uint(a);
-		_n.s[1] = (b < 0) ? (cl_uint(b) + _p) : cl_uint(b);
-		return *this;
-	}
-
-	GF31 add(const GF31 & rhs) const { return GF31(_add(_n.s[0], rhs._n.s[0]), _add(_n.s[1], rhs._n.s[1])); }
-	GF31 sub(const GF31 & rhs) const { return GF31(_sub(_n.s[0], rhs._n.s[0]), _sub(_n.s[1], rhs._n.s[1])); }
-	GF31 mul(const GF31 & rhs) const { return GF31(_sub(_mul(_n.s[0], rhs._n.s[0]), _mul(_n.s[1], rhs._n.s[1])), _add(_mul(_n.s[1], rhs._n.s[0]), _mul(_n.s[0], rhs._n.s[1]))); }
-
-	GF31 pow(const cl_uint e) const
-	{
-		if (e == 0) return GF31(1, 0);
-		GF31 r = GF31(1, 0), y = *this;
-		for (cl_uint i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.mul(y); }
-		return r.mul(y);
-	}
-
-	static const GF31 primroot_n(const cl_uint n) { return GF31(_h_a, _h_b).pow(_h_order / n); }
-};
-
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
 #define BLK32g		8
@@ -159,16 +96,13 @@ public:
 #define CHUNK256g	2
 #define CHUNK1024g	1
 
-template<size_t GF_SIZE>
 class engineg : public device
 {
 private:
 	const size_t _n;
 	const int _ln;
 	const bool _isBoinc;
-	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr;
-	cl_mem _ze = nullptr, _zpe = nullptr, _we = nullptr;
-	cl_mem _c = nullptr;
+	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _square22 = nullptr, _square4 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
@@ -200,12 +134,6 @@ public:
 			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF61) * n * num_regs);
 			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF61) * n);
 			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(GF61) * 3 * n / 2);
-			if (GF_SIZE == 2)
-			{
-				_ze = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31) * n * num_regs);
-				_zpe = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31) * n);
-				_we = _createBuffer(CL_MEM_READ_ONLY, sizeof(GF31) * 3 * n / 2);
-			}
 			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long2) * n / 4);
 		}
 	}
@@ -221,12 +149,6 @@ public:
 			_releaseBuffer(_z);
 			_releaseBuffer(_zp);
 			_releaseBuffer(_w);
-			if (GF_SIZE == 2)
-			{
-				_releaseBuffer(_ze);
-				_releaseBuffer(_zpe);
-				_releaseBuffer(_we);
-			}
 			_releaseBuffer(_c);
 		}
 	}
@@ -239,9 +161,7 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
@@ -250,7 +170,6 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_c);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &b);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &b_inv);
@@ -263,11 +182,8 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_w);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_we);
 		return kernel;
 	}
 
@@ -276,7 +192,6 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -285,7 +200,6 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -294,9 +208,7 @@ private:
 		cl_kernel kernel = _createKernel(kernelName);
 		cl_uint index = 0;
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_zp);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_zpe);
 		_setKernelArg(kernel, index++, sizeof(cl_mem), &_z);
-		if (GF_SIZE == 2) _setKernelArg(kernel, index++, sizeof(cl_mem), &_ze);
 		return kernel;
 	}
 
@@ -354,7 +266,7 @@ public:
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
-		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(GF61) + ((GF_SIZE == 2) ? sizeof(GF31) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(GF61), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -382,13 +294,8 @@ public:
 ///////////////////////////////
 
 	void readMemory_z(GF61 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(GF61) * _n * count); }
-	void readMemory_ze(GF31  * const zPtre, const size_t count = 1) { _readBuffer(_ze, zPtre, sizeof(GF31) * _n * count); }
-
 	void writeMemory_z(const GF61 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(GF61) * _n * count); }
-	void writeMemory_ze(const GF31 * const zPtre, const size_t count = 1) { _writeBuffer(_ze, zPtre, sizeof(GF31) * _n * count); }
-
 	void writeMemory_w(const GF61 * const wPtr) { _writeBuffer(_w, wPtr, sizeof(GF61) * 3 * _n / 2); }
-	void writeMemory_we(const GF31 * const wPtre) { _writeBuffer(_we, wPtre, sizeof(GF31) * 3 * _n / 2); }
 
 ///////////////////////////////
 
@@ -398,7 +305,7 @@ private:
 		const size_t n_4 = _n / 4;
 		const cl_int ilm = static_cast<cl_int>(lm);
 		const cl_uint is = static_cast<cl_uint>(n_4 >> lm);
-		cl_uint index = (GF_SIZE == 2) ? 4 : 2;
+		cl_uint index = 2;
 		_setKernelArg(kernel, index++, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, index++, sizeof(cl_uint), &is);
 		_executeKernel(kernel, n_4, localWorkSize);
@@ -443,7 +350,6 @@ private:
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
 		_setKernelArg(kernel, 0, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
-		if (GF_SIZE == 2) _setKernelArg(kernel, 1, sizeof(cl_mem), isMultiplier ? &_ze : &_zpe);
 	}
 
 	void forward64p(const int lm)
@@ -537,14 +443,13 @@ public:
 	}
 
 private:
-	void squareTune(const size_t count, const size_t sIndex, const GF61 * const Z, GF31 * const Ze)
+	void squareTune(const size_t count, const size_t sIndex, const GF61 * const Z)
 	{
 		const splitter * const pSplit = _pSplit;
 
 		for (size_t j = 0; j != count; ++j)
 		{
 			writeMemory_z(Z);
-			if (GF_SIZE == 2) writeMemory_ze(Ze);
 
 			const size_t s = pSplit->getPartSize(sIndex);
 
@@ -605,7 +510,7 @@ public:
 	void initMultiplicand(const size_t src)
 	{
 		const cl_uint isrc = static_cast<cl_uint>(src * _n);
-		_setKernelArg(_copyp, (GF_SIZE == 2) ? 4 : 2, sizeof(cl_uint), &isrc);
+		_setKernelArg(_copyp, 2, sizeof(cl_uint), &isrc);
 		_executeKernel(_copyp, _n);
 
 		const splitter * const pSplit = _pSplit;
@@ -707,7 +612,7 @@ public:
 	void set(const int32_t a)
 	{
 		const cl_int ia = static_cast<cl_int>(a);
-		cl_uint index = (GF_SIZE == 2) ? 2 : 1;
+		cl_uint index = 1;
 		_setKernelArg(_set, index++, sizeof(cl_int), &ia);
 		_executeKernel(_set, _n);
 	}
@@ -715,7 +620,7 @@ public:
 	void copy(const size_t dst, const size_t src)
 	{
 		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
-		cl_uint index = (GF_SIZE == 2) ? 2 : 1;
+		cl_uint index = 1;
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &idst);
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &isrc);
 		_executeKernel(_copy, _n);
@@ -728,10 +633,10 @@ public:
 		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
 		const size_t size = _n / blk;
 
-		_setKernelArg(_normalize1, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_int), &sblk);
+		_setKernelArg(_normalize1, 5, sizeof(cl_int), &sblk);
 		_executeKernel(_normalize1, size, std::min(size, _naLocalWS));
 
-		_setKernelArg(_normalize2, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_uint), &blk);
+		_setKernelArg(_normalize2, 5, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
@@ -744,18 +649,18 @@ public:
 		const size_t size = _n / blk;
 		const cl_int ia = static_cast<cl_int>(a);
 
-		cl_uint index1 = (GF_SIZE == 2) ? 6 : 5;
+		cl_uint index1 = 5;
 		_setKernelArg(_mul1, index1++, sizeof(cl_int), &blk);
 		_setKernelArg(_mul1, index1++, sizeof(cl_int), &ia);
 		_executeKernel(_mul1, size, std::min(size, _naLocalWS));
 
-		cl_uint index2 = (GF_SIZE == 2) ? 6 : 5;
+		cl_uint index2 = 5;
 		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
 		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
 	}
 
 private:
-	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const GF61 * const Z, const GF31 * const Ze)
+	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const GF61 * const Z)
 	{
 		const cl_uint cblk = static_cast<cl_uint>(blk);
 		const cl_int sblk = static_cast<cl_int>(blk);
@@ -764,12 +669,11 @@ private:
 		for (size_t i = 0; i != count; ++i)
 		{
 			writeMemory_z(Z);
-			if (GF_SIZE == 2) writeMemory_ze(Ze);
 
-			_setKernelArg(_normalize1, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_int), &sblk);
+			_setKernelArg(_normalize1, 5, sizeof(cl_int), &sblk);
 			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
 
-			_setKernelArg(_normalize2, (GF_SIZE == 2) ? 6 : 5, sizeof(cl_uint), &cblk);
+			_setKernelArg(_normalize2, 5, sizeof(cl_uint), &cblk);
 			_executeKernel(_normalize2, size, std::min(size, n3bLocalWS));
 		}
 	}
@@ -780,26 +684,20 @@ public:
 		const size_t n = _n;
 
 		GF61 * const Z = new GF61[n];
-		GF31 * const Ze = (GF_SIZE == 2) ? new GF31[n] : nullptr;
-		const double v61_max = pow(2.0, 60), v31_max = pow(2.0, 30);
+		const double v61_max = pow(2.0, 60);
 		for (size_t i = 0; i != n; ++i)
 		{
 			const double id = static_cast<double>(i);
 			const cl_long va61 = static_cast<cl_long>(v61_max * cos(id)), vb61 = static_cast<cl_long>(v61_max * cos(id + 0.5));
 			Z[i].set_long(va61, vb61);
-			if (GF_SIZE == 2)
-			{
-				const cl_int va31 = static_cast<cl_int>(v31_max * sin(id)), vb31 = static_cast<cl_int>(v31_max * sin(id + 0.5));
-				Ze[i].set_int(va31, vb31);
-			}
 		}
 
 		setProfiling(true);
 
 		resetProfiles();
-		baseModTune(1, 16, 0, 0, Z, Ze);
+		baseModTune(1, 16, 0, 0, Z);
 		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z; if (GF_SIZE == 2) delete[] Ze; setProfiling(false); return; }
+		if (time == 0) { delete[] Z; setProfiling(false); return; }
 		// 410 tests, 0.1 second = 10^8 ns
 		const size_t count = std::min(std::max(size_t(100000000 / (410 * time)), size_t(2)), size_t(100));
 
@@ -815,7 +713,7 @@ public:
 			if (log(maxSqr) >= base * log(static_cast<double>(b))) continue;
 
 			resetProfiles();
-			baseModTune(count, b, 0, 0, Z, Ze);
+			baseModTune(count, b, 0, 0, Z);
 			cl_ulong minT_b = getProfileTime();
 #if defined(ocl_debug)
 			// std::ostringstream ss; ss << "b = " << b << ", sa = 0, sb = 0, count = " << count << ", t = " << minT_b << "." << std::endl;
@@ -828,7 +726,7 @@ public:
 				for (size_t sb = 1; sb <= 256; sb *= 2)
 				{
 					resetProfiles();
-					baseModTune(count, b, sa, sb, Z, Ze);
+					baseModTune(count, b, sa, sb, Z);
 					const cl_ulong t = getProfileTime();
 #if defined(ocl_debug)
 					// std::ostringstream ss; ss << "b = " << b << ", sa = " << sa << ", sb = " << sb << ", count = " << count << ", t = " << t << "." << std::endl;
@@ -866,7 +764,7 @@ public:
 			for (size_t i = 0; i < ns; ++i)
 			{
 				resetProfiles();
-				squareTune(2, i, Z, Ze);
+				squareTune(2, i, Z);
 				const cl_ulong t = getProfileTime();
 
 #if defined(ocl_debug)
@@ -892,35 +790,32 @@ public:
 #endif
 
 		delete[] Z;
-		if (GF_SIZE == 2) delete[] Ze;
 
 		setProfiling(false);
 	}
 };
 
-template<size_t GF_SIZE>
 class transformGPUg : public transform
 {
 private:
 	const size_t _mem_size;
 	const size_t _num_regs;
 	GF61 * const _z;
-	GF31 * const _ze;
-	engineg<GF_SIZE> * _pEngine = nullptr;
+	engineg * _pEngine = nullptr;
 
 public:
 	transformGPUg(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(size_t(1) << (n - 1), n, b, (GF_SIZE == 2) ? EKind::NTT3g : EKind::NTT2g),
-		_mem_size((size_t(1) << (n - 1)) * num_regs * (sizeof(GF61) + ((GF_SIZE == 2) ? sizeof(GF31) : 0))), _num_regs(num_regs),
-		_z(new GF61[(size_t(1) << (n - 1)) * num_regs]), _ze((GF_SIZE == 2) ? new GF31[(size_t(1) << (n - 1)) * num_regs] : nullptr)
+		: transform(size_t(1) << (n - 1), n, b, EKind::NTT1g),
+		_mem_size((size_t(1) << (n - 1)) * num_regs * sizeof(GF61)), _num_regs(num_regs),
+		_z(new GF61[(size_t(1) << (n - 1)) * num_regs])
 	{
 		const size_t size = getSize();
 
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engineg<GF_SIZE>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n - 1), isBoinc, verbose);
+		_pEngine = new engineg(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n - 1), isBoinc, verbose);
 
 		std::ostringstream src;
 
@@ -928,7 +823,6 @@ public:
 		src << "#define\tNSIZE_4\t" << (1u << (n - 3)) << "u" << std::endl;
 
 		src << "#define\tSNORM61\t" << 61 - n + 2 << std::endl;
-		src << "#define\tSNORM31\t" << 31 - n + 2 << std::endl;
 
 		src << "#define\tBLK32\t" << BLK32g << std::endl;
 		src << "#define\tBLK64\t" << BLK64g << std::endl;
@@ -941,14 +835,7 @@ public:
 
 		src << "#define\tMAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
-		if (GF_SIZE == 1)
-		{
-			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel1g.cl", "src/ocl/kernel1g.h", "src_ocl_kernel1g", src)) src << src_ocl_kernel1g;
-		}
-		else	// GF_SIZE == 2
-		{
-			if (isBoinc || !_pEngine->readOpenCL("ocl/kernel2g.cl", "src/ocl/kernel2g.h", "src_ocl_kernel2g", src)) src << src_ocl_kernel2g;
-		}
+		if (isBoinc || !_pEngine->readOpenCL("ocl/kernel1g.cl", "src/ocl/kernel1g.h", "src_ocl_kernel1g", src)) src << src_ocl_kernel1g;
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory(num_regs);
@@ -969,24 +856,6 @@ public:
 		_pEngine->writeMemory_w(wr);
 		delete[] wr;
 
-		if (GF_SIZE == 2)
-		{
-			GF31 * const wre = new GF31[3 * size / 2];
-			GF31 * const wre2 = &wre[1 * size / 2];
-			GF31 * const wre3 = &wre[2 * size / 2];
-			for (size_t s = 1; s < size / 2; s *= 2)
-			{
-				const GF31 r_2s = GF31::primroot_n(cl_uint(2 * 4 * (2 * s)));
-				for (size_t j = 0; j < s; ++j)
-				{
-					const GF31 w2 = r_2s.pow(bitRev(j, 4 * s) + 1), w = w2.mul(w2);
-					wre[s + j] = w; wre2[s + j] = w2; wre3[s + j] = w.mul(w2);
-				}
-			}
-			_pEngine->writeMemory_we(wre);
-			delete[] wre;
-		}
-
 		_pEngine->tune(b);
 	}
 
@@ -998,7 +867,6 @@ public:
 		delete _pEngine;
 
 		delete[] _z;
-		if (GF_SIZE == 2) delete[] _ze;
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -1026,13 +894,6 @@ protected:
 		GF61 * const z = _z;
 		for (size_t i = 0; i < size; ++i) z[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
 		_pEngine->writeMemory_z(z);
-
-		if (GF_SIZE == 2)
-		{
-			GF31 * const ze = _ze;
-			for (size_t i = 0; i < size; ++i) ze[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
-			_pEngine->writeMemory_ze(_ze);
-		}
 	}
 
 public:
@@ -1047,12 +908,6 @@ public:
 		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(GF61) * size * num_regs)) return false;
 		_pEngine->writeMemory_z(_z, num_regs);
 
-		if (GF_SIZE == 2)
-		{
-			if (!cFile.read(reinterpret_cast<char *>(_ze), sizeof(GF31) * size * num_regs)) return false;
-			_pEngine->writeMemory_ze(_ze, num_regs);
-		}
-
 		return true;
 	}
 
@@ -1065,12 +920,6 @@ public:
 
 		_pEngine->readMemory_z(_z, num_regs);
 		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(GF61) * size * num_regs)) return;
-
-		if (GF_SIZE == 2)
-		{
-			_pEngine->readMemory_ze(_ze, num_regs);
-			if (!cFile.write(reinterpret_cast<const char *>(_ze), sizeof(GF31) * size * num_regs)) return;
-		}
 	}
 
 	void set(const int32_t a) override

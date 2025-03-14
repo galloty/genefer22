@@ -200,6 +200,20 @@ public:
 		z0 = v0.add(v2); z2 = v2.sub(v0).mul(win1); z1 = v1.add(v3); z3 = v3.sub(v1).mul(win1);
 	}
 
+	static void forward8_0(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w1, const Zp1 & w20, const Zp1 & w21)
+	{
+		Zp1 t0 = z0.forward2(), t2 = z2.forward2(), t1 = z1.forward2(), t3 = z3.forward2();
+		forward4(t0, t1, t2, t3, w1, w20, w21);
+		z0 = t0; z1 = t1; z2 = t2; z3 = t3;
+	}
+
+	static void backward8_0(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & win1, const Zp1 & win20, const Zp1 & win21)
+	{
+		Zp1 t0 = z0, t2 = z2, t1 = z1, t3 = z3;
+		backward4(t0, t1, t2, t3, win1, win20, win21);
+		z0 = t0.backward2(); z2 = t2.backward2(); z1 = t1.backward2(); z3 = t3.backward2();
+	}
+
 	static void square22(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w)
 	{
 		const Zp1 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
@@ -244,22 +258,6 @@ private:
 		return r;
 	}
 
-	void forward2_1_0()
-	{
-		const size_t n = _size;
-		Zp1 * const z = _vz1.data();
-
-		for (size_t k = 0; k < n; ++k) z[k].forward2();
-	}
-
-	void backward2_1_0()
-	{
-		const size_t n = _size;
-		Zp1 * const z = _vz1.data();
-
-		for (size_t k = 0; k < n; ++k) z[k].backward2();
-	}
-
 	void forward4_31(const size_t m, const size_t s)
 	{
 		const size_t n = _size;
@@ -293,6 +291,20 @@ private:
 				const size_t k = 4 * m * j + i;
 				Zp1::forward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w20, w21);
 			}
+		}
+	}
+
+	void forward8_1_0()
+	{
+		const size_t n = _size;
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wr = _vwr1.data();
+
+		const Zp1 w1 = wr[1], w20 = wr[n / 2 + 1], w21 = wr[n + 1];
+
+		for (size_t i = 0; i < n / 4; ++i)
+		{
+			Zp1::forward8_0(z[i + 0 * n / 4], z[i + 1 * n / 4], z[i + 2 * n / 4], z[i + 3 * n / 4], w1, w20, w21);
 		}
 	}
 
@@ -330,6 +342,20 @@ private:
 				const size_t k = 4 * m * j + i;
 				Zp1::backward4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], win1, win20, win21);
 			}
+		}
+	}
+
+	void backward8_1_0()
+	{
+		const size_t n = _size;
+		Zp1 * const z = _vz1.data();
+		const Zp1 * const wr = _vwr1.data();
+
+		const Zp1 win1 = wr[1].swap(), win20 = wr[n + 1].swap(), win21 = wr[n / 2 + 1].swap();
+
+		for (size_t i = 0; i < n / 4; ++i)
+		{
+			Zp1::backward8_0(z[i + 0 * n / 4], z[i + 1 * n / 4], z[i + 2 * n / 4], z[i + 3 * n / 4], win1, win20, win21);
 		}
 	}
 
@@ -489,12 +515,12 @@ public:
 		if (m == 1) square4_31(); else square2_31();
 		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4_31(m, s);
 
-		forward2_1_0();
-		m = n / 4, s = 1;
+		forward8_1_0();
+		m = n / 16, s = 4;
 		for (; m > 1; m /= 4, s *= 4) forward4_1(m, s);
 		if (m == 1) square4_1(); else square2_1();
-		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4_1(m, s);
-		backward2_1_0();
+		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 16; m *= 4, s /= 4) backward4_1(m, s);
+		backward8_1_0();
 
 		carry(mul);
 	}

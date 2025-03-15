@@ -227,8 +227,8 @@ INLINE void forward_4i_31(const sz_t ml, __local GF31 * restrict const Z, const 
 INLINE void forward_4o_31(const sz_t mg, __global GF31 * restrict const z, const sz_t ml,
 	__local const GF31 * restrict const Z, __global const GF31 * restrict const w, const sz_t j)
 {
-	const GF31 w1 = w[j], w2 = w[NSIZE / 2 + j], w3 = w[NSIZE + j];
 	__global GF31 * const z2mg = &z[2 * mg];
+	const GF31 w1 = w[j], w2 = w[NSIZE / 2 + j], w3 = w[NSIZE + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	FORWARD_4_31(Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], w1, w2, w3);
 }
@@ -251,8 +251,8 @@ INLINE void backward_4i_31(const sz_t ml, __local GF31 * restrict const Z, const
 INLINE void backward_4o_31(const sz_t mg, __global GF31 * restrict const z, const sz_t ml,
 	__local const GF31 * restrict const Z, __global const GF31 * restrict const w, const sz_t j)
 {
-	const GF31 w1 = w[j], w2 = w[NSIZE / 2 + j], w3 = w[NSIZE + j];
 	__global GF31 * const z2mg = &z[2 * mg];
+	const GF31 w1 = w[j], w2 = w[NSIZE / 2 + j], w3 = w[NSIZE + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	BACKWARD_4_31(Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], w1, w2, w3);
 }
@@ -403,8 +403,8 @@ INLINE void forward_4i_1(const sz_t ml, __local Zp1 * restrict const Z, const sz
 INLINE void forward_4o_1(const sz_t mg, __global Zp1 * restrict const z, const sz_t ml,
 	__local const Zp1 * restrict const Z, __global const Zp1 * restrict const w, const sz_t j)
 {
-	const Zp1 w1 = w[j], w20 = w[NSIZE / 2 + j], w21 = w[NSIZE + j];
 	__global Zp1 * const z2mg = &z[2 * mg];
+	const Zp1 w1 = w[j], w20 = w[NSIZE / 2 + j], w21 = w[NSIZE + j];
 	barrier(CLK_LOCAL_MEM_FENCE);
 	FORWARD_4_1(Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], w1, w20, w21);
 }
@@ -427,10 +427,27 @@ INLINE void backward_4i_1(const sz_t ml, __local Zp1 * restrict const Z, const s
 INLINE void backward_4o_1(const sz_t mg, __global Zp1 * restrict const z, const sz_t ml,
 	__local const Zp1 * restrict const Z, __global const Zp1 * restrict const w, const sz_t ji)
 {
-	const Zp1 win1 = swap1(w[ji]), win21 = swap1(w[NSIZE / 2 + ji]), win20 = swap1(w[NSIZE + ji]);
 	__global Zp1 * const z2mg = &z[2 * mg];
+	const Zp1 win1 = swap1(w[ji]), win21 = swap1(w[NSIZE / 2 + ji]), win20 = swap1(w[NSIZE + ji]);
 	barrier(CLK_LOCAL_MEM_FENCE);
 	BACKWARD_4_1(Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], win1, win20, win21);
+}
+
+INLINE void forward_8i_1_0(const sz_t ml, __local Zp1 * restrict const Z, const sz_t mg,
+	__global const Zp1 * restrict const z, __global const Zp1 * restrict const w)
+{
+	__global const Zp1 * const z2mg = &z[2 * mg];
+	const Zp1 w1 = w[1], w20 = w[NSIZE / 2 + 1], w21 = w[NSIZE + 1];
+	FORWARD_8_1_0(z[0], z[mg], z2mg[0], z2mg[mg], Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], w1, w20, w21);
+}
+
+INLINE void backward_8o_1_0(const sz_t mg, __global Zp1 * restrict const z, const sz_t ml,
+	__local const Zp1 * restrict const Z, __global const Zp1 * restrict const w)
+{
+	__global Zp1 * const z2mg = &z[2 * mg];
+	const Zp1 win1 = swap1(w[1]), win21 = swap1(w[NSIZE / 2 + 1]), win20 = swap1(w[NSIZE + 1]);
+	barrier(CLK_LOCAL_MEM_FENCE);
+	BACKWARD_8_1_0(Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], win1, win20, win21);
 }
 
 INLINE void write_4_1(const sz_t mg, __global Zp1 * restrict const z, __local const Zp1 * restrict const Z)
@@ -547,44 +564,66 @@ void square4(__global uint2 * restrict const z, __global const uint2 * restrict 
 // -----------------
 
 #define DECLARE_VAR(B_N, CHUNK_N) \
-	__local GF31 Z[4 * B_N * CHUNK_N]; \
+	__local uint2 Z[4 * B_N * CHUNK_N]; \
 	\
 	/* threadIdx < B_N */ \
 	const sz_t i = (sz_t)get_local_id(0), chunk_idx = i % CHUNK_N, threadIdx = i / CHUNK_N, blockIdx = (sz_t)get_group_id(0) * CHUNK_N + chunk_idx; \
-	__local GF31 * const Zi = &Z[chunk_idx]; \
+	__local uint2 * const Zi = &Z[chunk_idx]; \
 	\
 	const sz_t blockIdx_m = blockIdx >> lm, idx_m = blockIdx_m * B_N + threadIdx; \
 	const sz_t blockIdx_mm = blockIdx_m << lm, idx_mm = idx_m << lm; \
 	\
 	const sz_t ki = blockIdx + blockIdx_mm * (B_N * 3 - 1) + idx_mm, ko = blockIdx - blockIdx_mm + idx_mm * 4; \
 	\
-	sz_t sj = s + idx_m;
+	sz_t sj = s + idx_m, sji = s + s - idx_m - 1;
 
 #define DECLARE_VAR_FORWARD() \
-	__global GF31 * __restrict__ const zi = &z[ki]; \
-	__global GF31 * __restrict__ const zo = &z[ko];
+	__global GF31 * restrict const zi31 = &z[ki]; \
+	__global GF31 * restrict const zo31 = &z[ko]; \
+	__global Zp1 * restrict const zi1 = &zi31[ZOFFSET_1]; \
+	__global Zp1 * restrict const zo1 = &zo31[ZOFFSET_1];
 
 #define DECLARE_VAR_BACKWARD() \
-	__global GF31 * __restrict__ const zi = &z[ko]; \
-	__global GF31 * __restrict__ const zo = &z[ki];
+	__global GF31 * restrict const zi31 = &z[ko]; \
+	__global GF31 * restrict const zo31 = &z[ki]; \
+	__global Zp1 * restrict const zi1 = &zi31[ZOFFSET_1]; \
+	__global Zp1 * restrict const zo1 = &zo31[ZOFFSET_1];
 
 #define FORWARD_I_31(B_N, CHUNK_N) \
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_FORWARD(); \
 	\
-	forward_4i_31(B_N * CHUNK_N, &Z[i], B_N << lm, zi, w, sj / B_N);
+	forward_4i_31(B_N * CHUNK_N, &Z[i], B_N << lm, zi31, w, sj / B_N);
+
+#define FORWARD_I_1(B_N, CHUNK_N) \
+	forward_4i_1(B_N * CHUNK_N, &Z[i], B_N << lm, zi1, &w[WOFFSET_1], sj / B_N);
+
+#define FORWARD_I_1_0(B_N, CHUNK_N) \
+	forward_8i_1_0(B_N * CHUNK_N, &Z[i], B_N << lm, zi1, &w[WOFFSET_1]);
 
 #define FORWARD_O_31(CHUNK_N) \
-	forward_4o_31((sz_t)1 << lm, zo, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);
+	forward_4o_31((sz_t)1 << lm, zo31, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], w, sj / 1);
+
+#define FORWARD_O_1(CHUNK_N) \
+	forward_4o_1((sz_t)1 << lm, zo1, 1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], &w[WOFFSET_1], sj / 1);
 
 #define BACKWARD_I_31(B_N, CHUNK_N) \
 	DECLARE_VAR(B_N, CHUNK_N); \
 	DECLARE_VAR_BACKWARD(); \
 	\
-	backward_4i_31(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi, w, sj / 1);
+	backward_4i_31(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi31, w, sj / 1);
+
+#define BACKWARD_I_1(B_N, CHUNK_N) \
+	backward_4i_1(1 * CHUNK_N, &Zi[CHUNK_N * 4 * threadIdx], (sz_t)1 << lm, zi1, &w[WOFFSET_1], sji / 1);
 
 #define BACKWARD_O_31(B_N, CHUNK_N) \
-	backward_4o_31(B_N << lm, zo, B_N * CHUNK_N, &Z[i], w, sj / B_N);
+	backward_4o_31(B_N << lm, zo31, B_N * CHUNK_N, &Z[i], w, sj / B_N);
+
+#define BACKWARD_O_1(B_N, CHUNK_N) \
+	backward_4o_1(B_N << lm, zo1, B_N * CHUNK_N, &Z[i], &w[WOFFSET_1], sji / B_N);
+
+#define BACKWARD_O_1_0(B_N, CHUNK_N) \
+	backward_8o_1_0(B_N << lm, zo1, B_N * CHUNK_N, &Z[i], &w[WOFFSET_1]);
 
 // -----------------
 
@@ -592,7 +631,7 @@ void square4(__global uint2 * restrict const z, __global const uint2 * restrict 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
-	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
 #endif
 void forward64(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
@@ -602,20 +641,66 @@ void forward64(__global uint2 * restrict const z, __global const uint2 * restric
 	forward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
 
 	FORWARD_O_31(CHUNK64);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1(B_64, CHUNK64);
+	forward_4_1(4 * CHUNK64, &Zi[CHUNK64 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK64);
 }
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
-	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void forward64_0(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
+{
+	FORWARD_I_31(B_64, CHUNK64);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	forward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
+	FORWARD_O_31(CHUNK64);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1_0(B_64, CHUNK64);
+	forward_4_1(4 * CHUNK64, &Zi[CHUNK64 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK64);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
 #endif
 void backward64(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	BACKWARD_I_31(B_64, CHUNK64);
-
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
-
 	BACKWARD_O_31(B_64, CHUNK64);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_64, CHUNK64);
+	backward_4_1(4 * CHUNK64, &Zi[CHUNK64 * k4], &w[WOFFSET_1], sji / 4);
+	BACKWARD_O_1(B_64, CHUNK64);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void backward64_0(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
+{
+	BACKWARD_I_31(B_64, CHUNK64);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	backward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
+	BACKWARD_O_31(B_64, CHUNK64);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_64, CHUNK64);
+	backward_4_1(4 * CHUNK64, &Zi[CHUNK64 * k4], &w[WOFFSET_1], sji / 4);
+	BACKWARD_O_1_0(B_64, CHUNK64);
 }
 
 // -----------------
@@ -624,7 +709,7 @@ void backward64(__global uint2 * restrict const z, __global const uint2 * restri
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256
-	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
+	__attribute__((work_group_size_hint(B_256 * CHUNK256, 1, 1)))
 #endif
 void forward256(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
@@ -640,7 +725,7 @@ void forward256(__global uint2 * restrict const z, __global const uint2 * restri
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256
-	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))
+	__attribute__((work_group_size_hint(B_256 * CHUNK256, 1, 1)))
 #endif
 void backward256(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
@@ -660,7 +745,7 @@ void backward256(__global uint2 * restrict const z, __global const uint2 * restr
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024
-	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
+	__attribute__((work_group_size_hint(B_1024 * CHUNK1024, 1, 1)))
 #endif
 void forward1024(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
@@ -678,7 +763,7 @@ void forward1024(__global uint2 * restrict const z, __global const uint2 * restr
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024
-	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))
+	__attribute__((work_group_size_hint(B_1024 * CHUNK1024, 1, 1)))
 #endif
 void backward1024(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
@@ -697,19 +782,20 @@ void backward1024(__global uint2 * restrict const z, __global const uint2 * rest
 // -----------------
 
 #define DECLARE_VAR_32() \
-	__local GF31 Z[32 * BLK32]; \
+	__local uint2 Z[32 * BLK32]; \
 	\
-	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE / 4 + idx; \
+	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE / 4 + idx, ji = NSIZE / 4 + NSIZE / 4 - idx - 1; \
 	\
 	const sz_t k32 = (sz_t)get_group_id(0) * 32 * BLK32, i = (sz_t)get_local_id(0); \
 	const sz_t i32 = (i & (sz_t)~(32 / 4 - 1)) * 4, i8 = i % (32 / 4); \
 	\
-	__global GF31 * restrict const zk = &z[k32 + i32 + i8]; \
-	__local GF31 * const Z32 = &Z[i32]; \
-	__local GF31 * const Zi8 = &Z32[i8]; \
+	__global GF31 * restrict const zk31 = &z[k32 + i32 + i8]; \
+	__global Zp1 * restrict const zk1 = &zk31[ZOFFSET_1]; \
+	__local uint2 * const Z32 = &Z[i32]; \
+	__local uint2 * const Zi8 = &Z32[i8]; \
 	const sz_t i2 = ((4 * i8) & (sz_t)~(4 * 2 - 1)) + (i8 % 2); \
-	__local GF31 * const Zi2 = &Z32[i2]; \
-	__local GF31 * const Z4 = &Z32[4 * i8];
+	__local uint2 * const Zi2 = &Z32[i2]; \
+	__local uint2 * const Z4 = &Z32[4 * i8];
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 32 / 4 * BLK32
@@ -719,11 +805,19 @@ void square32(__global uint2 * restrict const z, __global const uint2 * restrict
 {
 	DECLARE_VAR_32();
 
-	forward_4i_31(8, Zi8, 8, zk, w, j / 8);
+	forward_4i_31(8, Zi8, 8, zk31, w, j / 8);
 	forward_4_31(2, Zi2, w, j / 2);
 	square_22_31(Z4, w[j]);
 	backward_4_31(2, Zi2, w, j / 2);
-	backward_4o_31(8, zk, 8, Zi8, w, j / 8);
+	backward_4o_31(8, zk31, 8, Zi8, w, j / 8);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	forward_4i_1(8, Zi8, 8, zk1, &w[WOFFSET_1], j / 8);
+	forward_4_1(2, Zi2, &w[WOFFSET_1], j / 2);
+	square_22_1(Z4, w[WOFFSET_1 + j]);
+	backward_4_1(2, Zi2, &w[WOFFSET_1], ji / 2);
+	backward_4o_1(8, zk1, 8, Zi8, &w[WOFFSET_1], ji / 8);
 }
 
 #define DECLARE_VAR_64() \
@@ -843,7 +937,7 @@ void square256(__global uint2 * restrict const z, __global const uint2 * restric
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 512 / 4
-	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
 #endif
 void square512(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -879,7 +973,7 @@ void square512(__global uint2 * restrict const z, __global const uint2 * restric
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 1024 / 4
-	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
 #endif
 void square1024(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -917,7 +1011,7 @@ void square1024(__global uint2 * restrict const z, __global const uint2 * restri
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 2048 / 4
-	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
 #endif
 void square2048(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -946,9 +1040,16 @@ void fwd32p(__global uint2 * restrict const z, __global const uint2 * restrict c
 {
 	DECLARE_VAR_32();
 
-	forward_4i_31(8, Zi8, 8, zk, w, j / 8);
+	forward_4i_31(8, Zi8, 8, zk31, w, j / 8);
 	forward_4_31(2, Zi2, w, j / 2);
-	write_4_31(8, zk, Z4);
+	write_4_31(8, zk31, Z4);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	forward_4i_31(8, Zi8, 8, zk1, &w[WOFFSET_1], j / 8);
+	forward_4_31(2, Zi2, &w[WOFFSET_1], j / 2);
+	write_4_31(8, zk1, Z4);
+
 }
 
 __kernel
@@ -994,7 +1095,7 @@ void fwd256p(__global uint2 * restrict const z, __global const uint2 * restrict 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 512 / 4
-	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
 #endif
 void fwd512p(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -1009,7 +1110,7 @@ void fwd512p(__global uint2 * restrict const z, __global const uint2 * restrict 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 1024 / 4
-	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
 #endif
 void fwd1024p(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -1024,7 +1125,7 @@ void fwd1024p(__global uint2 * restrict const z, __global const uint2 * restrict
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 2048 / 4
-	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
 #endif
 void fwd2048p(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
@@ -1049,11 +1150,19 @@ void mul32(__global uint2 * restrict const z, __global const uint2 * restrict co
 	DECLARE_VAR_32();
 	__global const GF31 * restrict const zpk = &zp[k32 + i32 + i8];
 
-	forward_4i_31(8, Zi8, 8, zk, w, j / 8);
+	forward_4i_31(8, Zi8, 8, zk31, w, j / 8);
 	forward_4_31(2, Zi2, w, j / 2);
 	mul_22_31(Z4, 8, zpk, w[j]);
 	backward_4_31(2, Zi2, w, j / 2);
-	backward_4o_31(8, zk, 8, Zi8, w, j / 8);
+	backward_4o_31(8, zk31, 8, Zi8, w, j / 8);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	forward_4i_1(8, Zi8, 8, zk1, &w[WOFFSET_1], j / 8);
+	forward_4_1(2, Zi2, &w[WOFFSET_1], j / 2);
+	mul_22_1(Z4, 8, zpk, w[WOFFSET_1 + j]);
+	backward_4_1(2, Zi2, &w[WOFFSET_1], ji / 2);
+	backward_4o_1(8, zk1, 8, Zi8, &w[WOFFSET_1], ji / 8);
 }
 
 __kernel
@@ -1110,7 +1219,7 @@ void mul256(__global uint2 * restrict const z, __global const uint2 * restrict c
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 512 / 4
-	__attribute__((reqd_work_group_size(512 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
 #endif
 void mul512(__global uint2 * restrict const z, __global const uint2 * restrict const zp, __global const uint2 * restrict const w)
 {
@@ -1130,7 +1239,7 @@ void mul512(__global uint2 * restrict const z, __global const uint2 * restrict c
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 1024 / 4
-	__attribute__((reqd_work_group_size(1024 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
 #endif
 void mul1024(__global uint2 * restrict const z, __global const uint2 * restrict const zp, __global const uint2 * restrict const w)
 {
@@ -1150,7 +1259,7 @@ void mul1024(__global uint2 * restrict const z, __global const uint2 * restrict 
 
 __kernel
 #if MAX_WORK_GROUP_SIZE >= 2048 / 4
-	__attribute__((reqd_work_group_size(2048 / 4, 1, 1)))
+	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
 #endif
 void mul2048(__global uint2 * restrict const z, __global const uint2 * restrict const zp, __global const uint2 * restrict const w)
 {

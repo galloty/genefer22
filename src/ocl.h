@@ -34,13 +34,12 @@ private:
 	struct partition
 	{
 		size_t size;
-		uint32_t p[8];
+		uint32_t p[64];
 	};
 
 	const bool b256, b1024;
 	const size_t mMax;
-	size_t size;
-	partition part[32];
+	std::vector<partition> part;
 
 private:
 	void split(const size_t m, const size_t i, partition & p)
@@ -61,12 +60,13 @@ private:
 			split(m - 6, i + 1, p);
 		}
 
-		if ((5 <= m) && (m <= mMax))
+		if ((5 <= m) && (m <= mMax) && (i > 0))
 		{
-			for (size_t k = 0; k < i; ++k) part[size].p[k] = p.p[k];
-			part[size].p[i] = static_cast<uint32_t>(m);
-			part[size].size = i + 1;
-			size++;
+			partition pt;
+			for (size_t k = 0; k < i; ++k) pt.p[k] = p.p[k];
+			pt.p[i] = static_cast<uint32_t>(m);
+			pt.size = i + 1;
+			part.push_back(pt);
 		}
 	}
 
@@ -76,16 +76,15 @@ private:
 public:
 	splitter(const size_t n, const size_t chunk256, const size_t chunk1024, const size_t sizeofRNS, const size_t mSquareMax,
 		const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
-		b256(maxWorkGroupSize >= (256 / 4) * chunk256),
+		b256((maxWorkGroupSize >= (256 / 4) * chunk256) && (localMemSize / sizeofRNS >= 256 * chunk256)),
 		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize / sizeofRNS >= 1024 * chunk1024)),
 		mMax(std::min(mSquareMax, std::min(log_2(size_t(localMemSize / sizeofRNS)), log_2(maxWorkGroupSize * 4))))
 	{
-		size = 0;
 		partition p;
 		split(n, 0, p);
 	}
 
-	size_t getSize() const { return size; }
+	size_t getSize() const { return part.size(); }
 	size_t getPartSize(const size_t i) const { return part[i].size; }
 	uint32_t getPart(const size_t i, const size_t j) const { return part[i].p[j]; }
 };

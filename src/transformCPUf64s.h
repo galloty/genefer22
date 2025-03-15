@@ -858,7 +858,7 @@ public:
 		}
 	}
 
-	void set(const int32_t a) override
+	void set(const uint32_t a) override
 	{
 		Vc * const zl = (Vc *)&_mem[zlOffset];
 		Vc * const zh = (Vc *)&_mem[zhOffset];

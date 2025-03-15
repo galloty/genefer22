@@ -1068,10 +1068,11 @@ static const char * const src_ocl_kernel2 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global RNS * restrict const z, const int a)\n" \
+"void set(__global RNS * restrict const z, const unsigned int a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
-"	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);\n" \
+"	const unsigned int ai = (idx == 0) ? a : 0;\n" \
+"	z[idx] = (RNS)(ai, ai);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

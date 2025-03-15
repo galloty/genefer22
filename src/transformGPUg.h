@@ -609,11 +609,11 @@ public:
 		}
 	}
 
-	void set(const int32_t a)
+	void set(const uint32_t a)
 	{
-		const cl_int ia = static_cast<cl_int>(a);
+		const cl_uint ia = static_cast<cl_uint>(a);
 		cl_uint index = 1;
-		_setKernelArg(_set, index++, sizeof(cl_int), &ia);
+		_setKernelArg(_set, index++, sizeof(cl_uint), &ia);
 		_executeKernel(_set, _n);
 	}
 
@@ -922,7 +922,7 @@ public:
 		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(GF61) * size * num_regs)) return;
 	}
 
-	void set(const int32_t a) override
+	void set(const uint32_t a) override
 	{
 		_pEngine->set(a);
 	}

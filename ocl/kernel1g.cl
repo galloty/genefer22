@@ -1031,11 +1031,11 @@ void normalize2(__global GF61 * restrict const z, __global const long2 * restric
 }
 
 __kernel
-void set(__global GF61 * restrict const z, const int a)
+void set(__global GF61 * restrict const z, const unsigned int a)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
-	const int ai = (idx == 0) ? a : 0;
-	z[idx] = toGF61(ai, 0);
+	const unsigned int ai = (idx == 0) ? a : 0;
+	z[idx] = (GF61)(ai, 0);
 }
 
 __kernel

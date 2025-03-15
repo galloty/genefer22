@@ -1378,11 +1378,12 @@ static const char * const src_ocl_kernel3 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global RNS * restrict const z, __global RNSe * restrict const ze, const int a)\n" \
+"void set(__global RNS * restrict const z, __global RNSe * restrict const ze, const unsigned int a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
-"	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);\n" \
-"	ze[idx] = (idx == 0) ? toRNSe(a) : (RNSe)(0);\n" \
+"	const unsigned int ai = (idx == 0) ? a : 0;\n" \
+"	z[idx] = (RNS)(ai, ai);\n" \
+"	ze[idx] = (RNSe)(ai);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

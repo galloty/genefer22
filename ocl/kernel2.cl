@@ -1056,10 +1056,11 @@ void normalize2(__global RNS * restrict const z, __global const long * restrict 
 }
 
 __kernel
-void set(__global RNS * restrict const z, const int a)
+void set(__global RNS * restrict const z, const unsigned int a)
 {
 	const sz_t idx = (sz_t)get_global_id(0);
-	z[idx] = (idx == 0) ? toRNS(a) : (RNS)(0, 0);
+	const unsigned int ai = (idx == 0) ? a : 0;
+	z[idx] = (RNS)(ai, ai);
 }
 
 __kernel

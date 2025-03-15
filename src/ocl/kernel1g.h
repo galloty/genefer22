@@ -1043,11 +1043,11 @@ static const char * const src_ocl_kernel1g = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global GF61 * restrict const z, const int a)\n" \
+"void set(__global GF61 * restrict const z, const unsigned int a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
-"	const int ai = (idx == 0) ? a : 0;\n" \
-"	z[idx] = toGF61(ai, 0);\n" \
+"	const unsigned int ai = (idx == 0) ? a : 0;\n" \
+"	z[idx] = (GF61)(ai, 0);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

@@ -844,7 +844,7 @@ public:
 		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(RNS4) * size_4 * num_regs)) return;
 	}
 
-	void set(const int32_t a) override
+	void set(const uint32_t a) override
 	{
 		const size_t size_4 = getSize() / 4;
 

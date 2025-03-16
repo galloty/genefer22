@@ -296,8 +296,8 @@ public:
 
 		_forward64_0 = createTransformKernel("forward64_0");
 		_backward64_0 = createTransformKernel("backward64_0");
-		// _forward256_0 = createTransformKernel("forward256_0");
-		// _backward256_0 = createTransformKernel("backward256_0");
+		_forward256_0 = createTransformKernel("forward256_0");
+		_backward256_0 = createTransformKernel("backward256_0");
 		// _forward1024_0 = createTransformKernel("forward1024_0");
 		// _backward1024_0 = createTransformKernel("backward1024_0");
 
@@ -421,8 +421,8 @@ private:
 
 	void forward64_0() { const size_t n_4 = _n / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64m); }
 	void backward64_0() { const size_t n_4 = _n / 4; _executeKernel(_backward64_0, n_4, 64 / 4 * CHUNK64m); }
-	void forward256_0(const int lm) { fb(_forward256_0, lm, 256 / 4 * CHUNK256m); }
-	void backward256_0(const int lm) { fb(_backward256_0, lm, 256 / 4 * CHUNK256m); }
+	void forward256_0() { const size_t n_4 = _n / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256m); }
+	void backward256_0() { const size_t n_4 = _n / 4; _executeKernel(_backward256_0, n_4, 256 / 4 * CHUNK256m); }
 	void forward1024_0(const int lm) { fb(_forward1024_0, lm, 1024 / 4 * CHUNK1024m); }
 	void backward1024_0(const int lm) { fb(_backward1024_0, lm, 1024 / 4 * CHUNK1024m); }
 
@@ -497,10 +497,10 @@ private:
 		setTransformArgs(_forward64_0);
 	}
 
-	void forward256p_0(const int lm)
+	void forward256p_0()
 	{
 		setTransformArgs(_forward256_0, false);
-		forward256_0(lm);
+		forward256_0();
 		setTransformArgs(_forward256_0);
 	}
 
@@ -525,14 +525,18 @@ private:
 			// forward4_0(); forward4(7); forward4(5); if (isSquare) square32(); else mul32(); backward4(5); backward4(7); backward4_0();
 			// forward4_0(); forward4(7); if (isSquare) square128(); else mul128(); backward4(7); backward4_0();
 			// forward4_0(); if (isSquare) square512(); else mul512(); backward4_0();
-			forward64_0(); if (isSquare) square32(); else mul32(); backward64_0();
+			// forward64_0(); if (isSquare) square32(); else mul32(); backward64_0();
+			// forward4_0(); forward256(11 - 10); if (isSquare) square22(); else mul22(); backward256(11 - 10); backward4_0();
+			forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256_0();
 			return;
 		}
 		if (_ln == 12)
 		{
 			// forward4_0(); forward4(8); if (isSquare) square256(); else mul256(); backward4(8); backward4_0();
 			// forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0();
-			forward64_0(); if (isSquare) square64(); else mul64(); backward64_0();
+			// forward64_0(); if (isSquare) square64(); else mul64(); backward64_0();
+			// forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4_0();
+			forward256_0(); forward4(12 - 10); if (isSquare) square4(); else mul4(); backward4(12 - 10); backward256_0();
 			return;
 		}
 		// if (_ln == 13)
@@ -560,7 +564,7 @@ private:
 			else if (k == 8)
 			{
 				lm -= 8;
-				if (i != 1) forward256(lm); else forward256_0(lm);
+				if (i != 1) forward256(lm); else forward256_0();
 				if (verbose) std::cout << "forward256 (" << lm << ") ";
 			}
 			else // if (k == 6)
@@ -605,7 +609,7 @@ private:
 			}
 			else if (k == 8)
 			{
-				if (i != 1) backward256(lm); else backward256_0(lm);
+				if (i != 1) backward256(lm); else backward256_0();
 				if (verbose) std::cout << "backward256 (" << lm << ") ";
 				lm += 8;
 			}
@@ -654,14 +658,18 @@ public:
 			// forward4p_0(); forward4p(7); forward4p(5); fwd32p();
 			// forward4p_0(); forward4p(7); fwd128p();
 			// forward4p_0(); fwd512p();
-			forward64p_0(); fwd32p();
+			// forward64p_0(); fwd32p();
+			// forward4p_0(); forward256p(11 - 10);
+			forward256p_0(); forward4p(11 - 10);
 			return;
 		}
 		if (_ln == 12)
 		{
 			// forward4p_0(); forward4p(8); fwd256p();
 			// forward4p_0(); fwd1024p();
-			forward64p_0(); fwd64p();
+			// forward64p_0(); fwd64p();
+			// forward4p_0(); forward256p(12 - 10); fwd4p();
+			forward256p_0();  forward4p(12 - 10); fwd4p();
 			return;
 		}
 		// if (_ln == 13)
@@ -689,7 +697,7 @@ public:
 			else if (k == 8)
 			{
 				lm -= 8;
-				if (i != 1) forward256p(lm); else forward256p_0(lm);
+				if (i != 1) forward256p(lm); else forward256p_0();
 			}
 			else // if (k == 6)
 			{

@@ -715,10 +715,8 @@ __kernel
 void forward64(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	FORWARD_I_31(B_64, CHUNK64);
-
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	forward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
-
 	FORWARD_O_31(CHUNK64);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -735,6 +733,7 @@ __kernel
 void forward64_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
 	const int lm = LNSZ - 6; const unsigned int s = 64 / 4;
+
 	FORWARD_I_31(B_64, CHUNK64);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	forward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
@@ -772,6 +771,7 @@ __kernel
 void backward64_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
 {
 	const int lm = LNSZ - 6; const unsigned int s = 64 / 4;
+
 	BACKWARD_I_31(B_64, CHUNK64);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4_31(4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
@@ -795,13 +795,41 @@ __kernel
 void forward256(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	FORWARD_I_31(B_256, CHUNK256);
-
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	forward_4_31(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	forward_4_31(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);
-
 	FORWARD_O_31(CHUNK256);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1(B_256, CHUNK256);
+	forward_4_1(16 * CHUNK256, &Zi[CHUNK256 * k16], &w[WOFFSET_1], sj / 16);
+	forward_4_1(4 * CHUNK256, &Zi[CHUNK256 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK256);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256
+	__attribute__((work_group_size_hint(B_256 * CHUNK256, 1, 1)))
+#endif
+void forward256_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
+{
+	const int lm = LNSZ - 8; const unsigned int s = 256 / 4;
+
+	FORWARD_I_31(B_256, CHUNK256);
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
+	forward_4_31(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	forward_4_31(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);
+	FORWARD_O_31(CHUNK256);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1_0(B_256, CHUNK256);
+	forward_4_1(16 * CHUNK256, &Zi[CHUNK256 * k16], &w[WOFFSET_1], sj / 16);
+	forward_4_1(4 * CHUNK256, &Zi[CHUNK256 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK256);
 }
 
 __kernel
@@ -811,13 +839,41 @@ __kernel
 void backward256(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	BACKWARD_I_31(B_256, CHUNK256);
-
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4_31(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	backward_4_31(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
-
 	BACKWARD_O_31(B_256, CHUNK256);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_256, CHUNK256);
+	backward_4_1(4 * CHUNK256, &Zi[CHUNK256 * k4], &w[WOFFSET_1], sji / 4);
+	backward_4_1(16 * CHUNK256, &Zi[CHUNK256 * k16], &w[WOFFSET_1], sji / 16);
+	BACKWARD_O_1(B_256, CHUNK256);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_256 * CHUNK256
+	__attribute__((work_group_size_hint(B_256 * CHUNK256, 1, 1)))
+#endif
+void backward256_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
+{
+	const int lm = LNSZ - 8; const unsigned int s = 256 / 4;
+
+	BACKWARD_I_31(B_256, CHUNK256);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	backward_4_31(4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4);
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
+	backward_4_31(16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
+	BACKWARD_O_31(B_256, CHUNK256);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_256, CHUNK256);
+	backward_4_1(4 * CHUNK256, &Zi[CHUNK256 * k4], &w[WOFFSET_1], sji / 4);
+	backward_4_1(16 * CHUNK256, &Zi[CHUNK256 * k16], &w[WOFFSET_1], sji / 16);
+	BACKWARD_O_1_0(B_256, CHUNK256);
 }
 
 // -----------------

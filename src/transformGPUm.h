@@ -18,6 +18,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernel3m.h"
 
 // #define	CHECK_ALL_FUNCTIONS		1
+// #define CHECK_FUNC_1		1	// GFN-12&13: square22, square4, forward4_0, forward4, forward256_0, forward256
+// #define CHECK_FUNC_2		1	// GFN-12&13: square32, square64, forward64_0
+// #define CHECK_FUNC_3		1	// GFN-12&13: square128, square256
+// #define CHECK_FUNC_4		1	// GFN-12&13: square512, square1024
+// #define CHECK_FUNC_5		1	// GFN-12&13&14: forward1024_0, forward1024
+// #define CHECK_FUNC_6		1	// GFN-14: square2048
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -511,39 +517,30 @@ private:
 private:
 	void _mul(const size_t sIndex, const bool isSquare, const bool verbose)
 	{
-/*		if (_ln == 10)
-		{
-			// forward4_0(); forward4(6); if (isSquare) square64(); else mul64(); backward4(6); backward4_0();
-			forward4_0(); if (isSquare) square256(); else mul256(); backward4_0();
-			return;
-		}
-		if (_ln == 11)
-		{
-			// forward4_0(); forward4(7); forward4(5); if (isSquare) square32(); else mul32(); backward4(5); backward4(7); backward4_0();
-			// forward4_0(); forward4(7); if (isSquare) square128(); else mul128(); backward4(7); backward4_0();
-			// forward4_0(); if (isSquare) square512(); else mul512(); backward4_0();
-			// forward64_0(); if (isSquare) square32(); else mul32(); backward64_0();
-			// forward4_0(); forward256(11 - 10); if (isSquare) square22(); else mul22(); backward256(11 - 10); backward4_0();
-			forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256_0();
-			return;
-		}
-		if (_ln == 12)
-		{
-			// forward4_0(); forward4(8); if (isSquare) square256(); else mul256(); backward4(8); backward4_0();
-			// forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0();
-			// forward64_0(); if (isSquare) square64(); else mul64(); backward64_0();
-			// forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4_0();
-			forward256_0(); forward4(12 - 10); if (isSquare) square4(); else mul4(); backward4(12 - 10); backward256_0();
-			return;
-		}
-		if (_ln == 13)
-		{
-			// forward4_0(); forward4(9); if (isSquare) square512(); else mul512(); backward4(9); backward4_0();
-			// forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0();
-			// forward4_0(); forward1024(13 - 12); if (isSquare) square22(); else mul22(); backward1024(13 - 12); backward4_0();
-			forward1024_0(); forward4(13 - 12); if (isSquare) square22(); else mul22(); backward4(13 - 12); backward1024_0();
-			return;
-		}*/
+#ifdef CHECK_FUNC_1
+		if (_ln == 11) { forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256_0(); return; }
+		if (_ln == 12) { forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4_0(); return; }
+#endif
+#ifdef CHECK_FUNC_2
+		if (_ln == 11) { forward64_0(); if (isSquare) square32(); else mul32(); backward64_0(); return; }
+		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64_0(); return; }
+#endif
+#ifdef CHECK_FUNC_3
+		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4_0(); return; }
+		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4_0(); return; }
+#endif
+#ifdef CHECK_FUNC_4
+		if (_ln == 11) { forward4_0(); if (isSquare) square512(); else mul512(); backward4_0(); return; }
+		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0(); return; }
+#endif
+#ifdef CHECK_FUNC_5
+		if (_ln == 11) { forward1024_0(); if (isSquare) square22(); else mul22(); backward1024_0(); return; }
+		if (_ln == 12) { forward1024_0(); if (isSquare) square4(); else mul4(); backward1024_0(); return; }
+		if (_ln == 13) { forward4_0(); forward1024(13 - 12); if (isSquare) square22(); else mul22(); backward1024(13 - 12); backward4_0(); return; }
+#endif
+#ifdef CHECK_FUNC_6
+		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0(); return; }
+#endif
 
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
@@ -649,39 +646,30 @@ public:
 			_executeKernel(_copyp, _n);
 		}
 
-/*		if (_ln == 10)
-		{
-			// forward4p_0(); forward4p(6); fwd64p();
-			forward4p_0(); fwd256p();
-			return;
-		}
-		if (_ln == 11)
-		{
-			// forward4p_0(); forward4p(7); forward4p(5); fwd32p();
-			// forward4p_0(); forward4p(7); fwd128p();
-			// forward4p_0(); fwd512p();
-			// forward64p_0(); fwd32p();
-			// forward4p_0(); forward256p(11 - 10);
-			forward256p_0(); forward4p(11 - 10);
-			return;
-		}
-		if (_ln == 12)
-		{
-			// forward4p_0(); forward4p(8); fwd256p();
-			// forward4p_0(); fwd1024p();
-			// forward64p_0(); fwd64p();
-			// forward4p_0(); forward256p(12 - 10); fwd4p();
-			forward256p_0();  forward4p(12 - 10); fwd4p();
-			return;
-		}
-		if (_ln == 13)
-		{
-			// forward4p_0(); forward4p(9); fwd512p();
-			// forward4p_0(); fwd2048p();
-			// forward4p_0(); forward1024p(13 - 12);
-			forward1024p_0(); forward4p(13 - 12);
-			return;
-		}*/
+#ifdef CHECK_FUNC_1
+		if (_ln == 11) { forward256p_0(); forward4p(11 - 10); return; }
+		if (_ln == 12) { forward4p_0(); forward256p(12 - 10); fwd4p(); return; }
+#endif
+#ifdef CHECK_FUNC_2
+		if (_ln == 11) { forward64p_0(); fwd32p(); return; }
+		if (_ln == 12) { forward64p_0(); fwd64p(); return; }
+#endif
+#ifdef CHECK_FUNC_3
+		if (_ln == 11) { forward4p_0(); forward4p(11 - 4); fwd128p(); return; }
+		if (_ln == 12) { forward4p_0(); forward4p(12 - 4); fwd256p(); return; }
+#endif
+#ifdef CHECK_FUNC_4
+		if (_ln == 11) { forward4p_0(); fwd512p(); return; }
+		if (_ln == 12) { forward4p_0(); fwd1024p(); return; }
+#endif
+#ifdef CHECK_FUNC_5
+		if (_ln == 11) { forward1024p_0(); return; }
+		if (_ln == 12) { forward1024p_0(); fwd4p(); return; }
+		if (_ln == 13) { forward4p_0(); forward1024p(13 - 12); return; }
+#endif
+#ifdef CHECK_FUNC_6
+		if (_ln == 13) { forward4p_0(); fwd2048p(); return; }
+#endif
 
 		const splitter * const pSplit = _pSplit;
 #ifdef CHECK_ALL_FUNCTIONS

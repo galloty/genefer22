@@ -887,15 +887,47 @@ __kernel
 void forward1024(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	FORWARD_I_31(B_1024, CHUNK1024);
-
 	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
 	forward_4_31(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	forward_4_31(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	forward_4_31(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);
-
 	FORWARD_O_31(CHUNK1024);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1(B_1024, CHUNK1024);
+	forward_4_1(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &w[WOFFSET_1], sj / 64);
+	forward_4_1(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &w[WOFFSET_1], sj / 16);
+	forward_4_1(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK1024);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024
+	__attribute__((work_group_size_hint(B_1024 * CHUNK1024, 1, 1)))
+#endif
+void forward1024_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
+{
+	const int lm = LNSZ - 10; const unsigned int s = 1024 / 4;
+
+	FORWARD_I_31(B_1024, CHUNK1024);
+	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
+	forward_4_31(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
+	forward_4_31(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	forward_4_31(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);
+	FORWARD_O_31(CHUNK1024);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	FORWARD_I_1_0(B_1024, CHUNK1024);
+	forward_4_1(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &w[WOFFSET_1], sj / 64);
+	forward_4_1(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &w[WOFFSET_1], sj / 16);
+	forward_4_1(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &w[WOFFSET_1], sj / 4);
+	FORWARD_O_1(CHUNK1024);
 }
 
 __kernel
@@ -905,15 +937,47 @@ __kernel
 void backward1024(__global uint2 * restrict const z, __global const uint2 * restrict const w, const int lm, const unsigned int s)
 {
 	BACKWARD_I_31(B_1024, CHUNK1024);
-
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4_31(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	backward_4_31(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);
 	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);
 	backward_4_31(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
-
 	BACKWARD_O_31(B_1024, CHUNK1024);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_1024, CHUNK1024);
+	backward_4_1(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &w[WOFFSET_1], sji / 4);
+	backward_4_1(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &w[WOFFSET_1], sji / 16);
+	backward_4_1(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &w[WOFFSET_1], sji / 64);
+	BACKWARD_O_1(B_1024, CHUNK1024);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_1024 * CHUNK1024
+	__attribute__((work_group_size_hint(B_1024 * CHUNK1024, 1, 1)))
+#endif
+void backward1024_0(__global uint2 * restrict const z, __global const uint2 * restrict const w)
+{
+	const int lm = LNSZ - 10; const unsigned int s = 1024 / 4;
+
+	BACKWARD_I_31(B_1024, CHUNK1024);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	backward_4_31(4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4);
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
+	backward_4_31(16 * CHUNK1024, &Zi[CHUNK1024 * k16], w, sj / 16);
+	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);
+	backward_4_31(64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
+	BACKWARD_O_31(B_1024, CHUNK1024);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	BACKWARD_I_1(B_1024, CHUNK1024);
+	backward_4_1(4 * CHUNK1024, &Zi[CHUNK1024 * k4], &w[WOFFSET_1], sji / 4);
+	backward_4_1(16 * CHUNK1024, &Zi[CHUNK1024 * k16], &w[WOFFSET_1], sji / 16);
+	backward_4_1(64 * CHUNK1024, &Zi[CHUNK1024 * k64], &w[WOFFSET_1], sji / 64);
+	BACKWARD_O_1_0(B_1024, CHUNK1024);
 }
 
 // -----------------

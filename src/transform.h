@@ -45,6 +45,7 @@ public:
 	virtual void saveContext(file & cFile, const size_t num_regs) const = 0;
 
 	virtual double getError() const { return 0; }
+	virtual void info() const {}
 
 private:
 #if defined(GPU)

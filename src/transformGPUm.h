@@ -17,6 +17,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernel2m.h"
 #include "ocl/kernel3m.h"
 
+// #define	CHECK_ALL_FUNCTIONS		1
+
 typedef cl_uint		uint32;
 typedef cl_int		int32;
 typedef cl_ulong	uint64;
@@ -148,14 +150,17 @@ public:
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32m		16
-#define BLK64m		8
-#define BLK128m		4
-#define BLK256m		2
+#define BLK32m		16		// local size = 4KB, workgroup size = 128
+#define BLK64m		8		// local size = 4KB, workgroup size = 128
+#define BLK128m		4		// local size = 4KB, workgroup size = 128
+#define BLK256m		2		// local size = 4KB, workgroup size = 128
+//		BLK512m		1		   local size = 4KB, workgroup size = 128
+//		BLK1024m	1		   local size = 8KB, workgroup size = 256
+//		BLK2048m	1		   local size = 16KB, workgroup size = 512
 
-#define CHUNK64m	4
-#define CHUNK256m	2
-#define CHUNK1024m	1
+#define CHUNK64m	4		// local size = 2KB, workgroup size = 64
+#define CHUNK256m	2		// local size = 4KB, workgroup size = 128
+#define CHUNK1024m	1		// local size = 8KB, workgroup size = 256
 
 template<size_t M_SIZE>
 class engineg : public device
@@ -177,7 +182,7 @@ private:
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
-	bool _first = true;
+	bool _first = false;
 
 public:
 	engineg(const platform & platform, const size_t d, const int ln, const bool isBoinc, const size_t num_regs, const bool verbose)
@@ -298,8 +303,8 @@ public:
 		_backward64_0 = createTransformKernel("backward64_0");
 		_forward256_0 = createTransformKernel("forward256_0");
 		_backward256_0 = createTransformKernel("backward256_0");
-		// _forward1024_0 = createTransformKernel("forward1024_0");
-		// _backward1024_0 = createTransformKernel("backward1024_0");
+		_forward1024_0 = createTransformKernel("forward1024_0");
+		_backward1024_0 = createTransformKernel("backward1024_0");
 
 		_square32 = createTransformKernel("square32");
 		_square64 = createTransformKernel("square64");
@@ -336,14 +341,6 @@ public:
 		_copyp = createCopypKernel("copyp");
 
 		_pSplit = new splitter(size_t(_ln), CHUNK256m, CHUNK1024m, sizeof(GF31), 11, getLocalMemSize(), getMaxWorkGroupSize());
-
-		std::ostringstream ss; ss << std::endl << "split:";
-		for (size_t i = 0, ns = _pSplit->getSize(); i < ns; ++i)
-		{
-			for (size_t j = 0, nps = _pSplit->getPartSize(i); j < nps; ++j) ss << " "<< _pSplit->getPart(i, j);
-			ss << ", ";
-		}
-		pio::display(ss.str());
 	}
 
 	void releaseKernels()
@@ -423,8 +420,8 @@ private:
 	void backward64_0() { const size_t n_4 = _n / 4; _executeKernel(_backward64_0, n_4, 64 / 4 * CHUNK64m); }
 	void forward256_0() { const size_t n_4 = _n / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256m); }
 	void backward256_0() { const size_t n_4 = _n / 4; _executeKernel(_backward256_0, n_4, 256 / 4 * CHUNK256m); }
-	void forward1024_0(const int lm) { fb(_forward1024_0, lm, 1024 / 4 * CHUNK1024m); }
-	void backward1024_0(const int lm) { fb(_backward1024_0, lm, 1024 / 4 * CHUNK1024m); }
+	void forward1024_0() { const size_t n_4 = _n / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024m); }
+	void backward1024_0() { const size_t n_4 = _n / 4; _executeKernel(_backward1024_0, n_4, 1024 / 4 * CHUNK1024m); }
 
 	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32m))); }
 	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64m))); }
@@ -504,17 +501,17 @@ private:
 		setTransformArgs(_forward256_0);
 	}
 
-	void forward1024p_0(const int lm)
+	void forward1024p_0()
 	{
 		setTransformArgs(_forward1024_0, false);
-		forward1024_0(lm);
+		forward1024_0();
 		setTransformArgs(_forward1024_0);
 	}
 
 private:
 	void _mul(const size_t sIndex, const bool isSquare, const bool verbose)
 	{
-		if (_ln == 10)
+/*		if (_ln == 10)
 		{
 			// forward4_0(); forward4(6); if (isSquare) square64(); else mul64(); backward4(6); backward4_0();
 			forward4_0(); if (isSquare) square256(); else mul256(); backward4_0();
@@ -539,15 +536,16 @@ private:
 			forward256_0(); forward4(12 - 10); if (isSquare) square4(); else mul4(); backward4(12 - 10); backward256_0();
 			return;
 		}
-		// if (_ln == 13)
-		// {
-		// 	// forward4_0(); forward4(9); if (isSquare) square512(); else mul512(); backward4(9); backward4_0();
-		// 	forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0();
-		// 	return;
-		// }
+		if (_ln == 13)
+		{
+			// forward4_0(); forward4(9); if (isSquare) square512(); else mul512(); backward4(9); backward4_0();
+			// forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0();
+			// forward4_0(); forward1024(13 - 12); if (isSquare) square22(); else mul22(); backward1024(13 - 12); backward4_0();
+			forward1024_0(); forward4(13 - 12); if (isSquare) square22(); else mul22(); backward4(13 - 12); backward1024_0();
+			return;
+		}*/
 
 		const splitter * const pSplit = _pSplit;
-
 		const size_t s = pSplit->getPartSize(sIndex);
 
 		int lm = _ln;
@@ -558,7 +556,7 @@ private:
 			if (k == 10)
 			{
 				lm -= 10;
-				if (i != 1) forward1024(lm); else forward1024_0(lm);
+				if (i != 1) forward1024(lm); else forward1024_0();
 				if (verbose) std::cout << "forward1024 (" << lm << ") ";
 			}
 			else if (k == 8)
@@ -603,7 +601,7 @@ private:
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
 			if (k == 10)
 			{
-				if (i != 1) backward1024(lm); else backward1024_0(lm);
+				if (i != 1) backward1024(lm); else backward1024_0();
 				if (verbose) std::cout << "backward1024 (" << lm << ") ";
 				lm += 10;
 			}
@@ -627,7 +625,11 @@ private:
 public:
 	void square()
 	{
+#ifdef CHECK_ALL_FUNCTIONS
+		_mul(size_t(rand()) % _pSplit->getSize(), true, false);
+#else
 		_mul(_splitIndex, true, _first);
+#endif
 		if (_first) _first = false;
 	}
 
@@ -647,7 +649,7 @@ public:
 			_executeKernel(_copyp, _n);
 		}
 
-		if (_ln == 10)
+/*		if (_ln == 10)
 		{
 			// forward4p_0(); forward4p(6); fwd64p();
 			forward4p_0(); fwd256p();
@@ -672,15 +674,19 @@ public:
 			forward256p_0();  forward4p(12 - 10); fwd4p();
 			return;
 		}
-		// if (_ln == 13)
-		// {
-		// 	// forward4p_0(); forward4p(9); fwd512p();
-		// 	forward4p_0(); fwd2048p();
-		// 	return;
-		// }
+		if (_ln == 13)
+		{
+			// forward4p_0(); forward4p(9); fwd512p();
+			// forward4p_0(); fwd2048p();
+			// forward4p_0(); forward1024p(13 - 12);
+			forward1024p_0(); forward4p(13 - 12);
+			return;
+		}*/
 
 		const splitter * const pSplit = _pSplit;
-
+#ifdef CHECK_ALL_FUNCTIONS
+		_splitIndex = size_t(rand()) % pSplit->getSize();
+#endif
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
@@ -692,7 +698,7 @@ public:
 			if (k == 10)
 			{
 				lm -= 10;
-				if (i != 1) forward1024p(lm); else forward1024p_0(lm);
+				if (i != 1) forward1024p(lm); else forward1024p_0();
 			}
 			else if (k == 8)
 			{
@@ -897,12 +903,12 @@ public:
 				_baseModBlk = b;
 			}
 		}
-// #if defined(ocl_debug)
+#if defined(ocl_debug)
 		{
 			std::ostringstream ss; ss << "baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
 			pio::display(ss.str());
 		}
-// #endif
+#endif
 
 		const splitter * const pSplit = _pSplit;
 		const size_t ns = pSplit->getSize();
@@ -941,6 +947,20 @@ public:
 		if (M_SIZE == 3) delete[] Z2;
 
 		setProfiling(false);
+	}
+
+public:
+	void info()
+	{
+		std::ostringstream ss; ss << "split:";
+		for (size_t i = 0, ns = _pSplit->getSize(); i < ns; ++i)
+		{
+			for (size_t j = 0, nps = _pSplit->getPartSize(i); j < nps; ++j) ss << " " << _pSplit->getPart(i, j);
+			if (i == _splitIndex) ss << " *";
+			ss << ",";
+		}
+		ss << " baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
+		pio::display(ss.str());
 	}
 };
 
@@ -1172,5 +1192,10 @@ public:
 	void copy(const size_t dst, const size_t src) const override
 	{
 		_pEngine->copy(dst, src);
+	}
+
+	void info() const override
+	{
+		_pEngine->info();
 	}
 };

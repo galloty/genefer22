@@ -18,12 +18,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernel3m.h"
 
 // #define	CHECK_ALL_FUNCTIONS		1
-// #define CHECK_FUNC_1		1	// GFN-12&13: square22, square4, forward4_0, forward4, forward256_0, forward256
-// #define CHECK_FUNC_2		1	// GFN-12&13: square32, square64, forward64_0
-// #define CHECK_FUNC_3		1	// GFN-12&13: square128, square256
-// #define CHECK_FUNC_4		1	// GFN-12&13: square512, square1024
-// #define CHECK_FUNC_5		1	// GFN-12&13&14: forward1024_0, forward1024
-// #define CHECK_FUNC_6		1	// GFN-14: square2048
+// #define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward4, forward64, forward256_0, forward256
+// #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward64_0, forward1024
+// #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024_0
+// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -59,6 +57,9 @@ private:
 public:
 	GF31() {}
 	explicit GF31(const uint32 n0, const uint32 n1) { _n.s[0] = n0; _n.s[1] = n1; }
+
+	uint32 s0() const { return _n.s[0]; }
+	uint32 s1() const { return _n.s[1]; }
 
 	void get_int(int32 & i0, int32 & i1) const { i0 = _get_int(_n.s[0]); i1 = _get_int(_n.s[1]); }
 	GF31 & set_int(const int32 i0, const int32 i1) { _n.s[0] = _set_int(i0); _n.s[1] = _set_int(i1); return *this; }
@@ -127,6 +128,9 @@ public:
 	ZP1() {}
 	explicit ZP1(const uint32 n0, const uint32 n1) { _n.s[0] = n0; _n.s[1] = n1; }
 
+	uint32 s0() const { return _n.s[0]; }
+	uint32 s1() const { return _n.s[1]; }
+
 	ZP1 & set_int(const int32 i0, const int32 i1) { _n.s[0] = _set_int(i0); _n.s[1] = _set_int(i1); return *this; }
 
 	ZP1 muli() const { return ZP1(_mul(_n.s[0], _i), _mul(_n.s[1], _i)); }
@@ -140,6 +144,28 @@ public:
 
 	static const ZP1 primroot_n(const uint32 n) { ZP1 r = ZP1(_h, 0).pow((_p - 1) / n); r._n.s[1] = _mul(r._n.s[0], r._n.s[0]); return r; }
 	static uint32 norm(const uint32 n) { return _p - (_p - 1) / n; }
+};
+
+class GF31_ZP1
+{
+private:
+	cl_uint4 _n;
+
+public:
+	GF31_ZP1 & set_int(const int32 i0, const int32 i1, const int32 i2, const int32 i3)
+	{
+		GF31 n31; n31.set_int(i0, i1);
+		ZP1 n1; n1.set_int(i2, i3);
+		_n.s[0] = n31.s0(); _n.s[1] = n31.s1();
+		_n.s[2] = n1.s0(); _n.s[3] = n1.s1();
+		return *this;
+	}
+
+	void get_int31(int32 & i0, int32 & i1) const
+	{
+		GF31 n31 = GF31(_n.s[0], _n.s[1]);
+		n31.get_int(i0, i1);
+	}
 };
 
 class ZP2
@@ -156,17 +182,17 @@ public:
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32m		16		// local size = 4KB, workgroup size = 128
-#define BLK64m		8		// local size = 4KB, workgroup size = 128
-#define BLK128m		4		// local size = 4KB, workgroup size = 128
-#define BLK256m		2		// local size = 4KB, workgroup size = 128
-//		BLK512m		1		   local size = 4KB, workgroup size = 128
-//		BLK1024m	1		   local size = 8KB, workgroup size = 256
-//		BLK2048m	1		   local size = 16KB, workgroup size = 512
+#define BLK32m		8		// local size =  4KB, workgroup size =  64
+#define BLK64m		4		// local size =  4KB, workgroup size =  64
+#define BLK128m		2		// local size =  4KB, workgroup size =  64
+#define BLK256m		1		// local size =  4KB, workgroup size =  64
+//		BLK512m		1		   local size =  8KB, workgroup size = 128
+//		BLK1024m	1		   local size = 16KB, workgroup size = 256
+//		BLK2048m	1		   local size = 32KB, workgroup size = 512
 
-#define CHUNK64m	4		// local size = 2KB, workgroup size = 64
-#define CHUNK256m	2		// local size = 4KB, workgroup size = 128
-#define CHUNK1024m	1		// local size = 8KB, workgroup size = 256
+#define CHUNK64m	4		// local size =  4KB, workgroup size =  64
+#define CHUNK256m	2		// local size =  8KB, workgroup size = 128
+#define CHUNK1024m	1		// local size = 16KB, workgroup size = 256
 
 template<size_t M_SIZE>
 class engineg : public device
@@ -207,9 +233,9 @@ public:
 		const size_t n = _n;
 		if (n != 0)
 		{
-			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_uint2) * M_SIZE * n * _num_regs);
-			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_uint2) * M_SIZE * n * _num_regs);
-			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(cl_uint2) * M_SIZE * 3 * n / 2);
+			_z = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31_ZP1) * n * _num_regs);
+			_zp = _createBuffer(CL_MEM_READ_WRITE, sizeof(GF31_ZP1) * n * _num_regs);
+			_w = _createBuffer(CL_MEM_READ_ONLY, sizeof(cl_uint2) * 2 * 3 * n / 2);
 			_c = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_long2) * n / 4);
 		}
 	}
@@ -346,7 +372,7 @@ public:
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
-		_pSplit = new splitter(size_t(_ln), CHUNK256m, CHUNK1024m, sizeof(GF31), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln), CHUNK256m, CHUNK1024m, sizeof(GF31_ZP1), 10, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -380,13 +406,9 @@ public:
 
 ///////////////////////////////
 
-	void readMemory_z31(GF31 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(GF31) * _n * count); }
-	void readMemory_z1(ZP1 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(ZP1) * _n * count, sizeof(GF31) * _n * _num_regs); }
-	void readMemory_z2(ZP2 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(ZP2) * _n * count, (sizeof(GF31) + sizeof(ZP1)) * _n * _num_regs); }
+	void readMemory_z(GF31_ZP1 * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, sizeof(GF31_ZP1) * _n * count); }
 
-	void writeMemory_z31(const GF31 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(GF31) * _n * count); }
-	void writeMemory_z1(const ZP1 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(ZP1) * _n * count, sizeof(GF31) * _n * _num_regs); }
-	void writeMemory_z2(const ZP2 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(ZP2) * _n * count, (sizeof(GF31) + sizeof(ZP1)) * _n * _num_regs); }
+	void writeMemory_z(const GF31_ZP1 * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, sizeof(GF31_ZP1) * _n * count); }
 
 	void writeMemory_w31(const GF31 * const wPtr) { _writeBuffer(_w, wPtr, sizeof(GF31) * 3 * _n / 2); }
 	void writeMemory_w1(const ZP1 * const wPtr) { _writeBuffer(_w, wPtr, sizeof(ZP1) * 3 * _n / 2, sizeof(GF31) * 3 * _n / 2); }
@@ -520,32 +542,35 @@ private:
 #ifdef CHECK_FUNC_1
 		if (_ln == 11) { forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256_0(); return; }
 		if (_ln == 12) { forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4_0(); return; }
+		if (_ln == 13) { forward4_0(); forward64(13 - 8); if (isSquare) square32(); else mul32(); backward64(13 - 8); backward4_0(); return; }
 #endif
 #ifdef CHECK_FUNC_2
-		if (_ln == 11) { forward64_0(); if (isSquare) square32(); else mul32(); backward64_0(); return; }
-		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64_0(); return; }
-#endif
-#ifdef CHECK_FUNC_3
 		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4_0(); return; }
-		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4_0(); return; }
-#endif
-#ifdef CHECK_FUNC_4
-		if (_ln == 11) { forward4_0(); if (isSquare) square512(); else mul512(); backward4_0(); return; }
-		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0(); return; }
-#endif
-#ifdef CHECK_FUNC_5
-		if (_ln == 11) { forward1024_0(); if (isSquare) square22(); else mul22(); backward1024_0(); return; }
-		if (_ln == 12) { forward1024_0(); if (isSquare) square4(); else mul4(); backward1024_0(); return; }
+		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64_0(); return; }
 		if (_ln == 13) { forward4_0(); forward1024(13 - 12); if (isSquare) square22(); else mul22(); backward1024(13 - 12); backward4_0(); return; }
 #endif
-#ifdef CHECK_FUNC_6
-		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0(); return; }
+#ifdef CHECK_FUNC_3
+		if (_ln == 11) { forward1024_0(); if (isSquare) square22(); else mul22(); backward1024_0(); return; }
+		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4_0(); return; }
+		if (_ln == 13) { forward4_0(); forward4(13 - 4); if (isSquare) square512(); else mul512(); backward4(13 - 4); backward4_0(); return; }
 #endif
+#ifdef CHECK_FUNC_4
+	if (_ln == 11) { forward64_0(); if (isSquare) square32(); else mul32(); backward64_0(); return; }
+	if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0(); return; }
+	if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0(); return; }
+#endif
+
+		int lm = _ln;
+
+		// lm -= 2; forward4_0();
+		// while (lm > 2) { lm -= 2; forward4(lm); }
+		// if (isSquare) { if (lm == 1) square22(); else square4(); } else if (lm == 1) mul22(); else mul4();
+		// while (lm < _ln - 2) { backward4(lm); lm += 2; }
+		// backward4_0(); lm += 2;
+		// return;
 
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
-
-		int lm = _ln;
 
 		for (size_t i = 1; i < s; ++i)
 		{
@@ -639,35 +664,26 @@ public:
 	{
 		const cl_uint isrc = static_cast<cl_uint>(src * _n);
 		_setKernelArg(_copyp, 2, sizeof(cl_uint), &isrc);
-		for (cl_uint i = 0; i < M_SIZE; ++i)
-		{
-			const cl_uint offset = _n * _num_regs * i;
-			_setKernelArg(_copyp, 3, sizeof(cl_uint), &offset);
-			_executeKernel(_copyp, _n);
-		}
+		_executeKernel(_copyp, _n);
 
 #ifdef CHECK_FUNC_1
 		if (_ln == 11) { forward256p_0(); forward4p(11 - 10); return; }
 		if (_ln == 12) { forward4p_0(); forward256p(12 - 10); fwd4p(); return; }
+		if (_ln == 13) { forward4p_0(); forward64p(13 - 8); fwd32p(); return; }
 #endif
 #ifdef CHECK_FUNC_2
-		if (_ln == 11) { forward64p_0(); fwd32p(); return; }
-		if (_ln == 12) { forward64p_0(); fwd64p(); return; }
-#endif
-#ifdef CHECK_FUNC_3
 		if (_ln == 11) { forward4p_0(); forward4p(11 - 4); fwd128p(); return; }
-		if (_ln == 12) { forward4p_0(); forward4p(12 - 4); fwd256p(); return; }
-#endif
-#ifdef CHECK_FUNC_4
-		if (_ln == 11) { forward4p_0(); fwd512p(); return; }
-		if (_ln == 12) { forward4p_0(); fwd1024p(); return; }
-#endif
-#ifdef CHECK_FUNC_5
-		if (_ln == 11) { forward1024p_0(); return; }
-		if (_ln == 12) { forward1024p_0(); fwd4p(); return; }
+		if (_ln == 12) { forward64p_0(); fwd64p(); return; }
 		if (_ln == 13) { forward4p_0(); forward1024p(13 - 12); return; }
 #endif
-#ifdef CHECK_FUNC_6
+#ifdef CHECK_FUNC_3
+		if (_ln == 11) { forward1024p_0(); return; }
+		if (_ln == 12) { forward4p_0(); forward4p(12 - 4); fwd256p(); return; }
+		if (_ln == 13) { forward4p_0(); forward4p(13 - 4); fwd512p(); return; }
+#endif
+#ifdef CHECK_FUNC_4
+		if (_ln == 11) { forward64p_0(); fwd32p(); return; }
+		if (_ln == 12) { forward4p_0(); fwd1024p(); return; }
 		if (_ln == 13) { forward4p_0(); fwd2048p(); return; }
 #endif
 
@@ -675,10 +691,16 @@ public:
 #ifdef CHECK_ALL_FUNCTIONS
 		_splitIndex = size_t(rand()) % pSplit->getSize();
 #endif
-		const size_t sIndex = _splitIndex;
-		const size_t s = pSplit->getPartSize(sIndex);
 
 		int lm = _ln;
+
+		// lm -= 2; forward4p_0();
+		// while (lm > 2) { lm -= 2; forward4p(lm); }
+		// if (lm == 2) fwd4p();
+		// return;
+
+		const size_t sIndex = _splitIndex;
+		const size_t s = pSplit->getPartSize(sIndex);
 
 		for (size_t i = 1; i < s; ++i)
 		{
@@ -714,13 +736,7 @@ public:
 	{
 		const cl_uint ia = static_cast<cl_uint>(a);
 		_setKernelArg(_set, 1, sizeof(cl_uint), &ia);
-
-		for (cl_uint i = 0; i < M_SIZE; ++i)
-		{
-			const cl_uint offset = _n * _num_regs * i;
-			_setKernelArg(_set, 2, sizeof(cl_uint), &offset);
-			_executeKernel(_set, _n);
-		}
+		_executeKernel(_set, _n);
 	}
 
 	void copy(const size_t dst, const size_t src)
@@ -728,13 +744,7 @@ public:
 		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
 		_setKernelArg(_copy, 1, sizeof(cl_uint), &idst);
 		_setKernelArg(_copy, 2, sizeof(cl_uint), &isrc);
-
-		for (cl_uint i = 0; i < M_SIZE; ++i)
-		{
-			const cl_uint offset = _n * _num_regs * i;
-			_setKernelArg(_copy, 3, sizeof(cl_uint), &offset);
-			_executeKernel(_copy, _n);
-		}
+		_executeKernel(_copy, _n);
 	}
 
 public:
@@ -771,8 +781,7 @@ public:
 	}
 
 private:
-	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS,
-		const GF31 * const Z31, const ZP1 * const Z1, const ZP2 * const Z2)
+	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const GF31_ZP1 * const Z)
 	{
 		const cl_uint cblk = static_cast<cl_uint>(blk);
 		const cl_int sblk = static_cast<cl_int>(blk);
@@ -780,8 +789,7 @@ private:
 
 		for (size_t i = 0; i != count; ++i)
 		{
-			writeMemory_z31(Z31); writeMemory_z1(Z1);
-			if (M_SIZE == 3) writeMemory_z2(Z2);
+			writeMemory_z(Z);
 
 			_setKernelArg(_normalize1, 5, sizeof(cl_int), &sblk);
 			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
@@ -792,12 +800,11 @@ private:
 	}
 
 private:
-	void squareTune(const size_t count, const size_t sIndex, const GF31 * const Z31, ZP1 * const Z1, ZP2 * const Z2)
+	void squareTune(const size_t count, const size_t sIndex, const GF31_ZP1 * const Z)
 	{
 		for (size_t j = 0; j != count; ++j)
 		{
-			writeMemory_z31(Z31); writeMemory_z1(Z1);
-			if (M_SIZE == 3) writeMemory_z2(Z2);
+			writeMemory_z(Z);
 			_mul(sIndex, true, false);
 		}
 	}
@@ -807,39 +814,21 @@ public:
 	{
 		const size_t n = _n;
 
-		GF31 * const Z31 = new GF31[n];
+		GF31_ZP1 * const Z = new GF31_ZP1[n];
 		for (size_t i = 0; i != n; ++i)
 		{
 			const double id = static_cast<double>(i);
 			const int32 va31 = static_cast<int32>((M31 - 1) * cos(id)), vb31 = static_cast<int32>((M31 - 1) * cos(id + 0.5));
-			Z31[i].set_int(va31, vb31);
-		}
-
-		ZP1 * const Z1 = new ZP1[n];
-		for (size_t i = 0; i != n; ++i)
-		{
-			const double id = static_cast<double>(i);
 			const int32 va1 = static_cast<int32>((P1M - 1) * cos(id + 0.25)), vb1 = static_cast<int32>((P1M - 1) * cos(id + 0.75));
-			Z1[i].set_int(va1, vb1);
-		}
-
-		ZP2 * const Z2 = (M_SIZE == 3) ? new ZP2[n] : nullptr;
-		if (M_SIZE == 3)
-		{
-			for (size_t i = 0; i != n; ++i)
-			{
-				const double id = static_cast<double>(i);
-				const int32 va2 = static_cast<int32>((P2M - 1) * sin(id + 0.33)), vb2 = static_cast<cl_int>((P2M - 1) * sin(id + 0.66));
-				Z2[i].set_int(va2, vb2);
-			}
+			Z[i].set_int(va31, vb31, va1, vb1);
 		}
 
 		setProfiling(true);
 
 		resetProfiles();
-		baseModTune(1, 16, 0, 0, Z31, Z1, Z2);
+		baseModTune(1, 16, 0, 0, Z);
 		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z31; delete[] Z1; if (M_SIZE == 3) delete[] Z2; setProfiling(false); return; }
+		if (time == 0) { delete[] Z; setProfiling(false); return; }
 		// 410 tests, 0.1 second = 10^8 ns
 		const size_t count = std::min(std::max(size_t(100000000 / (410 * time)), size_t(2)), size_t(100));
 
@@ -855,7 +844,7 @@ public:
 			if (log(maxSqr) >= base * log(static_cast<double>(b))) continue;
 
 			resetProfiles();
-			baseModTune(count, b, 0, 0, Z31, Z1, Z2);
+			baseModTune(count, b, 0, 0, Z);	//, Z2);
 			cl_ulong minT_b = getProfileTime();
 #if defined(ocl_debug)
 			// std::ostringstream ss; ss << "b = " << b << ", sa = 0, sb = 0, count = " << count << ", t = " << minT_b << "." << std::endl;
@@ -868,7 +857,7 @@ public:
 				for (size_t sb = 1; sb <= 256; sb *= 2)
 				{
 					resetProfiles();
-					baseModTune(count, b, sa, sb, Z31, Z1, Z2);
+					baseModTune(count, b, sa, sb, Z);	//, Z2);
 					const cl_ulong t = getProfileTime();
 #if defined(ocl_debug)
 					// std::ostringstream ss; ss << "b = " << b << ", sa = " << sa << ", sb = " << sb << ", count = " << count << ", t = " << t << "." << std::endl;
@@ -906,7 +895,7 @@ public:
 			for (size_t i = 0; i < ns; ++i)
 			{
 				resetProfiles();
-				squareTune(2, i, Z31, Z1, Z2);
+				squareTune(2, i, Z);	//, Z2);
 				const cl_ulong t = getProfileTime();
 
 #if defined(ocl_debug)
@@ -931,8 +920,7 @@ public:
 		}
 #endif
 
-		delete[] Z31; delete[] Z1;
-		if (M_SIZE == 3) delete[] Z2;
+		delete[] Z;
 
 		setProfiling(false);
 	}
@@ -958,18 +946,15 @@ class transformGPUm : public transform
 private:
 	const size_t _mem_size;
 	const size_t _num_regs;
-	GF31 * const _z31;
-	ZP1 * const _z1;
-	ZP2 * const _z2;
+	GF31_ZP1 * const _z;
 	engineg<M_SIZE> * _pEngine = nullptr;
 
 public:
 	transformGPUm(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
 		: transform(size_t(1) << (n - 1), n, b, (M_SIZE == 2) ? EKind::NTT2m : EKind::NTT3m),
-		_mem_size((size_t(1) << (n - 1)) * num_regs * (sizeof(GF31) + sizeof(ZP1) + ((M_SIZE == 3) ? sizeof(ZP2) : 0))), _num_regs(num_regs),
-		_z31(new GF31[(size_t(1) << (n - 1)) * num_regs]), _z1(new ZP1[(size_t(1) << (n - 1)) * num_regs]),
-		_z2((M_SIZE == 3) ? new ZP2[(size_t(1) << (n - 1)) * num_regs] : nullptr)
+		_mem_size((size_t(1) << (n - 1)) * num_regs * sizeof(GF31_ZP1)), _num_regs(num_regs),
+		_z(new GF31_ZP1[(size_t(1) << (n - 1)) * num_regs])
 	{
 		const size_t size = getSize();
 
@@ -987,7 +972,6 @@ public:
 
 		for (size_t i = 1; i < M_SIZE; ++i)
 		{
-			src << "#define\tZOFFSET_" << i << "\t" << i * size * _num_regs << std::endl;
 			src << "#define\tWOFFSET_" << i << "\t" << i * 3 * size / 2 << std::endl;
 		}
 
@@ -1041,13 +1025,6 @@ public:
 		_pEngine->writeMemory_w1(wr1);
 		delete[] wr1;
 
-		if (M_SIZE == 3)
-		{
-			ZP2 * const wr2 = new ZP2[3 * size / 2];
-			_pEngine->writeMemory_w2(wr2);
-			delete[] wr2;
-		}
-
 		_pEngine->tune(b);
 	}
 
@@ -1058,9 +1035,7 @@ public:
 		_pEngine->clearProgram();
 		delete _pEngine;
 
-		delete[] _z31;
-		delete[] _z1;
-		if (M_SIZE == 3) delete[] _z2;
+		delete[] _z;
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
@@ -1069,14 +1044,14 @@ public:
 protected:
 	void getZi(int32_t * const zi) const override
 	{
-		_pEngine->readMemory_z31(_z31);
+		_pEngine->readMemory_z(_z);
 
 		const size_t size = getSize();
 
-		const GF31 * const z31 = _z31;
+		const GF31_ZP1 * const z = _z;
 		for (size_t i = 0; i < size; ++i)
 		{
-			int32_t a, b; z31[i].get_int(a, b);
+			int32_t a, b; z[i].get_int31(a, b);
 			zi[i + 0 * size] = a; zi[i + 1 * size] = b;
 		}
 	}
@@ -1085,20 +1060,9 @@ protected:
 	{
 		const size_t size = getSize();
 
-		GF31 * const z31 = _z31;
-		for (size_t i = 0; i < size; ++i) z31[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
-		_pEngine->writeMemory_z31(z31);
-
-		ZP1 * const z1 = _z1;
-		for (size_t i = 0; i < size; ++i) z1[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
-		_pEngine->writeMemory_z1(z1);
-
-		if (M_SIZE == 3)
-		{
-			ZP2 * const z2 = _z2;
-			for (size_t i = 0; i < size; ++i) z2[i].set_int(zi[i + 0 * size], zi[i + 1 * size]);
-			_pEngine->writeMemory_z2(z2);
-		}
+		GF31_ZP1 * const z = _z;
+		for (size_t i = 0; i < size; ++i) z[i].set_int(zi[i + 0 * size], zi[i + 1 * size], zi[i + 0 * size], zi[i + 1 * size]);
+		_pEngine->writeMemory_z(z);
 	}
 
 public:
@@ -1110,17 +1074,8 @@ public:
 
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
-		if (!cFile.read(reinterpret_cast<char *>(_z31), sizeof(GF31) * size * num_regs)) return false;
-		_pEngine->writeMemory_z31(_z31, num_regs);
-
-		if (!cFile.read(reinterpret_cast<char *>(_z1), sizeof(ZP1) * size * num_regs)) return false;
-		_pEngine->writeMemory_z1(_z1, num_regs);
-
-		if (M_SIZE == 3)
-		{
-			if (!cFile.read(reinterpret_cast<char *>(_z2), sizeof(ZP2) * size * num_regs)) return false;
-			_pEngine->writeMemory_z2(_z2, num_regs);
-		}
+		if (!cFile.read(reinterpret_cast<char *>(_z), sizeof(GF31_ZP1) * size * num_regs)) return false;
+		_pEngine->writeMemory_z(_z, num_regs);
 
 		return true;
 	}
@@ -1132,17 +1087,8 @@ public:
 
 		const size_t size = getSize(), num_regs = (nregs != 0) ? nregs : _num_regs;
 
-		_pEngine->readMemory_z31(_z31, num_regs);
-		if (!cFile.write(reinterpret_cast<const char *>(_z31), sizeof(GF31) * size * num_regs)) return;
-
-		_pEngine->readMemory_z1(_z1, num_regs);
-		if (!cFile.write(reinterpret_cast<const char *>(_z1), sizeof(ZP1) * size * num_regs)) return;
-
-		if (M_SIZE == 3)
-		{
-			_pEngine->readMemory_z2(_z2, num_regs);
-			if (!cFile.write(reinterpret_cast<const char *>(_z2), sizeof(ZP2) * size * num_regs)) return;
-		}
+		_pEngine->readMemory_z(_z, num_regs);
+		if (!cFile.write(reinterpret_cast<const char *>(_z), sizeof(GF31_ZP1) * size * num_regs)) return;
 	}
 
 	void set(const uint32_t a) override

@@ -335,34 +335,34 @@ INLINE void backward_4io_0(__global uint4 * restrict const z, __global const uin
 
 INLINE void square_22io(__global uint4 * restrict const z, __global const uint2 * restrict const w, const sz_t j)
 {
-	SQUARE_22_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * j]);
-	SQUARE_22_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * j]);
+	SQUARE_22_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * NSIZE / 4 + j]);
+	SQUARE_22_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * NSIZE / 4 + j]);
 }
 
 INLINE void square_4io(__global uint4 * restrict const z, __global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
-	SQUARE_4_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * j]);
-	SQUARE_4_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * j], swap1(w[WOFFSET_1 + 3 * ji]));
+	SQUARE_4_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * NSIZE / 4 + j]);
+	SQUARE_4_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * NSIZE / 4 + j], swap1(w[WOFFSET_1 + 3 * NSIZE / 4 + ji]));
 }
 
 INLINE void fwd_2io(__global uint4 * restrict const z, __global const uint2 * restrict const w, const sz_t j)
 {
-	FWD_2_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * j]);
-	FWD_2_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * j])
+	FWD_2_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, z[0].s01, z[1].s01, z[2].s01, z[3].s01, w[3 * NSIZE / 4 + j]);
+	FWD_2_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, z[0].s23, z[1].s23, z[2].s23, z[3].s23, w[WOFFSET_1 + 3 * NSIZE / 4 + j])
 }
 
 INLINE void mul_22io(__global uint4 * restrict const z, const __global uint4 * restrict const zp,
 	__global const uint2 * restrict const w, const sz_t j)
 {
-	MUL_22_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, zp[0].s01, zp[1].s01, zp[2].s01, zp[3].s01, w[3 * j]);
-	MUL_22_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, zp[0].s23, zp[1].s23, zp[2].s23, zp[3].s23, w[WOFFSET_1 + 3 * j]);
+	MUL_22_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, zp[0].s01, zp[1].s01, zp[2].s01, zp[3].s01, w[3 * NSIZE / 4 + j]);
+	MUL_22_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, zp[0].s23, zp[1].s23, zp[2].s23, zp[3].s23, w[WOFFSET_1 +3 * NSIZE / 4 +  j]);
 }
 
 INLINE void mul_4io(__global uint4 * restrict const z, const __global uint4 * restrict const zp,
 	__global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
-	MUL_4_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, zp[0].s01, zp[1].s01, zp[2].s01, zp[3].s01, w[3 * j]);
-	MUL_4_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, zp[0].s23, zp[1].s23, zp[2].s23, zp[3].s23, w[WOFFSET_1 + 3 * j], swap1(w[WOFFSET_1 + 3 * ji]));
+	MUL_4_31(z[0].s01, z[1].s01, z[2].s01, z[3].s01, zp[0].s01, zp[1].s01, zp[2].s01, zp[3].s01, w[3 * NSIZE / 4 + j]);
+	MUL_4_1(z[0].s23, z[1].s23, z[2].s23, z[3].s23, zp[0].s23, zp[1].s23, zp[2].s23, zp[3].s23, w[WOFFSET_1 + 3 * NSIZE / 4 + j], swap1(w[WOFFSET_1 + 3 * NSIZE / 4 + ji]));
 }
 
 // --- transform/inline local & global mem ---
@@ -452,15 +452,15 @@ INLINE void backward_4o_0(const sz_t mg, __global uint4 * restrict const z, cons
 INLINE void square_22(__local uint4 * restrict const Z, __global const uint2 * restrict const w, const sz_t j)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
-	SQUARE_22_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, w[3 * j]);
-	SQUARE_22_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, w[WOFFSET_1 + 3 * j]);
+	SQUARE_22_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, w[2 * NSIZE / 4 + j]);
+	SQUARE_22_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, w[WOFFSET_1 + 2 * NSIZE / 4 + j]);
 }
 
 INLINE void square_4(__local uint4 * restrict const Z, __global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
-	SQUARE_4_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, w[3 * j]);
-	SQUARE_4_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, w[WOFFSET_1 + 3 * j], swap1(w[WOFFSET_1 + 3 * ji]));
+	SQUARE_4_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, w[2 * NSIZE / 4 + j]);
+	SQUARE_4_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, w[WOFFSET_1 + 2 * NSIZE / 4 + j], swap1(w[WOFFSET_1 + 2 * NSIZE / 4 + ji]));
 }
 
 INLINE void write_4(const sz_t mg, __global uint4 * restrict const z, __local const uint4 * restrict const Z)
@@ -475,8 +475,8 @@ INLINE void fwd2_write_4(const sz_t mg, __global uint4 * restrict const z, __loc
 {
 	__global uint4 * const z2mg = &z[2 * mg];
 	barrier(CLK_LOCAL_MEM_FENCE);
-	FWD_2_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z[0].s01, z[mg].s01, z2mg[0].s01, z2mg[mg].s01, w[3 * j]);
-	FWD_2_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z[0].s23, z[mg].s23, z2mg[0].s23, z2mg[mg].s23, w[WOFFSET_1 + 3 * j]);
+	FWD_2_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z[0].s01, z[mg].s01, z2mg[0].s01, z2mg[mg].s01, w[2 * NSIZE / 4 + j]);
+	FWD_2_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z[0].s23, z[mg].s23, z2mg[0].s23, z2mg[mg].s23, w[WOFFSET_1 + 2 * NSIZE / 4 + j]);
 }
 
 INLINE void mul_22(__local uint4 * restrict const Z, const sz_t mg, __global const uint4 * restrict const z,
@@ -485,8 +485,8 @@ INLINE void mul_22(__local uint4 * restrict const Z, const sz_t mg, __global con
 	__global const uint4 * const z2mg = &z[2 * mg];
 	const uint4 z0p = z[0], z1p = z[mg], z2p = z2mg[0], z3p = z2mg[mg];
 	barrier(CLK_LOCAL_MEM_FENCE);
-	MUL_22_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z0p.s01, z1p.s01, z2p.s01, z3p.s01, w[3 * j]);
-	MUL_22_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z0p.s23, z1p.s23, z2p.s23, z3p.s23, w[WOFFSET_1 + 3 * j]);
+	MUL_22_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z0p.s01, z1p.s01, z2p.s01, z3p.s01, w[2 * NSIZE / 4 + j]);
+	MUL_22_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z0p.s23, z1p.s23, z2p.s23, z3p.s23, w[WOFFSET_1 + 2 * NSIZE / 4 + j]);
 }
 
 INLINE void mul_4(__local uint4 * restrict const Z, const sz_t mg, __global const uint4 * restrict const z,
@@ -495,8 +495,8 @@ INLINE void mul_4(__local uint4 * restrict const Z, const sz_t mg, __global cons
 	__global const uint4 * const z2mg = &z[2 * mg];
 	const uint4 z0p = z[0], z1p = z[mg], z2p = z2mg[0], z3p = z2mg[mg];
 	barrier(CLK_LOCAL_MEM_FENCE);
-	MUL_4_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z0p.s01, z1p.s01, z2p.s01, z3p.s01, w[3 * j]);
-	MUL_4_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z0p.s23, z1p.s23, z2p.s23, z3p.s23, w[WOFFSET_1 + 3 * j], swap1(w[WOFFSET_1 + 3 * ji]));
+	MUL_4_31(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z0p.s01, z1p.s01, z2p.s01, z3p.s01, w[2 * NSIZE / 4 + j]);
+	MUL_4_1(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z0p.s23, z1p.s23, z2p.s23, z3p.s23, w[WOFFSET_1 + 2 * NSIZE / 4 + j], swap1(w[WOFFSET_1 + 2 * NSIZE / 4 + ji]));
 }
 
 // --- transform without local mem ---
@@ -538,7 +538,7 @@ void square22(__global uint4 * restrict const z, __global const uint2 * restrict
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const sz_t j = idx, k = 4 * idx;
-	square_22io(&z[k], w, NSIZE / 4 + j);
+	square_22io(&z[k], w, j);
 }
 
 __kernel
@@ -546,7 +546,7 @@ void square4(__global uint4 * restrict const z, __global const uint2 * restrict 
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const sz_t j = idx, k = 4 * idx;
-	square_4io(&z[k], w, NSIZE / 4 + j, NSIZE / 4 + NSIZE / 4 - j - 1);
+	square_4io(&z[k], w, j, NSIZE / 4 - j - 1);
 }
 
 __kernel
@@ -554,7 +554,7 @@ void fwd4p(__global uint4 * restrict const z, __global const uint2 * restrict co
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const sz_t j = idx, k = 4 * idx;
-	fwd_2io(&z[k], w, NSIZE / 4 + j);
+	fwd_2io(&z[k], w, j);
 }
 
 __kernel
@@ -562,7 +562,7 @@ void mul22(__global uint4 * restrict const z, __global const uint4 * restrict co
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const sz_t j = idx, k = 4 * idx;
-	mul_22io(&z[k], &zp[k], w, NSIZE / 4 + j);
+	mul_22io(&z[k], &zp[k], w, j);
 }
 
 __kernel
@@ -570,7 +570,7 @@ void mul4(__global uint4 * restrict const z, __global const uint4 * restrict con
 {
 	const sz_t idx = (sz_t)get_global_id(0);
 	const sz_t j = idx, k = 4 * idx;
-	mul_4io(&z[k], &zp[k], w, NSIZE / 4 + j, NSIZE / 4 + NSIZE / 4 - j - 1);
+	mul_4io(&z[k], &zp[k], w, j, NSIZE / 4 - j - 1);
 }
 
 // --- transform ---
@@ -1011,7 +1011,7 @@ void square1024(__global uint4 * restrict const z, __global const uint2 * restri
 	backward_4o(256, zk, 256, Zi256, w, j / 256, ji / 256);
 }
 
-#define DECLARE_VAR_2048() \
+/*#define DECLARE_VAR_2048() \
 	__local uint4 Z[2048]; \
 	\
 	const sz_t idx = (sz_t)get_global_id(0), j = NSIZE / 4 + idx, ji = NSIZE / 4 + NSIZE / 4 - idx - 1; \
@@ -1049,7 +1049,7 @@ void square2048(__global uint4 * restrict const z, __global const uint2 * restri
 	backward_4(32, Zi32, w, j / 32, ji / 32);
 	backward_4(128, Zi128, w, j / 128, ji / 128);
 	backward_4o(512, zk, 512, Zi512, w, j / 512, ji / 51);
-}
+}*/
 
 // -----------------
 
@@ -1137,7 +1137,7 @@ void fwd1024p(__global uint4 * restrict const z, __global const uint2 * restrict
 	fwd2_write_4(256, zk, Z4, w, j);
 }
 
-__kernel
+/*__kernel
 #if MAX_WORK_GROUP_SIZE >= 2048 / 4
 	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
 #endif
@@ -1151,7 +1151,7 @@ void fwd2048p(__global uint4 * restrict const z, __global const uint2 * restrict
 	forward_4(8, Zi8, w, j / 8);
 	forward_4(2, Zi2, w, j / 2);
 	write_4(512, zk, Z4);
-}
+}*/
 
 // -----------------
 
@@ -1263,7 +1263,7 @@ void mul1024(__global uint4 * restrict const z, __global const uint4 * restrict 
 	backward_4o(256, zk, 256, Zi256, w, j / 256, ji / 256);
 }
 
-__kernel
+/*__kernel
 #if MAX_WORK_GROUP_SIZE >= 2048 / 4
 	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
 #endif
@@ -1283,7 +1283,7 @@ void mul2048(__global uint4 * restrict const z, __global const uint4 * restrict 
 	backward_4(32, Zi32, w, j / 32, ji / 32);
 	backward_4(128, Zi128, w, j / 128, ji / 128);
 	backward_4o(512, zk, 512, Zi512, w, j / 512, ji / 512);
-}
+}*/
 
 // -----------------
 

@@ -18,10 +18,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernel3m.h"
 
 // #define	CHECK_ALL_FUNCTIONS		1
+// #define	CHECK_RADIX4_FUNCTIONS	1
 // #define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward4, forward64, forward256_0, forward256
 // #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward64_0, forward1024
 // #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024_0
-// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048
+#define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -562,12 +563,14 @@ private:
 
 		int lm = _ln;
 
-		// lm -= 2; forward4_0();
-		// while (lm > 2) { lm -= 2; forward4(lm); }
-		// if (isSquare) { if (lm == 1) square22(); else square4(); } else if (lm == 1) mul22(); else mul4();
-		// while (lm < _ln - 2) { backward4(lm); lm += 2; }
-		// backward4_0(); lm += 2;
-		// return;
+#ifdef CHECK_RADIX4_FUNCTIONS
+		lm -= 2; forward4_0();
+		while (lm > 2) { lm -= 2; forward4(lm); }
+		if (isSquare) { if (lm == 1) square22(); else square4(); } else if (lm == 1) mul22(); else mul4();
+		while (lm < _ln - 2) { backward4(lm); lm += 2; }
+		backward4_0(); lm += 2;
+		return;
+#endif
 
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
@@ -694,10 +697,12 @@ public:
 
 		int lm = _ln;
 
-		// lm -= 2; forward4p_0();
-		// while (lm > 2) { lm -= 2; forward4p(lm); }
-		// if (lm == 2) fwd4p();
-		// return;
+#ifdef CHECK_RADIX4_FUNCTIONS
+		lm -= 2; forward4p_0();
+		while (lm > 2) { lm -= 2; forward4p(lm); }
+		if (lm == 2) fwd4p();
+		return;
+#endif
 
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
@@ -1006,7 +1011,7 @@ public:
 			for (size_t j = 0; j < s; ++j)
 			{
 				const GF31 w2 = r_s.pow(bitRev(j, 4 * s) + 1), w1 = w2.sqr(), w3 = w1.mul(w2);
-				wr31[s + j] = w1; wr31[size / 2 + s + j] = w2; wr31[size + s + j] = w3;
+				wr31[3 * (s + j) + 0] = w1; wr31[3 * (s + j) + 1] = w2; wr31[3 * (s + j) + 2] = w3;
 			}
 		}
 		_pEngine->writeMemory_w31(wr31);
@@ -1019,7 +1024,7 @@ public:
 			for (size_t j = 0; j < s; ++j)
 			{
 				const ZP1 w20 = r_s.pow_mul_sqr(bitRev(j, 4 * s) + 1), w1 = w20.sqr(), w21 = w20.muli();
-				wr1[s + j] = w1; wr1[size / 2 + s + j] = w20; wr1[size + s + j] = w21;
+				wr1[3 * (s + j) + 0] = w1; wr1[3 * (s + j) + 1] = w20; wr1[3 * (s + j) + 2] = w21;
 			}
 		}
 		_pEngine->writeMemory_w1(wr1);

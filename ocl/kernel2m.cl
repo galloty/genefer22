@@ -16,6 +16,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define	LNSZ		16
 #define	SNORM31		16
 #define	NORM1		2130673921u
+#define	NORM2		2112897025u
 #define	WOFFSET_1	98304
 #define BLK32		8
 #define BLK64		4
@@ -36,6 +37,8 @@ typedef uint2	uint32_2;
 typedef int2	int32_2;
 typedef ulong2	uint64_2;
 typedef long2	int64_2;
+
+INLINE uint2 swap(const uint2 lhs) { return (uint2)(lhs.s1, lhs.s0); }
 
 INLINE uint32 _addmod(const uint32 lhs, const uint32 rhs, const uint32 p)
 {
@@ -123,21 +126,20 @@ INLINE GF31 sqr31(const GF31 lhs)
 INLINE uint32 _add1(const uint32 lhs, const uint32 rhs) { return _addmod(lhs, rhs, P1); }
 INLINE uint32 _sub1(const uint32 lhs, const uint32 rhs) { return _submod(lhs, rhs, P1); }
 INLINE uint32 _mul1(const uint32 lhs, const uint32 rhs) { return _mulmod(lhs, rhs, P1, Q1); }
+INLINE int32 _get_int1(const uint32 n) { return _get_int(n, P1); }
 INLINE uint32 _set_int1(const int32 i) { return _set_int(i, P1); }
 
 // --- pair of Z/p1Z ---
 
 typedef uint2	Zp1;
 
+INLINE int32_2 get_int1(const Zp1 n) { return (int32_2)(_get_int1(n.s0), _get_int1(n.s1)); }
 INLINE Zp1 set_int1(const int32_2 i) { return (Zp1)(_set_int1(i.s0), _set_int1(i.s1)); }
-
-INLINE Zp1 swap1(const Zp1 lhs) { return (Zp1)(lhs.s1, lhs.s0); }
 
 INLINE Zp1 add1(const Zp1 lhs, const Zp1 rhs) { return (Zp1)(_add1(lhs.s0, rhs.s0), _add1(lhs.s1, rhs.s1)); }
 INLINE Zp1 sub1(const Zp1 lhs, const Zp1 rhs) { return (Zp1)(_sub1(lhs.s0, rhs.s0), _sub1(lhs.s1, rhs.s1)); }
 
 INLINE Zp1 muls1(const Zp1 lhs, const uint32 s) { return (Zp1)(_mul1(lhs.s0, s), _mul1(lhs.s1, s)); }
-INLINE Zp1 muli1(const Zp1 lhs) { return muls1(lhs, I1); }
 
 INLINE Zp1 mul1(const Zp1 lhs, const Zp1 rhs) { return (Zp1)(_mul1(lhs.s0, rhs.s0), _mul1(lhs.s1, rhs.s1)); }
 INLINE Zp1 sqr1(const Zp1 lhs) { return mul1(lhs, lhs); }
@@ -165,21 +167,20 @@ INLINE Zp1 backward2_1(const Zp1 lhs)
 INLINE uint32 _add2(const uint32 lhs, const uint32 rhs) { return _addmod(lhs, rhs, P2); }
 INLINE uint32 _sub2(const uint32 lhs, const uint32 rhs) { return _submod(lhs, rhs, P2); }
 INLINE uint32 _mul2(const uint32 lhs, const uint32 rhs) { return _mulmod(lhs, rhs, P2, Q2); }
+INLINE int32 _get_int2(const uint32 n) { return _get_int(n, P2); }
 INLINE uint32 _set_int2(const int32 i) { return _set_int(i, P2); }
 
 // --- pair of Z/p2Z ---
 
 typedef uint2	Zp2;
 
+INLINE int32_2 get_int2(const Zp2 n) { return (int32_2)(_get_int2(n.s0), _get_int2(n.s1)); }
 INLINE Zp2 set_int2(const int32_2 i) { return (Zp2)(_set_int2(i.s0), _set_int2(i.s1)); }
-
-INLINE Zp2 swap2(const Zp2 lhs) { return (Zp2)(lhs.s1, lhs.s0); }
 
 INLINE Zp2 add2(const Zp2 lhs, const Zp2 rhs) { return (Zp2)(_add2(lhs.s0, rhs.s0), _add2(lhs.s1, rhs.s1)); }
 INLINE Zp2 sub2(const Zp2 lhs, const Zp2 rhs) { return (Zp2)(_sub2(lhs.s0, rhs.s0), _sub2(lhs.s1, rhs.s1)); }
 
 INLINE Zp2 muls2(const Zp2 lhs, const uint32 s) { return (Zp2)(_mul2(lhs.s0, s), _mul2(lhs.s1, s)); }
-INLINE Zp2 muli2(const Zp2 lhs) { return muls2(lhs, I2); }
 
 INLINE Zp2 mul2(const Zp2 lhs, const Zp2 rhs) { return (Zp2)(_mul2(lhs.s0, rhs.s0), _mul2(lhs.s1, rhs.s1)); }
 INLINE Zp2 sqr2(const Zp2 lhs) { return mul2(lhs, lhs); }
@@ -277,13 +278,13 @@ INLINE Zp2 backward2_2(const Zp2 lhs)
 	zo0 = add1(v0, v2); zo2 = mul1(sub1(v2, v0), win1); zo1 = add1(v1, v3); zo3 = mul1(sub1(v3, v1), win1); \
 	}
 
-#define FORWARD_8_1_0(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w1, w20, w21) \
+#define FORWARD_8_1(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w1, w20, w21) \
 	{ \
 	const Zp1 t0 = forward2_1(zi0), t2 = forward2_1(zi2), t1 = forward2_1(zi1), t3 = forward2_1(zi3); \
 	FORWARD_4_1(t0, t1, t2, t3, zo0, zo1, zo2, zo3, w1, w20, w21); \
 	}
 
-#define BACKWARD_8_1_0(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, win1, win20, win21) \
+#define BACKWARD_8_1(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, win1, win20, win21) \
 	{ \
 	Zp1 t0, t1, t2, t3; \
 	BACKWARD_4_1(zi0, zi1, zi2, zi3, t0, t1, t2, t3, win1, win20, win21); \
@@ -353,13 +354,13 @@ INLINE Zp2 backward2_2(const Zp2 lhs)
 	zo0 = add2(v0, v2); zo2 = mul2(sub2(v2, v0), win1); zo1 = add2(v1, v3); zo3 = mul2(sub2(v3, v1), win1); \
 	}
 
-#define FORWARD_8_2_0(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w1, w20, w21) \
+#define FORWARD_8_2(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w1, w20, w21) \
 	{ \
 	const Zp2 t0 = forward2_2(zi0), t2 = forward2_2(zi2), t1 = forward2_2(zi1), t3 = forward2_2(zi3); \
 	FORWARD_4_2(t0, t1, t2, t3, zo0, zo1, zo2, zo3, w1, w20, w21); \
 	}
 
-#define BACKWARD_8_2_0(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, win1, win20, win21) \
+#define BACKWARD_8_2(zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, win1, win20, win21) \
 	{ \
 	Zp2 t0, t1, t2, t3; \
 	BACKWARD_4_2(zi0, zi1, zi2, zi3, t0, t1, t2, t3, win1, win20, win21); \
@@ -414,41 +415,75 @@ INLINE Zp2 backward2_2(const Zp2 lhs)
 
 // --- set pair M31/P1 ---
 
+#ifdef W123
+#define DECLARE_VAR_INDEXW(j) \
+	const sz_t j0 = 3 * j + 0, j1 = 3 * j + 1, j2 = 3 * j + 2;
+#define DECLARE_VAR_INDEXWIN(ji) \
+	const sz_t ji0 = 3 * ji + 0, ji1 = 3 * ji + 1, ji2 = 3 * ji + 2;
+#define DECLARE_VAR_INDEXWS() \
+	const sz_t ws_offset = NSIZE / 2;
+#else
+#define DECLARE_VAR_INDEXW(j) \
+	const sz_t j0 = j, j1 = NSIZE / 2 + j, j2 = NSIZE + j;
+#define DECLARE_VAR_INDEXWIN(ji) \
+	const sz_t ji0 = ji, ji1 = NSIZE / 2 + ji, ji2 = NSIZE + ji;
+#define DECLARE_VAR_INDEXWS() \
+	const sz_t ws_offset = 0;
+#endif
+
 #define DECLARE_VAR_W(j) \
-	const GF31 w1_0 = w[3 * j + 0], w2_0 = w[3 * j + 1], w3_0 = w[3 * j + 2]; \
-	const Zp1 w1_1 = w[WOFFSET_1 + 3 * j + 0], w2_1 = w[WOFFSET_1 + 3 * j + 1], w3_1 = w[WOFFSET_1 + 3 * j + 2];
+	DECLARE_VAR_INDEXW(j); \
+	const Zp1 w1_0 = w[j0], w2_0 = w[j1], w3_0 = w[j2]; \
+	const Zp2 w1_1 = w[WOFFSET_1 + j0], w2_1 = w[WOFFSET_1 + j1], w3_1 = w[WOFFSET_1 + j2];
+	// const GF31 w1_1 = w[WOFFSET_1 + j0], w2_1 = w[WOFFSET_1 + j1], w3_1 = w[WOFFSET_1 + j2];
 
 #define DECLARE_VAR_WIN(j, ji) \
-	const GF31 wi1_0 = w[3 * j + 0], wi2_0 = w[3 * j + 1], wi3_0 = w[3 * j + 2]; \
-	const Zp1 wi1_1 = swap1(w[WOFFSET_1 + 3 * ji + 0]), wi3_1 = swap1(w[WOFFSET_1 + 3 * ji + 1]), wi2_1 = swap1(w[WOFFSET_1 + 3 * ji + 2]);
+	DECLARE_VAR_INDEXWIN(ji); \
+	const Zp1 wi1_0 = swap(w[ji0]), wi3_0 = swap(w[ji1]), wi2_0 = swap(w[ji2]); \
+	const Zp2 wi1_1 = swap(w[WOFFSET_1 + ji0]), wi3_1 = swap(w[WOFFSET_1 + ji1]), wi2_1 = swap(w[WOFFSET_1 + ji2]);
+	// DECLARE_VAR_INDEXW(j);
+	// const GF31 wi1_1 = w[WOFFSET_1 + j0], wi2_1 = w[WOFFSET_1 + j1], wi3_1 = w[WOFFSET_1 + j2];
 
 #define DECLARE_VAR_WS(j) \
-	const GF31 w_0 = w[NSIZE / 2 + j]; \
-	const Zp1 w_1 = w[WOFFSET_1 + NSIZE / 2 + j];
+	DECLARE_VAR_INDEXWS(); \
+	const Zp1 w_0 = w[ws_offset + j]; \
+	const Zp2 w_1 = w[WOFFSET_1 + ws_offset + j];
+	// const GF31 w_1 = w[WOFFSET_1 + ws_offset + j];
 
-#define DECLARE_VAR_WINS(j, ji) \
-	const GF31 wi_0 = 0; \
-	const Zp1 wi_1 = swap1(w[WOFFSET_1 + NSIZE / 2 + ji]);
+#define DECLARE_VAR_WINS(ji) \
+	const Zp1 wi_0 = swap(w[ws_offset + ji]); \
+	const Zp2 wi_1 = swap(w[WOFFSET_1 + ws_offset + ji]);
+	// const GF31 wi_1 = 0;
 
-#define FORWARD_4_a		FORWARD_4_31
-#define FORWARD_4_0_a	FORWARD_4_31
-#define BACKWARD_4_a	BACKWARD_4_31
-#define BACKWARD_4_0_a	BACKWARD_4_31
-#define SQUARE_22_a		SQUARE_22_31
-#define SQUARE_4_a		SQUARE_4_31
-#define FWD_2_a			FWD_2_31
-#define MUL_22_a		MUL_22_31
-#define MUL_4_a			MUL_4_31
+#define FORWARD_4_a		FORWARD_4_1
+#define FORWARD_4_0_a	FORWARD_8_1
+#define BACKWARD_4_a	BACKWARD_4_1
+#define BACKWARD_4_0_a	BACKWARD_8_1
+#define SQUARE_22_a		SQUARE_22_1
+#define SQUARE_4_a		SQUARE_4_1
+#define FWD_2_a			FWD_2_1
+#define MUL_22_a		MUL_22_1
+#define MUL_4_a			MUL_4_1
 
-#define FORWARD_4_b		FORWARD_4_1
-#define FORWARD_4_0_b	FORWARD_8_1_0
-#define BACKWARD_4_b	BACKWARD_4_1
-#define BACKWARD_4_0_b	BACKWARD_8_1_0
-#define SQUARE_22_b		SQUARE_22_1
-#define SQUARE_4_b		SQUARE_4_1
-#define FWD_2_b			FWD_2_1
-#define MUL_22_b		MUL_22_1
-#define MUL_4_b			MUL_4_1
+// #define FORWARD_4_b		FORWARD_4_31
+// #define FORWARD_4_0_b	FORWARD_4_31
+// #define BACKWARD_4_b	BACKWARD_4_31
+// #define BACKWARD_4_0_b	BACKWARD_4_31
+// #define SQUARE_22_b		SQUARE_22_31
+// #define SQUARE_4_b		SQUARE_4_31
+// #define FWD_2_b			FWD_2_31
+// #define MUL_22_b		MUL_22_31
+// #define MUL_4_b			MUL_4_31
+
+#define FORWARD_4_b		FORWARD_4_2
+#define FORWARD_4_0_b	FORWARD_8_2
+#define BACKWARD_4_b	BACKWARD_4_2
+#define BACKWARD_4_0_b	BACKWARD_8_2
+#define SQUARE_22_b		SQUARE_22_2
+#define SQUARE_4_b		SQUARE_4_2
+#define FWD_2_b			FWD_2_2
+#define MUL_22_b		MUL_22_2
+#define MUL_4_b			MUL_4_2
 
 // --- transform/inline global mem ---
 
@@ -492,7 +527,7 @@ INLINE void square_22io(__global uint4 * restrict const z, __global const uint2 
 INLINE void square_4io(__global uint4 * restrict const z, __global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
 	DECLARE_VAR_WS(j);
-	DECLARE_VAR_WINS(j, ji);
+	DECLARE_VAR_WINS(ji);
 	SQUARE_4_a(z[0].s01, z[1].s01, z[2].s01, z[3].s01, w_0, wi_0);
 	SQUARE_4_b(z[0].s23, z[1].s23, z[2].s23, z[3].s23, w_1, wi_1);
 }
@@ -516,7 +551,7 @@ INLINE void mul_4io(__global uint4 * restrict const z, const __global uint4 * re
 	__global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
 	DECLARE_VAR_WS(j);
-	DECLARE_VAR_WINS(j, ji);
+	DECLARE_VAR_WINS(ji);
 	MUL_4_a(z[0].s01, z[1].s01, z[2].s01, z[3].s01, zp[0].s01, zp[1].s01, zp[2].s01, zp[3].s01, w_0, wi_0);
 	MUL_4_b(z[0].s23, z[1].s23, z[2].s23, z[3].s23, zp[0].s23, zp[1].s23, zp[2].s23, zp[3].s23, w_1, wi_1);
 }
@@ -607,7 +642,7 @@ INLINE void square_22(__local uint4 * restrict const Z, __global const uint2 * r
 INLINE void square_4(__local uint4 * restrict const Z, __global const uint2 * restrict const w, const sz_t j, const sz_t ji)
 {
 	DECLARE_VAR_WS(j);
-	DECLARE_VAR_WINS(j, ji);
+	DECLARE_VAR_WINS(ji);
 	barrier(CLK_LOCAL_MEM_FENCE);
 	SQUARE_4_a(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, w_0, wi_0);
 	SQUARE_4_b(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, w_1, wi_1);
@@ -647,7 +682,7 @@ INLINE void mul_4(__local uint4 * restrict const Z, const sz_t mg, __global cons
 	__global const uint4 * const z2mg = &z[2 * mg];
 	const uint4 z0p = z[0], z1p = z[mg], z2p = z2mg[0], z3p = z2mg[mg];
 	DECLARE_VAR_WS(j);
-	DECLARE_VAR_WINS(j, ji);
+	DECLARE_VAR_WINS(ji);
 	barrier(CLK_LOCAL_MEM_FENCE);
 	MUL_4_a(Z[0].s01, Z[1].s01, Z[2].s01, Z[3].s01, z0p.s01, z1p.s01, z2p.s01, z3p.s01, w_0, wi_0);
 	MUL_4_b(Z[0].s23, Z[1].s23, Z[2].s23, Z[3].s23, z0p.s23, z1p.s23, z2p.s23, z3p.s23, w_1, wi_1);
@@ -1483,14 +1518,33 @@ INLINE int32_2 reduce64(int64_2 * f, const uint32 b, const uint32 b_inv, const i
 	return (int32_2)(b0 ? -(int32)(r_l.s0) : (int32)(r_l.s0), b1 ? -(int32)(r_l.s1) : (int32)(r_l.s1));
 }
 
-INLINE int64_2 garner2(const GF31 r1, const Zp1 r2)
+INLINE int64_2 garner2_31_1(const GF31 r1, const Zp1 r2)
 {
-	const uint32 InvP1_M1 = 8421505u;	// 1 / P1 (mod M1)	
+	const uint32 InvP1_M1 = 8421505u;	// 1 / P1 (mod M1)
 	const uint64 M31P1 = M31 * (uint64)(P1);
 	GF31 r2_1 = (GF31)(r2);	// P1 < M31
 	GF31 u12 = muls31(sub31(r1, r2_1), InvP1_M1);
 	const uint64 n0 = r2.s0 + u12.s0 * (uint64)(P1), n1 = r2.s1 + u12.s1 * (uint64)(P1);
 	return (int64_2)((n0 > M31P1 / 2) ? (int64)(n0 - M31P1) : (int64)(n0), (n1 > M31P1 / 2) ? (int64)(n1 - M31P1) : (int64)(n1));
+}
+
+INLINE int64_2 garner2_31_2(const GF31 r1, const Zp1 r2)
+{
+	const uint32 InvP2_M1 = 152183881u;	// 1 / P2 (mod M1)
+	const uint64 M31P2 = M31 * (uint64)(P2);
+	GF31 r2_1 = (GF31)(r2);	// P2 < M31
+	GF31 u12 = muls31(sub31(r1, r2_1), InvP2_M1);
+	const uint64 n0 = r2.s0 + u12.s0 * (uint64)(P2), n1 = r2.s1 + u12.s1 * (uint64)(P2);
+	return (int64_2)((n0 > M31P2 / 2) ? (int64)(n0 - M31P2) : (int64)(n0), (n1 > M31P2 / 2) ? (int64)(n1 - M31P2) : (int64)(n1));
+}
+
+INLINE int64_2 garner2_1_2(const Zp1 r1, const Zp2 r2)
+{
+	const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)
+	const uint64 P1P2 = P1 * (uint64)(P2);
+	Zp1 u12 = muls1(sub1(r1, (Zp1)(r2)), mfInvP2_P1);	// P2 < P1
+	const uint64 n0 = r2.s0 + u12.s0 * (uint64)(P2), n1 = r2.s1 + u12.s1 * (uint64)(P2);
+	return (int64_2)((n0 > P1P2 / 2) ? (int64)(n0 - P1P2) : (int64)(n0), (n1 > P1P2 / 2) ? (int64)(n1 - P1P2) : (int64)(n1));
 }
 
 __kernel
@@ -1508,14 +1562,15 @@ void normalize1(__global uint4 * restrict const z, __global long2 * restrict con
 	sz_t j = 0;
 	do
 	{
-		const GF31 u31 = lshift31(zi[j].s01, SNORM31);
-		const Zp1 u1 = muls1(zi[j].s23, NORM1);
-		int64_2 l = garner2(u31, u1);
+		const Zp1 u1 = muls1(zi[j].s01, NORM1);
+		// const GF31 u31 = lshift31(zi[j].s23, SNORM31);
+		const Zp2 u2 = muls2(zi[j].s23, NORM2);
+		int64_2 l = garner2_1_2(u1, u2);
 		if (sblk < 0) l += l;
 		f += l;
 		const int32_2 r = reduce64(&f, b, b_inv, b_s);
-		zi[j].s01 = set_int31(r);
-		zi[j].s23 = set_int1(r);
+		zi[j].s01 = set_int1(r);
+		zi[j].s23 = set_int2(r);
 
 		++j;
 	} while (j != blk);
@@ -1537,20 +1592,19 @@ void normalize2(__global uint4 * restrict const z, __global const long2 * restri
 	sz_t j = 0;
 	do
 	{
-		const GF31 u31 = zi[j].s01;
-		const int32_2 i = get_int31(u31);
+		const int32_2 i = get_int1(zi[j].s01);
 		f += (int64_2)(i.s0, i.s1);
 		const int32_2 r = reduce64(&f, b, b_inv, b_s);
-		zi[j].s01 = set_int31(r);
-		zi[j].s23 = set_int1(r);
+		zi[j].s01 = set_int1(r);
+		zi[j].s23 = set_int2(r);
 
 		if ((f.s0 == 0) && (f.s1 == 0)) return;
 		++j;
 	} while (j != blk - 1);
 
 	const int32_2 f32 = (int32_2)((int32)(f.s0), (int32)(f.s1));
-	zi[blk - 1].s01 = add31(zi[blk - 1].s01, set_int31(f32));
-	zi[blk - 1].s23 = add1(zi[blk - 1].s23, set_int1(f32));
+	zi[blk - 1].s01 = add1(zi[blk - 1].s01, set_int1(f32));
+	zi[blk - 1].s23 = add2(zi[blk - 1].s23, set_int2(f32));
 }
 
 __kernel
@@ -1567,11 +1621,11 @@ void mulscalar(__global uint4 * restrict const z, __global long2 * restrict cons
 	sz_t j = 0;
 	do
 	{
-		int64_2 l = garner2(zi[j].s01, zi[j].s23) * a;
-		f += l;;
+		int64_2 l = garner2_1_2(zi[j].s01, zi[j].s23) * a;
+		f += l;
 		const int32_2 r = reduce64(&f, b, b_inv, b_s);
-		zi[j].s01 = set_int31(r);
-		zi[j].s23 = set_int1(r);
+		zi[j].s01 = set_int1(r);
+		zi[j].s23 = set_int2(r);
 
 		++j;
 	} while (j != blk);

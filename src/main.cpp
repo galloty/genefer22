@@ -373,22 +373,17 @@ public:
 
 		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
 		{
-			for (size_t n = 16; n <= 22; ++n)
+			for (size_t n = 16; n <= 23; ++n)
 			{
 				if (g.check(0, n, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;
-			}
-			if (mode == genefer::EMode::Bench)
-			{
-				if (g.check(0, 23, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;	// DYFL
-				if (g.check(0, 24, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;	// 23
 			}
 			return;
 		}
 
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
-			// internal test
-			/*static const size_t count = 20 - 12 + 1;
+			/*// internal test
+			// static const size_t count = 20 - 12 + 1;
 			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
 			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 1154623840, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
 			// static constexpr uint32_t bp[count] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496, 5710946, 4038248, 2855472 };	// gfn NTT-2 limits
@@ -401,9 +396,12 @@ public:
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 
-			// if (g.check(824, 10, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(150, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-
+			// if (g.check(33422122, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(33423102, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0xf0ab429cbbc7ed7dull
+			if (g.check(23445612, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x8054ae714890f6d0ull
+			if (g.check(16558530, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			return;
 			// for (size_t i = 0; i < count; ++i)
 			// {
 				// g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth);

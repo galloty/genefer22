@@ -18,11 +18,29 @@ typedef int32_t		int32;
 typedef uint64_t	uint64;
 typedef int64_t		int64;
 
+#define	M31		((uint32(1) << 31) - 1)
+
+#define	P1		(127 * (uint32(1) << 24) + 1)
+#define	Q1		2164260865u		// p * q = 1 (mod 2^32)
+#define ONE1	33554430u		// Montgomery form of 1 is 2^32 (mod p)
+#define	RSQ1	402124772u		// (2^32)^2 mod p
+#define	H1		167772150u		// Montgomery form of the primitive root 5
+#define	I1		66976762u 		// Montgomery form of 5^{(p - 1)/4} = 16711679
+#define	IM1		200536044u		// Montgomery form of Montgomery form of I to convert input into Montgomery form
+
+#define	P2		(63 * (uint32(1) << 25) + 1)
+#define	Q2		2181038081u
+#define ONE2	67108862u
+#define	RSQ2	2111798781u
+#define	H2		335544310u		// Montgomery form of the primitive root 5
+#define	I2		530075385u
+#define	IM2		1036950657u
+
 // GF((2^31 - 1)^2)
 class GF31
 {
 private:
-	static const uint32 _p = (uint32(1) << 31) - 1;
+	static const uint32 _p = M31;
 	uint32 _s[2];
 	// a primitive root of order 2^31 which is a root of (0, 1)
 	static const uint32 _h_order = uint32(1) << 31;
@@ -112,129 +130,126 @@ public:
 	static const GF31 primroot_n(const uint32 n) { return GF31(_h_0, _h_1).pow(_h_order / n); }
 };
 
-class Zp1
+template<uint32 P, uint32 Q, uint32 ONE, uint32 RSQ, uint32 H, uint32 I, uint32 IM>
+class Zp
 {
 private:
-	static const uint32 _p = 127 * (uint32(1) << 24) + 1;
-	static const uint32 _q = 2164260865u;	// p * q = 1 (mod 2^32)
-	static const uint32 _r2 = 402124772u;	// (2^32)^2 mod p
-	static const uint32 _h = 167772150u;	// Montgomery form of the primitive root 5
-	static const uint32 _i = 66976762u; 	// Montgomery form of 5^{(p + 1)/4} = 16711679
-	static const uint32 _im = 200536044u;	// Montgomery form of Montgomery form to convert input into Montgomery form
 	uint32 _s[2];
 
-	static uint32 _add(const uint32 a, const uint32 b) { const uint32 t = a + b; return t - ((t >= _p) ? _p : 0); }
-	static uint32 _sub(const uint32 a, const uint32 b) { const uint32 t = a - b; return t + ((int32(t) < 0) ? _p : 0); }
+	static uint32 _add(const uint32 a, const uint32 b) { const uint32 t = a + b; return t - ((t >= P) ? P : 0); }
+	static uint32 _sub(const uint32 a, const uint32 b) { const uint32 t = a - b; return t + ((int32(t) < 0) ? P : 0); }
 
 	static uint32 _mul(const uint32 lhs, const uint32 rhs)
 	{
 		const uint64 t = lhs * uint64(rhs);
 		const uint32 lo = uint32(t), hi = uint32(t >> 32);
-		const uint32 mp = uint32(((lo * _q) * uint64(_p)) >> 32);
+		const uint32 mp = uint32(((lo * Q) * uint64(P)) >> 32);
 		return _sub(hi, mp);
 	}
 
-	static int32 _get_int(const uint32 a) { return (a >= _p / 2) ? int32(a - _p) : int32(a); }
-	static uint32 _set_int(const int32 a) { return (a < 0) ? (uint32(a) + _p) : uint32(a); }
+	static int32 _get_int(const uint32 a) { return (a >= P / 2) ? int32(a - P) : int32(a); }
+	static uint32 _set_int(const int32 a) { return (a < 0) ? (uint32(a) + P) : uint32(a); }
 
-	Zp1 pow(const size_t e) const
+	Zp pow(const size_t e) const
 	{
-		static const uint32 one = -_p * 2u;	// Montgomery form of 1 is 2^32 (mod p)
-		if (e == 0) return Zp1(one, 0);
-		Zp1 r = Zp1(one, 0), y = *this;
+		if (e == 0) return Zp(ONE, 0);
+		Zp r = Zp(ONE, 0), y = *this;
 		for (size_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r._s[0] = _mul(r._s[0], y._s[0]); y._s[0] = _mul(y._s[0], y._s[0]); }
 		r._s[0] = _mul(r._s[0], y._s[0]);
 		return r;
 	}
 
 public:
-	Zp1() {}
-	explicit Zp1(const uint32 n0, const uint32 n1) { _s[0] = n0; _s[1] = n1; }
+	Zp() {}
+	explicit Zp(const uint32 n0, const uint32 n1) { _s[0] = n0; _s[1] = n1; }
 
 	uint32 s0() const { return _s[0]; }
 	uint32 s1() const { return _s[1]; }
 
-	Zp1 & set_int(const int32 i0, const int32 i1) { _s[0] = _set_int(i0); _s[1] = _set_int(i1); return *this; }
+	Zp & set_int(const int32 i0, const int32 i1) { _s[0] = _set_int(i0); _s[1] = _set_int(i1); return *this; }
 
-	Zp1 swap() const { return Zp1(_s[1], _s[0]); }
+	Zp swap() const { return Zp(_s[1], _s[0]); }
 
-	Zp1 add(const Zp1 & rhs) const { return Zp1(_add(_s[0], rhs._s[0]), _add(_s[1], rhs._s[1])); }
-	Zp1 sub(const Zp1 & rhs) const { return Zp1(_sub(_s[0], rhs._s[0]), _sub(_s[1], rhs._s[1])); }
+	Zp add(const Zp & rhs) const { return Zp(_add(_s[0], rhs._s[0]), _add(_s[1], rhs._s[1])); }
+	Zp sub(const Zp & rhs) const { return Zp(_sub(_s[0], rhs._s[0]), _sub(_s[1], rhs._s[1])); }
 
-	Zp1 muls(const uint32 s) const { return Zp1(_mul(_s[0], s), _mul(_s[1], s)); }
-	Zp1 muli() const { return muls(_i); }
+	Zp muls(const uint32 s) const { return Zp(_mul(_s[0], s), _mul(_s[1], s)); }
+	Zp muli() const { return muls(I); }
 
-	Zp1 mul(const Zp1 & rhs) const { return Zp1(_mul(_s[0], rhs._s[0]), _mul(_s[1], rhs._s[1])); }
-	Zp1 sqr() const { return mul(*this); }
+	Zp mul(const Zp & rhs) const { return Zp(_mul(_s[0], rhs._s[0]), _mul(_s[1], rhs._s[1])); }
+	Zp sqr() const { return mul(*this); }
 
 	// Conversion into / out of Montgomery form
-	// Zp1 toMonty() const { return Zp1(_mul(_s[0], _r2), _mul(_s[1], _r2)); }
-	// Zp1 fromMonty() const { return Zp1(_mul(_s[0], 1), _mul(_s[1], 1)); }
+	// Zp toMonty() const { return Zp(_mul(_s[0], RSQ), _mul(_s[1], RSQ)); }
+	// Zp fromMonty() const { return Zp(_mul(_s[0], 1), _mul(_s[1], 1)); }
 
-	Zp1 & forward2()
+	Zp & forward2()
 	{
-		const uint32 u0 = _mul(_s[0], _r2), u1 = _mul(_s[1], _im);
+		const uint32 u0 = _mul(_s[0], RSQ), u1 = _mul(_s[1], IM);
 		_s[0] = _add(u0, u1); _s[1] = _sub(u0, u1);
 		return *this;
 	}
 
-	Zp1 & backward2()
+	Zp & backward2()
 	{
 		const uint32 u0 = _s[0], u1 = _s[1];
-		_s[0] = _add(u0, u1); _s[1] = _mul(_sub(u1, u0), _i);
+		_s[0] = _add(u0, u1); _s[1] = _mul(_sub(u1, u0), I);
 	 	return *this;
 	}
 
 	// 16 mul + 16 mul_hi
-	static void forward4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w1, const Zp1 & w20, const Zp1 & w21)
+	static void forward4(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & w1, const Zp & w20, const Zp & w21)
 	{
-		const Zp1 u0 = z0, u2 = z2.mul(w1), u1 = z1, u3 = z3.mul(w1);
-		const Zp1 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3).mul(w20), v3 = u1.sub(u3).mul(w21);
+		const Zp u0 = z0, u2 = z2.mul(w1), u1 = z1, u3 = z3.mul(w1);
+		const Zp v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3).mul(w20), v3 = u1.sub(u3).mul(w21);
 		z0 = v0.add(v1); z1 = v0.sub(v1); z2 = v2.add(v3); z3 = v2.sub(v3);
 	}
 
-	static void backward4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & win1, const Zp1 & win20, const Zp1 & win21)
+	static void backward4(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & win1, const Zp & win20, const Zp & win21)
 	{
-		const Zp1 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
-		const Zp1 v0 = u0.add(u1), v1 = u1.sub(u0).mul(win20), v2 = u2.add(u3), v3 = u3.sub(u2).mul(win21);
+		const Zp u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const Zp v0 = u0.add(u1), v1 = u1.sub(u0).mul(win20), v2 = u2.add(u3), v3 = u3.sub(u2).mul(win21);
 		z0 = v0.add(v2); z2 = v2.sub(v0).mul(win1); z1 = v1.add(v3); z3 = v3.sub(v1).mul(win1);
 	}
 
-	static void forward8_0(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w1, const Zp1 & w20, const Zp1 & w21)
+	static void forward8_0(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & w1, const Zp & w20, const Zp & w21)
 	{
-		Zp1 t0 = z0.forward2(), t2 = z2.forward2(), t1 = z1.forward2(), t3 = z3.forward2();
+		Zp t0 = z0.forward2(), t2 = z2.forward2(), t1 = z1.forward2(), t3 = z3.forward2();
 		forward4(t0, t1, t2, t3, w1, w20, w21);
 		z0 = t0; z1 = t1; z2 = t2; z3 = t3;
 	}
 
-	static void backward8_0(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & win1, const Zp1 & win20, const Zp1 & win21)
+	static void backward8_0(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & win1, const Zp & win20, const Zp & win21)
 	{
-		Zp1 t0 = z0, t2 = z2, t1 = z1, t3 = z3;
+		Zp t0 = z0, t2 = z2, t1 = z1, t3 = z3;
 		backward4(t0, t1, t2, t3, win1, win20, win21);
 		z0 = t0.backward2(); z2 = t2.backward2(); z1 = t1.backward2(); z3 = t3.backward2();
 	}
 
-	static void square22(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w)
+	static void square22(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & w)
 	{
-		const Zp1 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const Zp u0 = z0, u1 = z1, u2 = z2, u3 = z3;
 		z0 = u0.sqr().add(u1.sqr().mul(w)); z1 = u0.mul(u1.add(u1));
 		z2 = u2.sqr().sub(u3.sqr().mul(w)); z3 = u2.mul(u3.add(u3));
 	}
 
-	static void square4(Zp1 & z0, Zp1 & z1, Zp1 & z2, Zp1 & z3, const Zp1 & w, const Zp1 & win)
+	static void square4(Zp & z0, Zp & z1, Zp & z2, Zp & z3, const Zp & w, const Zp & win)
 	{
-		const Zp1 u0 = z0, u2 = z2.mul(w), u1 = z1, u3 = z3.mul(w);
-		const Zp1 v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3), v3 = u1.sub(u3);
-		const Zp1 s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
-		const Zp1 s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
+		const Zp u0 = z0, u2 = z2.mul(w), u1 = z1, u3 = z3.mul(w);
+		const Zp v0 = u0.add(u2), v2 = u0.sub(u2), v1 = u1.add(u3), v3 = u1.sub(u3);
+		const Zp s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
+		const Zp s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
 		z0 = s0.add(s2); z2 = s2.sub(s0).mul(win); z1 = s1.add(s3); z3 = s3.sub(s1).mul(win);
 	}
 
-	Zp1 pow_mul_sqr(const size_t e) const { Zp1 r = pow(e); r._s[1] = _mul(r._s[0], _s[1]); return r; }
+	Zp pow_mul_sqr(const size_t e) const { Zp r = pow(e); r._s[1] = _mul(r._s[0], _s[1]); return r; }
 
-	static const Zp1 primroot_n(const uint32 n) { Zp1 r = Zp1(_h, 0).pow((_p - 1) / n); r._s[1] = _mul(r._s[0], r._s[0]); return r; }
-	static uint32 norm(const uint32 n) { return _p - (_p - 1) / n; }
+	static const Zp primroot_n(const uint32 n) { Zp r = Zp(H, 0).pow((P - 1) / n); r._s[1] = _mul(r._s[0], r._s[0]); return r; }
+	static uint32 norm(const uint32 n) { return P - (P - 1) / n; }
 };
+
+typedef Zp<P1, Q1, ONE1, RSQ1, H1, I1, IM1> Zp1;
+typedef Zp<P2, Q2, ONE2, RSQ2, H2, I2, IM2> Zp2;
 
 class Transform
 {
@@ -410,14 +425,14 @@ private:
 
 	static void garner2(const GF31 r1, const Zp1 r2, int64 & i0, int64 & i1)
 	{
-		const uint32 M31 = (uint32(1) << 31) - 1, P1 = 127 * (uint32(1) << 24) + 1, InvP1_M1 = 8421505u;
-		const uint64 M31P2 = M31 * uint64(P1);
+		const uint32 InvP1_M1 = 8421505u;	//, InvP2_M1 = 152183881u;
+		const uint64 M31P1 = M31 * uint64(P1);
 
 		GF31 r2_1 = GF31(r2.s0(), r2.s1());	// P1 < M31
 		GF31 u12 = r1.sub(r2_1).muls(InvP1_M1);
 		const uint64 n0 = r2.s0() + u12.s0() * uint64(P1), n1 = r2.s1() + u12.s1() * uint64(P1);
-		i0 = (n0 > M31P2 / 2) ? int64(n0 - M31P2) : int64(n0);
-		i1 = (n1 > M31P2 / 2) ? int64(n1 - M31P2) : int64(n1);
+		i0 = (n0 > M31P1 / 2) ? int64(n0 - M31P1) : int64(n0);
+		i1 = (n1 > M31P1 / 2) ? int64(n1 - M31P1) : int64(n1);
 	}
 
 	void carry(const bool mul)

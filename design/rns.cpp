@@ -8,7 +8,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <vector>
 #include <iostream>
-#include <cmath>
 #include <ctime>
 
 #include <gmp.h>
@@ -20,23 +19,23 @@ typedef int64_t		int64;
 
 #define	P1		(127 * (uint32(1) << 24) + 1)
 #define	Q1		2164260865u		// p * q = 1 (mod 2^32)
-#define ONE1	33554430u		// Montgomery form of 1 is 2^32 (mod p)
+#define	R1		33554430u		// 2^32 mod p
 #define	RSQ1	402124772u		// (2^32)^2 mod p
 #define	H1		167772150u		// Montgomery form of the primitive root 5
-#define	IM1		200536044u		// Montgomery form of Montgomery form of I = 5^{(p - 1)/4} to convert input into Montgomery form
-#define	SQRTI1	856006302u		// Montgomery form of 5^{(p - 1)/8}
-#define	ISQRTI1	1626730317u		// i * sqrt(i)
+#define	IM1		200536044u		// MF of MF of I = 5^{(p - 1)/4} to convert input into MF
+#define	SQRTI1	856006302u		// MF of 5^{(p - 1)/8}
+#define	ISQRTI1	1626730317u		// MF of i * sqrt(i)
 
 #define	P2		(63 * (uint32(1) << 25) + 1)
 #define	Q2		2181038081u
-#define ONE2	67108862u
+#define	R2		67108862u
 #define	RSQ2	2111798781u
-#define	H2		335544310u		// Montgomery form of the primitive root 5
+#define	H2		335544310u		// MF of the primitive root 5
 #define	IM2		1036950657u
 #define	SQRTI2	338852760u
 #define	ISQRTI2	1090446030u
 
-template<uint32 P, uint32 Q, uint32 ONE, uint32 RSQ, uint32 H, uint32 IM, uint32 SQRTI, uint32 ISQRTI>
+template<uint32 P, uint32 Q, uint32 R, uint32 RSQ, uint32 H, uint32 IM, uint32 SQRTI, uint32 ISQRTI>
 class Zp
 {
 private:
@@ -102,7 +101,6 @@ public:
 
 	Zp add(const Zp & rhs) const { return Zp(_add(_n, rhs._n)); }
 	Zp sub(const Zp & rhs) const { return Zp(_sub(_n, rhs._n)); }
-
 	Zp mul(const Zp & rhs) const { return Zp(_mul(_n, rhs._n)); }
 	Zp sqr() const { return mul(*this); }
 
@@ -112,8 +110,8 @@ public:
 
 	Zp pow(const size_t e) const
 	{
-		if (e == 0) return Zp(ONE);
-		Zp r = Zp(ONE), y = *this;
+		if (e == 0) return Zp(R);	// MF of one is R
+		Zp r = Zp(R), y = *this;
 		for (size_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
 		r = r.mul(y);
 		return r;
@@ -177,8 +175,8 @@ public:
 	}
 };
 
-typedef Zp<P1, Q1, ONE1, RSQ1, H1, IM1, SQRTI1, ISQRTI1> Zp1;
-typedef Zp<P2, Q2, ONE2, RSQ2, H2, IM2, SQRTI2, ISQRTI2> Zp2;
+typedef Zp<P1, Q1, R1, RSQ1, H1, IM1, SQRTI1, ISQRTI1> Zp1;
+typedef Zp<P2, Q2, R2, RSQ2, H2, IM2, SQRTI2, ISQRTI2> Zp2;
 
 class Transform
 {
@@ -218,7 +216,7 @@ private:
 		Zp1 * const z1 = _vz1.data();
 		Zp2 * const z2 = _vz2.data();
 
-		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	// Not converted into Montgomery form such that output is converted out of Montgomery form
+		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	// Not converted into Montgomery form such that output is converted out of MF
 		const int32 m = _multiplier, base = _base;
 		int64 f = 0;
 		uint64 fmax = 0;
@@ -258,13 +256,13 @@ private:
 
 public:
 	Transform(const uint32_t b, const int n, const uint32_t a)
-		: _size(size_t(1) << n), _vz1(_size), _vz2(_size), _vwr1(_size / 1), _vwr2(_size / 1),
+		: _size(size_t(1) << n), _vz1(_size), _vz2(_size), _vwr1(_size / 2), _vwr2(_size / 2),
 		_base(int32(b)), _multiplier(int32(a)), _norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2)))
 	{
 		const size_t size = _size;
 
 		Zp1 * const wr1 = _vwr1.data();
-		for (size_t s = 1; s < size / 1; s *= 2)
+		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const Zp1 r_s = Zp1::primroot_n(4 * s);
 			for (size_t j = 0; j < s; ++j)
@@ -274,7 +272,7 @@ public:
 		}
 
 		Zp2 * const wr2 = _vwr2.data();
-		for (size_t s = 1; s < size / 1; s *= 2)
+		for (size_t s = 1; s < size / 2; s *= 2)
 		{
 			const Zp2 r_s = Zp2::primroot_n(4 * s);
 			for (size_t j = 0; j < s; ++j)
@@ -358,7 +356,7 @@ public:
 		return bOne;
 	}
 
-	__uint128_t fmax() const { return _fmax; }
+	uint64_t fmax() const { return _fmax; }
 };
 
 static void check(const uint32_t b, const int n, const uint64_t expectedResidue = 0)
@@ -392,7 +390,7 @@ static void check(const uint32_t b, const int n, const uint64_t expectedResidue 
 		std::cout << std::internal << std::hex << residue << std::dec << ")";
 	}
 	std::cout.precision(3);
-	std::cout << ", max = " << transform.fmax() * std::pow(2.0, -64) << ", " << duration << " sec.";
+	std::cout << ", max = " << transform.fmax() / double(uint64(-1)) << ", " << duration << " sec.";
 
 	if ((isPrime && (expectedResidue != 0)) || (!isPrime && (expectedResidue != residue))) std::cout << " ERROR!";
 

@@ -961,6 +961,20 @@ public:
 
 		setProfiling(false);
 	}
+
+public:
+	void info()
+	{
+		std::ostringstream ss; ss << "split:";
+		for (size_t i = 0, ns = _pSplit->getSize(); i < ns; ++i)
+		{
+			for (size_t j = 0, nps = _pSplit->getPartSize(i); j < nps; ++j) ss << " " << _pSplit->getPart(i, j);
+			if (i == _splitIndex) ss << " *";
+			ss << ",";
+		}
+		ss << " blk = " << _baseModBlk << ", wsize1 = " << _naLocalWS << ", wsize2 = " << _nbLocalWS << "." << std::endl;
+		pio::display(ss.str());
+	}
 };
 
 template<size_t RNS_SIZE>
@@ -1233,5 +1247,10 @@ public:
 	void copy(const size_t dst, const size_t src) const override
 	{
 		_pEngine->copy(dst, src);
+	}
+
+	void info() const override
+	{
+		_pEngine->info();
 	}
 };

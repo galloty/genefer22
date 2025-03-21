@@ -1241,27 +1241,28 @@ private:
 	EReturn bench(const uint32_t m, const size_t device, const size_t nthreads, const std::string & impl)
 	{
 #if defined(DTRANSFORM)
-		static constexpr uint32_t bm[13] = { 4200000, 3500000, 2800000, 2300000, 1900000, 1600000,
-		 									 1300000, 1100000, 880000, 730000, 600000, 600000, 510000 };
+		static constexpr uint32_t bm[12] = { 4200000, 3500000, 2800000, 2300000, 1900000, 1600000,
+		 									 1300000, 1100000, 880000, 730000, 600000, 510000 };
 #elif defined(IBDTRANSFORM)
-		static constexpr uint32_t bm[13] = { 500000000, 380000000, 290000000, 220000000, 160000000, 125000000,
-		 									 94000000, 71000000, 54000000, 41000000, 31000000, 31000000, 24000000 };
+		static constexpr uint32_t bm[12] = { 500000000, 380000000, 290000000, 220000000, 160000000, 125000000,
+		 									 94000000, 71000000, 54000000, 41000000, 31000000, 24000000 };
 #elif defined(SBDTRANSFORM)
-		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
-		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
+		static constexpr uint32_t bm[12] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
+		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
 #elif defined(NTTRANSFORM2)
-		static constexpr uint32_t bm[13] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496,
-		 									 5710946, 4038248, 2855472, 2019124, 1427736, 1427736, 1009562 };
+		static constexpr uint32_t bm[12] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496,
+		 									 5710946, 4038248, 2855472, 2019124, 1427736, 1009562 };
 #elif defined(NTTRANSFORM3)
-		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
-		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
+		static constexpr uint32_t bm[12] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
+		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
 #else
-		static constexpr uint32_t bm[13] = { 2000000000, 2000000000, 2000000000, 460000000, 400000000,
-											 250000000, 40000000, 9000000, 3500000, 1500000, 400000, 1200000, 500000 };
+		static constexpr uint32_t bm[12] = { 2000000000, 2000000000, 2000000000, 460000000, 460000000, 330000000,
+											 53000000, 14000000, 4000000, 2200000, 400000, 100000 };
 #endif
+
 		const size_t num_regs = 3;
 
-		const uint32_t b = bm[m - 12], n = (m <= 22) ? m : m - 1;
+		const uint32_t b = bm[m - 12], n = m;
 
 #if defined(GPU)
 		(void)nthreads; (void)impl;
@@ -1273,8 +1274,10 @@ private:
 
 		transform * const pTransform = _transform;
 
+		pTransform->info();
+
 		_gi = new gint(size_t(1) << n, b);
-		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 3, 20);
+		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 6, 50);
 		double testTime = 0, validTime = 0; bool isPrp = false; uint64_t res64 = 0, old64 = 0;
 		const EReturn qret = quick(exponent, testTime, validTime, isPrp, res64, old64);
 		mpz_clear(exponent);
@@ -1304,12 +1307,7 @@ private:
 
 			pTransform->copy(1, 0);	// synchro
 
-			const size_t memsize = 
-#if defined(GPU)
-			_transform->getMemSize();
-#else
-			_transform->getCacheSize();
-#endif
+			const size_t memsize = _transform->getCacheSize();
 
 			const double error = _transform->getError();
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (size_t(1) << n);

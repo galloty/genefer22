@@ -397,11 +397,17 @@ public:
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 
 			// if (g.check(33422122, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(33423102, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0xf0ab429cbbc7ed7dull
-			if (g.check(23445612, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x8054ae714890f6d0ull
-			if (g.check(16558530, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(33160956, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x9e2d51da6c7c3f54
+			// if (g.check(23448336, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x81cff004ace85caa
+			// if (g.check(16558530, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+
+			if (g.check(1000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x43c6cc5326e5c77f
+			if (g.check(1000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x4e43a5b93273c649
+			if (g.check(1000001960, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			if (g.check(1000032014, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
 			return;
+		
 			// for (size_t i = 0; i < count; ++i)
 			// {
 				// g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth);

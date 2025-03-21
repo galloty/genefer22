@@ -23,12 +23,18 @@ static const char * const src_ocl_kernels = \
 "	#define INLINE\n" \
 "#endif\n" \
 "\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	#define PTX_ASM	1\n" \
+"#endif\n" \
+"\n" \
 "#ifndef NSIZE\n" \
 "#define NSIZE		4096u\n" \
 "#define	LNSZ		12\n" \
-"#define	NORM1		2129666049u\n" \
-"#define	NORM2		2112897025u\n" \
-"#define	WOFFSET		2048u\n" \
+"#define	RNSSIZE		2\n" \
+"#define NORM1		2129666049u\n" \
+"#define NORM2		2112897025u\n" \
+"#define NORM3		2012774401u\n" \
+"#define WOFFSET		2048u\n" \
 "#define BLK32		32\n" \
 "#define BLK64		16\n" \
 "#define BLK128		8\n" \
@@ -54,10 +60,10 @@ static const char * const src_ocl_kernels = \
 "#define	Q1		2164260865u		// p * q = 1 (mod 2^32)\n" \
 "// #define	R1		33554430u		// 2^32 mod p\n" \
 "#define	RSQ1	402124772u		// (2^32)^2 mod p\n" \
-"// #define	H1		167772150u		// Montgomery form of the primitive root 5\n" \
-"#define	IM1		200536044u		// MF of MF of I = 5^{(p - 1)/4} to convert input into MF\n" \
-"#define	SQRTI1	856006302u		// MF of 5^{(p - 1)/8}\n" \
-"#define	ISQRTI1	1626730317u		// MF of i * sqrt(i)\n" \
+"// #define	H1		100663290u		// Montgomery form of the primitive root 3\n" \
+"#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF\n" \
+"#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}\n" \
+"#define	ISQRTI1	856006302u		// MF of i * sqrt(i)\n" \
 "\n" \
 "// --- Z/(63*2^25 + 1)Z ---\n" \
 "\n" \
@@ -70,13 +76,25 @@ static const char * const src_ocl_kernels = \
 "#define	SQRTI2	338852760u\n" \
 "#define	ISQRTI2	1090446030u\n" \
 "\n" \
+"// --- Z/(15*2^27 + 1)Z ---\n" \
+"\n" \
+"#define	P3		2013265921u\n" \
+"#define	Q3		2281701377u\n" \
+"// #define	R3		268435454u\n" \
+"#define	RSQ3	1172168163u\n" \
+"// #define	H3		268435390u		// MF of the primitive root 31\n" \
+"#define	IM3		734725699u\n" \
+"#define	SQRTI3	1032137103u\n" \
+"#define	ISQRTI3	1964242958u\n" \
+"\n" \
 "// ---\n" \
 "\n" \
 "#define	PQ1		(uint32_2)(P1, Q1)\n" \
 "#define	PQ2		(uint32_2)(P2, Q2)\n" \
+"#define	PQ3		(uint32_2)(P3, Q3)\n" \
 "\n" \
-"__constant uint32_2 g_pq[2] = { PQ1, PQ2 };\n" \
-"__constant uint32_4 g_f0[2] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, IM2, SQRTI2, ISQRTI2) };\n" \
+"__constant uint32_2 g_pq[3] = { PQ1, PQ2, PQ3 };\n" \
+"__constant uint32_4 g_f0[3] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, IM2, SQRTI2, ISQRTI2), (uint32_4)(RSQ3, IM3, SQRTI3, ISQRTI3) };\n" \
 "\n" \
 "INLINE uint32 addmod(const uint32 lhs, const uint32 rhs, const uint32 p)\n" \
 "{\n" \
@@ -102,6 +120,78 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "INLINE int32 get_int(const uint32 n, const uint32 p) { return (n >= p / 2) ? (int32)(n - p) : (int32)(n); }	// ? 2n >= p ?\n" \
 "INLINE uint32 set_int(const int32 i, const uint32 p) { return (i < 0) ? ((uint32)(i) + p) : (uint32)(i); }\n" \
+"\n" \
+"// --- uint96/int96 ---\n" \
+"\n" \
+"typedef struct { uint64 s0; uint32 s1; } uint96;\n" \
+"typedef struct { uint64 s0; int32 s1; } int96;\n" \
+"\n" \
+"INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
+"INLINE uint96 uint96_set(const uint64 s0, const int32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
+"\n" \
+"INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int32)(x.s1); return r; }\n" \
+"INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint32)(x.s1); return r; }\n" \
+"\n" \
+"INLINE bool int96_is_neg(const int96 x) { return (x.s1 < 0); }\n" \
+"\n" \
+"INLINE bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }\n" \
+"\n" \
+"INLINE int96 int96_neg(const int96 x)\n" \
+"{\n" \
+"	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - ((x.s0 != 0) ? 1 : 0);\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE uint96 int96_abs(const int96 x)\n" \
+"{\n" \
+"	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;\n" \
+"	return int96_u(t);\n" \
+"}\n" \
+"\n" \
+"INLINE int96 int96_add(const int96 x, const int96 y)\n" \
+"{\n" \
+"	int96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
+"	asm volatile (\"addc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"#else\n" \
+"	const uint64 s0 = x.s0 + y.s0;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + y.s1 + ((s0 < y.s0) ? 1 : 0);\n" \
+"#endif\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE uint96 uint96_add_64(const uint96 x, const ulong y)\n" \
+"{\n" \
+"	uint96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
+"	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
+"#else\n" \
+"	const uint64 s0 = x.s0 + y;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + ((s0 < y) ? 1 : 0);\n" \
+"#endif\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE int96 uint96_subi(const uint96 x, const uint96 y)\n" \
+"{\n" \
+"	int96 r;\n" \
+"#ifdef PTX_ASM\n" \
+"	asm volatile (\"sub.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
+"	asm volatile (\"subc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"#else\n" \
+"	r.s0 = x.s0 - y.s0; r.s1 = (int32)(x.s1 - y.s1 - ((x.s0 < y.s0) ? 1 : 0));\n" \
+"#endif\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE uint96 uint96_mul_64_32(const uint64 x, const uint32 y)\n" \
+"{\n" \
+"	const uint64 l = (uint32)(x) * (uint64)(y), h = (x >> 32) * y + (l >> 32);\n" \
+"	uint96 r; r.s0 = (h << 32) | (uint32)(l); r.s1 = (uint32)(h >> 32);\n" \
+"	return r;\n" \
+"}\n" \
 "\n" \
 "// --- transform/macro ---\n" \
 "\n" \
@@ -1143,6 +1233,21 @@ static const char * const src_ocl_kernels = \
 "	return s ? -(int32)(r_l) : (int32)(r_l);\n" \
 "}\n" \
 "\n" \
+"INLINE int32 reduce96(int96 * f, const uint32 b, const uint32 b_inv, const int b_s)\n" \
+"{\n" \
+"	const uint96 t = int96_abs(*f);\n" \
+"	const uint64 t_h = ((uint64)(t.s1) << (64 - 29)) | (t.s0 >> 29);\n" \
+"	const uint32 t_l = (uint32)(t.s0) & ((1u << 29) - 1);\n" \
+"\n" \
+"	uint32 d_h, r_h = barrett(t_h, b, b_inv, b_s, &d_h);\n" \
+"	uint32 d_l, r_l = barrett(((uint64)(r_h) << 29) | t_l, b, b_inv, b_s, &d_l);\n" \
+"	const uint64 d = ((uint64)(d_h) << 29) | d_l;\n" \
+"\n" \
+"	const bool s = int96_is_neg(*f);\n" \
+"	*f = int96_set_si(s ? -(int64)(d) : (int64)(d));\n" \
+"	return s ? -(int32)(r_l) : (int32)(r_l);\n" \
+"}\n" \
+"\n" \
 "INLINE int64 garner2(const uint32 r1, const uint32 r2)\n" \
 "{\n" \
 "	const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)\n" \
@@ -1150,6 +1255,21 @@ static const char * const src_ocl_kernels = \
 "	uint32 u12 = mulmod(submod(r1, r2, P1), mfInvP2_P1, PQ1);	// P2 < P1\n" \
 "	const uint64 n = r2 + u12 * (uint64)(P2);\n" \
 "	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);\n" \
+"}\n" \
+"\n" \
+"INLINE int96 garner3(const uint r1, const uint r2, const uint r3)\n" \
+"{\n" \
+"	// Montgomery form of 1 / Pi (mod Pj)\n" \
+"	const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;\n" \
+"	const uint64 P2P3 = P2 * (uint64)(P3);\n" \
+"	const uint96 P1P2P3 = uint96_set(13049742876517335041ul, 491581440u);\n" \
+"	const uint96 P1P2P3_2 = uint96_set(6524871438258667520ul, 245790720u);\n" \
+"\n" \
+"	const uint32 u13 = mulmod(submod(r1, r3, P1), mfInvP3_P1, PQ1);\n" \
+"	const uint32 u23 = mulmod(submod(r2, r3, P2), mfInvP3_P2, PQ2);\n" \
+"	const uint32 u123 = mulmod(submod(u13, u23, P1), mfInvP2_P1, PQ1);\n" \
+"	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);\n" \
+"	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1162,25 +1282,51 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "	prefetch(zi, (size_t)blk);\n" \
 "\n" \
+"#if RNSSIZE == 2\n" \
+"\n" \
 "	int64 f = 0;\n" \
 "\n" \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		const uint32 u1 = mulmod(zi[j], NORM1, PQ1);\n" \
-"		const uint32 u2 = mulmod(zi[j + NSIZE], NORM2, PQ2);\n" \
+"		const uint32 u1 = mulmod(zi[j + 0 * NSIZE], NORM1, PQ1);\n" \
+"		const uint32 u2 = mulmod(zi[j + 1 * NSIZE], NORM2, PQ2);\n" \
 "		int64 l = garner2(u1, u2);\n" \
 "		if (sblk < 0) l += l;\n" \
 "		f += l;\n" \
 "		const int32 r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);\n" \
-"\n" \
+"		zi[j + 0 * NSIZE] = set_int(r, P1);\n" \
+"		zi[j + 1 * NSIZE] = set_int(r, P2);\n" \
 "		++j;\n" \
 "	} while (j != blk);\n" \
 "\n" \
 "	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
-"	if (i == 0) f = -f;		// a_n = -a_0\n" \
-"	c[i] = f;\n" \
+"	c[i] = (i == 0) ? -f : f;\n" \
+"\n" \
+"#else\n" \
+"\n" \
+"	int96 f = int96_set_si(0);\n" \
+"\n" \
+"	sz_t j = 0;\n" \
+"	do\n" \
+"	{\n" \
+"		const uint32 u1 = mulmod(zi[j + 0 * NSIZE], NORM1, PQ1);\n" \
+"		const uint32 u2 = mulmod(zi[j + 1 * NSIZE], NORM2, PQ2);\n" \
+"		const uint32 u3 = mulmod(zi[j + 2 * NSIZE], NORM3, PQ3);\n" \
+"		int96 l = garner3(u1, u2, u3);\n" \
+"		if (sblk < 0) l = int96_add(l, l);\n" \
+"		f = int96_add(f, l);\n" \
+"		const int32 r = reduce96(&f, b, b_inv, b_s);\n" \
+"		zi[j + 0 * NSIZE] = set_int(r, P1);\n" \
+"		zi[j + 1 * NSIZE] = set_int(r, P2);\n" \
+"		zi[j + 2 * NSIZE] = set_int(r, P3);\n" \
+"		++j;\n" \
+"	} while (j != blk);\n" \
+"\n" \
+"	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
+"	c[i] = (i == 0) ? -(long)f.s0 : (long)f.s0;\n" \
+"\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1197,15 +1343,21 @@ static const char * const src_ocl_kernels = \
 "	{\n" \
 "		f += get_int(zi[j], P1);\n" \
 "		const int32 r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);\n" \
-"\n" \
+"		zi[j + 0 * NSIZE] = set_int(r, P1);\n" \
+"		zi[j + 1 * NSIZE] = set_int(r, P2);\n" \
+"#if RNSSIZE == 3\n" \
+"		zi[j + 2 * NSIZE] = set_int(r, P3);\n" \
+"#endif\n" \
 "		if (f == 0) return;\n" \
 "		++j;\n" \
 "	} while (j != blk - 1);\n" \
 "\n" \
 "	const int32 r = (int32)(f);\n" \
-"	zi[blk - 1] = addmod(zi[blk - 1], set_int(r, P1), P1);\n" \
-"	zi[blk - 1 + NSIZE] = addmod(zi[blk - 1 + NSIZE], set_int(r, P2), P2);\n" \
+"	zi[blk - 1 + 0 * NSIZE] = addmod(zi[blk - 1 + 0 * NSIZE], set_int(r, P1), P1);\n" \
+"	zi[blk - 1 + 1 * NSIZE] = addmod(zi[blk - 1 + 1 * NSIZE], set_int(r, P2), P2);\n" \
+"#if RNSSIZE == 3\n" \
+"	zi[blk - 1 + 2 * NSIZE] = addmod(zi[blk - 1 + 2 * NSIZE], set_int(r, P3), P3);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1222,16 +1374,18 @@ static const char * const src_ocl_kernels = \
 "	sz_t j = 0;\n" \
 "	do\n" \
 "	{\n" \
-"		f += garner2(zi[j], zi[j + NSIZE]) * a;\n" \
+"		f += get_int(zi[j], P1) * (int64)(a);\n" \
 "		const int32 r = reduce64(&f, b, b_inv, b_s);\n" \
-"		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);\n" \
-"\n" \
+"		zi[j + 0 * NSIZE] = set_int(r, P1);\n" \
+"		zi[j + 1 * NSIZE] = set_int(r, P2);\n" \
+"#if RNSSIZE == 3\n" \
+"		zi[j + 2 * NSIZE] = set_int(r, P3);\n" \
+"#endif\n" \
 "		++j;\n" \
 "	} while (j != blk);\n" \
 "\n" \
 "	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);\n" \
-"	if (i == 0) f = -f;		// a_n = -a_0\n" \
-"	c[i] = f;\n" \
+"	c[i] = (i == 0) ? -f : f;\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

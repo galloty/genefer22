@@ -236,14 +236,6 @@ private:
 		const Zp1 u123 = u13.sub(Zp1(u23.get())).mul(Zp1(mfInvP2_P1));	// P3 < P1
 		const __uint128_t n = __uint128_t(P2P3) * u123.get() + (u23.get() * uint64(P3) + r3.get());
 		return (n > P1P2P3 / 2) ? __int128_t(n - P1P2P3) : __int128_t(n);
-
-		// const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
-		// const uint u23 = mul_P2(sub_P2(r2, r3), InvP3_P2);
-		// const uint u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);
-		// const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (ulong)P3 + r3);
-		// const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
-		// const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
-		// return r;
 	}
 
 

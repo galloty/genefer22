@@ -11,12 +11,18 @@ Please give feedback to the authors if improvement is realized. It is distribute
 	#define INLINE
 #endif
 
+#ifdef __NV_CL_C_VERSION
+	#define PTX_ASM	1
+#endif
+
 #ifndef NSIZE
 #define NSIZE		4096u
 #define	LNSZ		12
-#define	NORM1		2129666049u
-#define	NORM2		2112897025u
-#define	WOFFSET		2048u
+#define	RNSSIZE		2
+#define NORM1		2129666049u
+#define NORM2		2112897025u
+#define NORM3		2012774401u
+#define WOFFSET		2048u
 #define BLK32		32
 #define BLK64		16
 #define BLK128		8
@@ -42,10 +48,10 @@ typedef uint4	uint32_4;
 #define	Q1		2164260865u		// p * q = 1 (mod 2^32)
 // #define	R1		33554430u		// 2^32 mod p
 #define	RSQ1	402124772u		// (2^32)^2 mod p
-// #define	H1		167772150u		// Montgomery form of the primitive root 5
-#define	IM1		200536044u		// MF of MF of I = 5^{(p - 1)/4} to convert input into MF
-#define	SQRTI1	856006302u		// MF of 5^{(p - 1)/8}
-#define	ISQRTI1	1626730317u		// MF of i * sqrt(i)
+// #define	H1		100663290u		// Montgomery form of the primitive root 3
+#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1	856006302u		// MF of i * sqrt(i)
 
 // --- Z/(63*2^25 + 1)Z ---
 
@@ -58,13 +64,25 @@ typedef uint4	uint32_4;
 #define	SQRTI2	338852760u
 #define	ISQRTI2	1090446030u
 
+// --- Z/(15*2^27 + 1)Z ---
+
+#define	P3		2013265921u
+#define	Q3		2281701377u
+// #define	R3		268435454u
+#define	RSQ3	1172168163u
+// #define	H3		268435390u		// MF of the primitive root 31
+#define	IM3		734725699u
+#define	SQRTI3	1032137103u
+#define	ISQRTI3	1964242958u
+
 // ---
 
 #define	PQ1		(uint32_2)(P1, Q1)
 #define	PQ2		(uint32_2)(P2, Q2)
+#define	PQ3		(uint32_2)(P3, Q3)
 
-__constant uint32_2 g_pq[2] = { PQ1, PQ2 };
-__constant uint32_4 g_f0[2] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, IM2, SQRTI2, ISQRTI2) };
+__constant uint32_2 g_pq[3] = { PQ1, PQ2, PQ3 };
+__constant uint32_4 g_f0[3] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, IM2, SQRTI2, ISQRTI2), (uint32_4)(RSQ3, IM3, SQRTI3, ISQRTI3) };
 
 INLINE uint32 addmod(const uint32 lhs, const uint32 rhs, const uint32 p)
 {
@@ -90,6 +108,78 @@ INLINE uint32 sqrmod(const uint32 lhs, const uint32_2 pq) { return mulmod(lhs, l
 
 INLINE int32 get_int(const uint32 n, const uint32 p) { return (n >= p / 2) ? (int32)(n - p) : (int32)(n); }	// ? 2n >= p ?
 INLINE uint32 set_int(const int32 i, const uint32 p) { return (i < 0) ? ((uint32)(i) + p) : (uint32)(i); }
+
+// --- uint96/int96 ---
+
+typedef struct { uint64 s0; uint32 s1; } uint96;
+typedef struct { uint64 s0; int32 s1; } int96;
+
+INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }
+INLINE uint96 uint96_set(const uint64 s0, const int32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
+
+INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int32)(x.s1); return r; }
+INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint32)(x.s1); return r; }
+
+INLINE bool int96_is_neg(const int96 x) { return (x.s1 < 0); }
+
+INLINE bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }
+
+INLINE int96 int96_neg(const int96 x)
+{
+	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - ((x.s0 != 0) ? 1 : 0);
+	return r;
+}
+
+INLINE uint96 int96_abs(const int96 x)
+{
+	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;
+	return int96_u(t);
+}
+
+INLINE int96 int96_add(const int96 x, const int96 y)
+{
+	int96 r;
+#ifdef PTX_ASM
+	asm volatile ("add.cc.u64 %0, %1, %2;" : "=l" (r.s0) : "l" (x.s0), "l" (y.s0));
+	asm volatile ("addc.s32 %0, %1, %2;" : "=r" (r.s1) : "r" (x.s1), "r" (y.s1));
+#else
+	const uint64 s0 = x.s0 + y.s0;
+	r.s0 = s0; r.s1 = x.s1 + y.s1 + ((s0 < y.s0) ? 1 : 0);
+#endif
+	return r;
+}
+
+INLINE uint96 uint96_add_64(const uint96 x, const ulong y)
+{
+	uint96 r;
+#ifdef PTX_ASM
+	asm volatile ("add.cc.u64 %0, %1, %2;" : "=l" (r.s0) : "l" (x.s0), "l" (y));
+	asm volatile ("addc.u32 %0, %1, 0;" : "=r" (r.s1) : "r" (x.s1));
+#else
+	const uint64 s0 = x.s0 + y;
+	r.s0 = s0; r.s1 = x.s1 + ((s0 < y) ? 1 : 0);
+#endif
+	return r;
+}
+
+INLINE int96 uint96_subi(const uint96 x, const uint96 y)
+{
+	int96 r;
+#ifdef PTX_ASM
+	asm volatile ("sub.cc.u64 %0, %1, %2;" : "=l" (r.s0) : "l" (x.s0), "l" (y.s0));
+	asm volatile ("subc.s32 %0, %1, %2;" : "=r" (r.s1) : "r" (x.s1), "r" (y.s1));
+#else
+	r.s0 = x.s0 - y.s0; r.s1 = (int32)(x.s1 - y.s1 - ((x.s0 < y.s0) ? 1 : 0));
+#endif
+	return r;
+}
+
+INLINE uint96 uint96_mul_64_32(const uint64 x, const uint32 y)
+{
+	const uint64 l = (uint32)(x) * (uint64)(y), h = (x >> 32) * y + (l >> 32);
+	uint96 r; r.s0 = (h << 32) | (uint32)(l); r.s1 = (uint32)(h >> 32);
+	return r;
+}
 
 // --- transform/macro ---
 
@@ -1131,6 +1221,21 @@ INLINE int32 reduce64(int64 * f, const uint32 b, const uint32 b_inv, const int b
 	return s ? -(int32)(r_l) : (int32)(r_l);
 }
 
+INLINE int32 reduce96(int96 * f, const uint32 b, const uint32 b_inv, const int b_s)
+{
+	const uint96 t = int96_abs(*f);
+	const uint64 t_h = ((uint64)(t.s1) << (64 - 29)) | (t.s0 >> 29);
+	const uint32 t_l = (uint32)(t.s0) & ((1u << 29) - 1);
+
+	uint32 d_h, r_h = barrett(t_h, b, b_inv, b_s, &d_h);
+	uint32 d_l, r_l = barrett(((uint64)(r_h) << 29) | t_l, b, b_inv, b_s, &d_l);
+	const uint64 d = ((uint64)(d_h) << 29) | d_l;
+
+	const bool s = int96_is_neg(*f);
+	*f = int96_set_si(s ? -(int64)(d) : (int64)(d));
+	return s ? -(int32)(r_l) : (int32)(r_l);
+}
+
 INLINE int64 garner2(const uint32 r1, const uint32 r2)
 {
 	const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)
@@ -1138,6 +1243,21 @@ INLINE int64 garner2(const uint32 r1, const uint32 r2)
 	uint32 u12 = mulmod(submod(r1, r2, P1), mfInvP2_P1, PQ1);	// P2 < P1
 	const uint64 n = r2 + u12 * (uint64)(P2);
 	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);
+}
+
+INLINE int96 garner3(const uint r1, const uint r2, const uint r3)
+{
+	// Montgomery form of 1 / Pi (mod Pj)
+	const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;
+	const uint64 P2P3 = P2 * (uint64)(P3);
+	const uint96 P1P2P3 = uint96_set(13049742876517335041ul, 491581440u);
+	const uint96 P1P2P3_2 = uint96_set(6524871438258667520ul, 245790720u);
+
+	const uint32 u13 = mulmod(submod(r1, r3, P1), mfInvP3_P1, PQ1);
+	const uint32 u23 = mulmod(submod(r2, r3, P2), mfInvP3_P2, PQ2);
+	const uint32 u123 = mulmod(submod(u13, u23, P1), mfInvP2_P1, PQ1);
+	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);
+	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
 }
 
 __kernel
@@ -1150,25 +1270,51 @@ void normalize1(__global uint * restrict const z, __global long * restrict const
 
 	prefetch(zi, (size_t)blk);
 
+#if RNSSIZE == 2
+
 	int64 f = 0;
 
 	sz_t j = 0;
 	do
 	{
-		const uint32 u1 = mulmod(zi[j], NORM1, PQ1);
-		const uint32 u2 = mulmod(zi[j + NSIZE], NORM2, PQ2);
+		const uint32 u1 = mulmod(zi[j + 0 * NSIZE], NORM1, PQ1);
+		const uint32 u2 = mulmod(zi[j + 1 * NSIZE], NORM2, PQ2);
 		int64 l = garner2(u1, u2);
 		if (sblk < 0) l += l;
 		f += l;
 		const int32 r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);
-
+		zi[j + 0 * NSIZE] = set_int(r, P1);
+		zi[j + 1 * NSIZE] = set_int(r, P2);
 		++j;
 	} while (j != blk);
 
 	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
-	if (i == 0) f = -f;		// a_n = -a_0
-	c[i] = f;
+	c[i] = (i == 0) ? -f : f;
+
+#else
+
+	int96 f = int96_set_si(0);
+
+	sz_t j = 0;
+	do
+	{
+		const uint32 u1 = mulmod(zi[j + 0 * NSIZE], NORM1, PQ1);
+		const uint32 u2 = mulmod(zi[j + 1 * NSIZE], NORM2, PQ2);
+		const uint32 u3 = mulmod(zi[j + 2 * NSIZE], NORM3, PQ3);
+		int96 l = garner3(u1, u2, u3);
+		if (sblk < 0) l = int96_add(l, l);
+		f = int96_add(f, l);
+		const int32 r = reduce96(&f, b, b_inv, b_s);
+		zi[j + 0 * NSIZE] = set_int(r, P1);
+		zi[j + 1 * NSIZE] = set_int(r, P2);
+		zi[j + 2 * NSIZE] = set_int(r, P3);
+		++j;
+	} while (j != blk);
+
+	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
+	c[i] = (i == 0) ? -(long)f.s0 : (long)f.s0;
+
+#endif
 }
 
 __kernel
@@ -1185,15 +1331,21 @@ void normalize2(__global uint * restrict const z, __global const long * restrict
 	{
 		f += get_int(zi[j], P1);
 		const int32 r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);
-
+		zi[j + 0 * NSIZE] = set_int(r, P1);
+		zi[j + 1 * NSIZE] = set_int(r, P2);
+#if RNSSIZE == 3
+		zi[j + 2 * NSIZE] = set_int(r, P3);
+#endif
 		if (f == 0) return;
 		++j;
 	} while (j != blk - 1);
 
 	const int32 r = (int32)(f);
-	zi[blk - 1] = addmod(zi[blk - 1], set_int(r, P1), P1);
-	zi[blk - 1 + NSIZE] = addmod(zi[blk - 1 + NSIZE], set_int(r, P2), P2);
+	zi[blk - 1 + 0 * NSIZE] = addmod(zi[blk - 1 + 0 * NSIZE], set_int(r, P1), P1);
+	zi[blk - 1 + 1 * NSIZE] = addmod(zi[blk - 1 + 1 * NSIZE], set_int(r, P2), P2);
+#if RNSSIZE == 3
+	zi[blk - 1 + 2 * NSIZE] = addmod(zi[blk - 1 + 2 * NSIZE], set_int(r, P3), P3);
+#endif
 }
 
 __kernel
@@ -1210,16 +1362,18 @@ void mulscalar(__global uint * restrict const z, __global long * restrict const 
 	sz_t j = 0;
 	do
 	{
-		f += garner2(zi[j], zi[j + NSIZE]) * a;
+		f += get_int(zi[j], P1) * (int64)(a);
 		const int32 r = reduce64(&f, b, b_inv, b_s);
-		zi[j] = set_int(r, P1); zi[j + NSIZE] = set_int(r, P2);
-
+		zi[j + 0 * NSIZE] = set_int(r, P1);
+		zi[j + 1 * NSIZE] = set_int(r, P2);
+#if RNSSIZE == 3
+		zi[j + 2 * NSIZE] = set_int(r, P3);
+#endif
 		++j;
 	} while (j != blk);
 
 	const sz_t i = (idx + 1) & ((sz_t)get_global_size(0) - 1);
-	if (i == 0) f = -f;		// a_n = -a_0
-	c[i] = f;
+	c[i] = (i == 0) ? -f : f;
 }
 
 __kernel

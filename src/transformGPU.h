@@ -972,7 +972,7 @@ class transformGPU : public transform
 	using RNS_We = RNSe;
 
 private:
-	const size_t _mem_size;
+	const size_t _mem_size, _cache_size;
 	const size_t _num_regs;
 	RNS * const _z;
 	RNSe * const _ze;
@@ -982,7 +982,8 @@ public:
 	transformGPU(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
 		: transform(size_t(1) << n, n, b, (RNS_SIZE == 3) ? EKind::NTT3 : EKind::NTT2),
-		_mem_size((size_t(1) << n) * num_regs * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
+		_mem_size((size_t(1) << n) * (num_regs + 1 + 2) * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0)) + (size_t(1) << n) / 4 * sizeof(cl_long)),
+		_cache_size((size_t(1) << n) * 3 * (sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0))), _num_regs(num_regs),
 		_z(new RNS[(size_t(1) << n) * num_regs]), _ze((RNS_SIZE == 3) ? new RNSe[(size_t(1) << n) * num_regs] : nullptr)
 	{
 		const size_t size = getSize();
@@ -1130,7 +1131,7 @@ public:
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
-	size_t getCacheSize() const override { return 0; }
+	size_t getCacheSize() const override { return _cache_size; }
 
 protected:
 	void getZi(int32_t * const zi) const override

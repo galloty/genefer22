@@ -32,10 +32,10 @@ typedef cl_long		int64;
 #define	Q1S			2164260865u		// p * q = 1 (mod 2^32)
 #define	R1S			33554430u		// 2^32 mod p
 // #define	RSQ1S		402124772u		// (2^32)^2 mod p
-#define	H1S			167772150u		// Montgomery form of the primitive root 5
-// #define	IM1S		200536044u		// MF of MF of I = 5^{(p - 1)/4} to convert input into MF
-// #define	SQRTI1S		856006302u		// MF of 5^{(p - 1)/8}
-// #define	ISQRTI1S	1626730317u		// MF of i * sqrt(i)
+#define	H1S			100663290u		// Montgomery form of the primitive root 3
+// #define	IM1S		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+// #define	SQRTI1S		1626730317u		// MF of 3^{(p - 1)/8}
+// #define	ISQRTI1S	856006302u		// MF of i * sqrt(i)
 
 #define	P2S			(63 * (uint32(1) << 25) + 1)
 #define	Q2S			2181038081u
@@ -45,6 +45,15 @@ typedef cl_long		int64;
 // #define	IM2S		1036950657u
 // #define	SQRTI2S		338852760u
 // #define	ISQRTI2S	1090446030u
+
+#define	P3S			(15 * (uint32(1) << 27) + 1)
+#define	Q3S			2281701377u
+#define	R3S			268435454u
+// #define	RSQ3S		1172168163u
+#define	H3S			268435390u		// MF of the primitive root 31
+// #define	IM3S		734725699u
+// #define	SQRTI3S		1032137103u
+// #define	ISQRTI3S	1964242958u
 
 class ZP
 {
@@ -97,6 +106,7 @@ public:
 
 typedef ZPT<P1S, Q1S, R1S, H1S> ZP1;
 typedef ZPT<P2S, Q2S, R2S, H2S> ZP2;
+typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
@@ -731,7 +741,7 @@ public:
 		{
 			Z[0 * n + i] = ZP1().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.25)));
 			if (RNS_SIZE >= 2) Z[1 * n + i] = ZP2().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.33)));
-			// if (RNS_SIZE >= 3) Z[2 * n + i] = ZP3().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.47)));
+			if (RNS_SIZE >= 3) Z[2 * n + i] = ZP3().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.47)));
 		}
 
 		setProfiling(true);
@@ -846,7 +856,7 @@ public:
 			if (i == _splitIndex) ss << " *";
 			ss << ",";
 		}
-		ss << " baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
+		ss << " blk = " << _baseModBlk << ", wsize1 = " << _naLocalWS << ", wsize2 = " << _nbLocalWS << "." << std::endl;
 		pio::display(ss.str());
 	}
 };
@@ -855,7 +865,7 @@ template<size_t RNS_SIZE>
 class transformGPUs : public transform
 {
 private:
-	const size_t _mem_size;
+	const size_t _mem_size, _cache_size;
 	const size_t _num_regs;
 	ZP * const _z;
 	engines<RNS_SIZE> * _pEngine = nullptr;
@@ -864,7 +874,9 @@ public:
 	transformGPUs(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
 		: transform(size_t(1) << n, n, b, (RNS_SIZE == 2) ? EKind::NTT2s : EKind::NTT3s),
-		_mem_size(RNS_SIZE * (size_t(1) << n) * num_regs * sizeof(ZP)), _num_regs(num_regs), _z(new ZP[RNS_SIZE * (size_t(1) << n) * num_regs])
+		_mem_size(RNS_SIZE * (size_t(1) << n) * (2 * num_regs + 3) / 2 * sizeof(ZP) + (size_t(1) << n) / 4 * sizeof(cl_long)),
+		_cache_size(RNS_SIZE * (size_t(1) << n) * 3 / 2 * sizeof(ZP)), _num_regs(num_regs),
+		_z(new ZP[RNS_SIZE * (size_t(1) << n) * num_regs])
 	{
 		const size_t size = getSize();
 
@@ -877,8 +889,11 @@ public:
 
 		src << "#define NSIZE\t" << (1u << n) << "u" << std::endl;
 		src << "#define LNSZ\t" << n << std::endl;
+		src << "#define RNSSIZE\t" << RNS_SIZE << std::endl;
+
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
+		src << "#define NORM3\t" << ZP3::norm(uint32(size / 2)).get() << "u" << std::endl;
 
 		src << "#define WOFFSET\t" << size / 2 << "u" << std::endl;
 
@@ -924,6 +939,20 @@ public:
 		_pEngine->writeMemory_w(wr2, 1);
 		delete[] wr2;
 
+		if (RNS_SIZE == 3)
+		{
+			ZP3 * const wr3 = new ZP3[size / 2];
+			for (size_t s = 1; s < size / 2; s *= 2)
+			{
+				const ZP3 r_s = ZP3::primroot_n(4 * s);
+				for (size_t j = 0; j < s; ++j)
+				{
+					wr3[s + j] = r_s.pow(bitRev(j, 2 * s) + 1);
+				}
+			}
+			_pEngine->writeMemory_w(wr3, 2);
+			delete[] wr3;
+		}
 		_pEngine->tune(b);
 	}
 
@@ -938,7 +967,7 @@ public:
 	}
 
 	size_t getMemSize() const override { return _mem_size; }
-	size_t getCacheSize() const override { return 0; }
+	size_t getCacheSize() const override { return _cache_size; }
 
 protected:
 	void getZi(int32_t * const zi) const override
@@ -963,7 +992,7 @@ protected:
 		{
 			z[0 * size + i] = ZP1().set_int(zi[i]);
 			if (RNS_SIZE >= 2) z[1 * size + i] = ZP2().set_int(zi[i]);
-			// if (RNS_SIZE >= 3) z[2 * size + i] = ZP3().set_int(zi[i]);
+			if (RNS_SIZE >= 3) z[2 * size + i] = ZP3().set_int(zi[i]);
 		}
 		_pEngine->writeMemory_z(z);
 	}

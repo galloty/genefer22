@@ -21,10 +21,10 @@ typedef int64_t		int64;
 #define	Q1		2164260865u		// p * q = 1 (mod 2^32)
 #define	R1		33554430u		// 2^32 mod p
 #define	RSQ1	402124772u		// (2^32)^2 mod p
-#define	H1		167772150u		// Montgomery form of the primitive root 5
-#define	IM1		200536044u		// MF of MF of I = 5^{(p - 1)/4} to convert input into MF
-#define	SQRTI1	856006302u		// MF of 5^{(p - 1)/8}
-#define	ISQRTI1	1626730317u		// MF of i * sqrt(i)
+#define	H1		100663290u		// Montgomery form of the primitive root 3
+#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1	856006302u		// MF of i * sqrt(i)
 
 #define	P2		(63 * (uint32(1) << 25) + 1)
 #define	Q2		2181038081u
@@ -34,6 +34,16 @@ typedef int64_t		int64;
 #define	IM2		1036950657u
 #define	SQRTI2	338852760u
 #define	ISQRTI2	1090446030u
+
+#define	P3		(15 * (uint32(1) << 27) + 1)
+#define	Q3		2281701377u
+#define	R3		268435454u
+#define	RSQ3	1172168163u
+#define	H3		268435390u		// MF of the primitive root 31
+#define	IM3		734725699u
+#define	SQRTI3	1032137103u
+#define	ISQRTI3	1964242958u
+
 
 template<uint32 P, uint32 Q, uint32 R, uint32 RSQ, uint32 H, uint32 IM, uint32 SQRTI, uint32 ISQRTI>
 class Zp
@@ -177,6 +187,7 @@ public:
 
 typedef Zp<P1, Q1, R1, RSQ1, H1, IM1, SQRTI1, ISQRTI1> Zp1;
 typedef Zp<P2, Q2, R2, RSQ2, H2, IM2, SQRTI2, ISQRTI2> Zp2;
+typedef Zp<P3, Q3, R3, RSQ3, H3, IM3, SQRTI3, ISQRTI3> Zp3;
 
 class Transform
 {
@@ -184,13 +195,16 @@ private:
 	const size_t _size;
 	std::vector<Zp1> _vz1;
 	std::vector<Zp2> _vz2;
+	std::vector<Zp3> _vz3;
 	std::vector<Zp1> _vwr1;
 	std::vector<Zp2> _vwr2;
+	std::vector<Zp3> _vwr3;
 	const int32 _base;
 	const int32 _multiplier;
 	const Zp1 _norm1;
 	const Zp2 _norm2;
-	uint64 _fmax;
+	const Zp3 _norm3;
+	__uint128_t _fmax;
 
 private:
 	static constexpr size_t bitrev(const size_t i, const size_t n)
@@ -203,37 +217,64 @@ private:
 	static int64 garner2(const Zp1 r1, const Zp2 r2)
 	{
 		const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)
-		const uint64 P1P2 = P1 * (uint64)(P2);
+		const uint64 P1P2 = P1 * uint64(P2);
 
-		Zp1 u12 = r1.sub(Zp1(r2.get())).mul(Zp1(mfInvP2_P1));	// P2 < P1
-		const uint64 n = r2.get() + u12.get() * uint64(P2);
+		const Zp1 u = r1.sub(Zp1(r2.get())).mul(Zp1(mfInvP2_P1));	// P2 < P1
+		const uint64 n = r2.get() + u.get() * uint64(P2);
 		return (n > P1P2 / 2) ? int64(n - P1P2) : int64(n);
 	}
+
+	static __int128_t garner3(const Zp1 r1, const Zp2 r2, const Zp3 r3)
+	{
+		// Montgomery form of 1 / Pi (mod Pj)
+		const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;
+		const uint64 P2P3 = P2 * uint64(P3);
+		const __uint128_t P1P2P3 = P1 * __uint128_t(P2P3);
+
+		const Zp1 u13 = r1.sub(Zp1(r3.get())).mul(Zp1(mfInvP3_P1));	// P3 < P1
+		const Zp2 u23 = r2.sub(Zp2(r3.get())).mul(Zp2(mfInvP3_P2));	// P3 < P2
+		const Zp1 u123 = u13.sub(Zp1(u23.get())).mul(Zp1(mfInvP2_P1));	// P3 < P1
+		const __uint128_t n = __uint128_t(P2P3) * u123.get() + (u23.get() * uint64(P3) + r3.get());
+		return (n > P1P2P3 / 2) ? __int128_t(n - P1P2P3) : __int128_t(n);
+
+		// const uint u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
+		// const uint u23 = mul_P2(sub_P2(r2, r3), InvP3_P2);
+		// const uint u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);
+		// const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (ulong)P3 + r3);
+		// const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
+		// const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
+		// return r;
+	}
+
 
 	void carry(const bool mul)
 	{
 		const size_t n = _size;
 		Zp1 * const z1 = _vz1.data();
 		Zp2 * const z2 = _vz2.data();
+		Zp3 * const z3 = _vz3.data();
 
-		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	// Not converted into Montgomery form such that output is converted out of MF
+		// Not converted into Montgomery form such that output is converted out of MF
+		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2;	const Zp3 norm3 = _norm3;
 		const int32 m = _multiplier, base = _base;
-		int64 f = 0;
-		uint64 fmax = 0;
+		__int128_t f = 0;
+		__uint128_t fmax = 0;
 
 		for (size_t k = 0; k < n; ++k)
 		{
 			const Zp1 u1 = z1[k].mul(norm1);
 			const Zp2 u2 = z2[k].mul(norm2);
-			int64 l = garner2(u1, u2);
+			const Zp3 u3 = z3[k].mul(norm3);
+			// int64 l = garner2(u1, u2);
+			__int128_t l = garner3(u1, u2, u3);
 			if (mul) l *= m;
 			f += l;
-			const uint64 uf = uint64((f < 0) ? -f : f);
+			const __uint128_t uf = __uint128_t((f < 0) ? -f : f);
 			fmax = (uf > fmax) ? uf : fmax;
-			const int64 r = f / base;
+			const __int128_t r = f / base;
 			const int32 i = int32(f - r * base);
 			f = r;
-			z1[k].set_int(i); z2[k].set_int(i);
+			z1[k].set_int(i); z2[k].set_int(i); z3[k].set_int(i);
 		}
 
 		if (fmax > _fmax) _fmax = fmax;
@@ -245,9 +286,9 @@ private:
 			for (size_t k = 0; k < n; ++k)
 			{
 				f += z1[k].get_int();
-				const int64 r = f / base;
+				const __int128_t r = f / base;
 				const int32 i = int32(f - r * base);
-				z1[k].set_int(i); z2[k].set_int(i);
+				z1[k].set_int(i); z2[k].set_int(i); z3[k].set_int(i);
 				f = r;
 				if (r == 0) break;
 			}
@@ -256,8 +297,9 @@ private:
 
 public:
 	Transform(const uint32_t b, const int n, const uint32_t a)
-		: _size(size_t(1) << n), _vz1(_size), _vz2(_size), _vwr1(_size / 2), _vwr2(_size / 2),
-		_base(int32(b)), _multiplier(int32(a)), _norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2)))
+		: _size(size_t(1) << n), _vz1(_size), _vz2(_size), _vz3(_size), _vwr1(_size / 2), _vwr2(_size / 2), _vwr3(_size / 2),
+		_base(int32(b)), _multiplier(int32(a)),
+		_norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2))), _norm3(Zp3::norm(uint32(_size / 2)))
 	{
 		const size_t size = _size;
 
@@ -281,11 +323,24 @@ public:
 			}
 		}
 
+		Zp3* const wr3 = _vwr3.data();
+		for (size_t s = 1; s < size / 2; s *= 2)
+		{
+			const Zp3 r_s = Zp3::primroot_n(4 * s);
+			for (size_t j = 0; j < s; ++j)
+			{
+				wr3[s + j] = r_s.pow(bitrev(j, 2 * s) + 1);
+			}
+		}
+
 		Zp1 * const z1 = _vz1.data();
 		z1[0] = Zp1(1); for (size_t k = 1; k < size; ++k) z1[k] = Zp1(0);
 
 		Zp2 * const z2 = _vz2.data();
 		z2[0] = Zp2(1); for (size_t k = 1; k < size; ++k) z2[k] = Zp2(0);
+
+		Zp3 * const z3 = _vz3.data();
+		z3[0] = Zp3(1); for (size_t k = 1; k < size; ++k) z3[k] = Zp3(0);
 
 		_fmax = 0;
 	}
@@ -296,8 +351,10 @@ public:
 		const size_t n_4 = _size / 4;
 		Zp1 * const z1 = _vz1.data();
 		Zp2 * const z2 = _vz2.data();
+		Zp3 * const z3 = _vz3.data();
 		const Zp1 * const wr1 = _vwr1.data();
 		const Zp2 * const wr2 = _vwr2.data();
+		const Zp3 * const wr3 = _vwr3.data();
 
 		Zp1::forward4_0(z1, n_4);
 		size_t m = n_4 / 4, s = 4;
@@ -310,6 +367,12 @@ public:
 		for (; m > 1; m /= 4, s *= 4) Zp2::forward4(z2, wr2, m, s);
 		if (m == 1) Zp2::square4(z2, wr2, n_4); else Zp2::square2(z2, wr2, n_4);
 		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n_4; m *= 4, s /= 4) Zp2::backward4(z2, wr2, m, s);
+
+		Zp3::forward4_0(z3, n_4);
+		m = n_4 / 4, s = 4;
+		for (; m > 1; m /= 4, s *= 4) Zp3::forward4(z3, wr3, m, s);
+		if (m == 1) Zp3::square4(z3, wr3, n_4); else Zp3::square2(z3, wr3, n_4);
+		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n_4; m *= 4, s /= 4) Zp3::backward4(z3, wr3, m, s);
 
 		carry(mul);
 	}
@@ -356,7 +419,7 @@ public:
 		return bOne;
 	}
 
-	uint64_t fmax() const { return _fmax; }
+	__uint128_t fmax() const { return _fmax; }
 };
 
 static void check(const uint32_t b, const int n, const uint64_t expectedResidue = 0)
@@ -390,7 +453,7 @@ static void check(const uint32_t b, const int n, const uint64_t expectedResidue 
 		std::cout << std::internal << std::hex << residue << std::dec << ")";
 	}
 	std::cout.precision(3);
-	std::cout << ", max = " << transform.fmax() / double(uint64(-1)) << ", " << duration << " sec.";
+	std::cout << ", max = " << transform.fmax() / double(__uint128_t(1) << 96) << ", " << duration << " sec.";
 
 	if ((isPrime && (expectedResidue != 0)) || (!isPrime && (expectedResidue != residue))) std::cout << " ERROR!";
 
@@ -399,6 +462,30 @@ static void check(const uint32_t b, const int n, const uint64_t expectedResidue 
 
 int main()
 {
+	// Z/p1Z x Z/p2Z x Z/p3Z
+	check(1000000000, 5, 0x7da127b73585c207ull);
+	check(1000000000, 6, 0xc37bd72acdea47e1ull);
+	check(1000000000, 7, 0xcfa99a35cc4a7179ull);
+	check(1000000000, 8, 0x280cd7361db156d7ull);
+	check(1000000000, 9, 0x0629e1b97daab9dfull);
+	check(1000000000, 10, 0x9983e7718a7d7a4dull);
+	check(1000000000, 11, 0x43c6cc5326e5c77full);
+	check(1000000000, 12, 0x4e43a5b93273c649ull);
+	check(1000000064, 5);
+	check(1000000432, 6);
+	check(1000000072, 7);
+	check(1000000116, 8);
+	check(1000000512, 9);
+	check(1000003008, 10);
+	check(1000002456, 11);
+	check(1000005800, 12);
+	check(1000001960, 13);
+	check(1000032014, 14);
+	check(459986590, 15);
+	check(456492690, 16);
+	check(1000032472, 17);
+	return EXIT_SUCCESS;
+
 	// Z/p1Z x Z/p2Z
 	check(265287654, 5, 0x2d5f91935581646full);
 	check(187586700, 6, 0x4ef835cde43b2a6cull);

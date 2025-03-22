@@ -134,6 +134,7 @@ private:
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
 	cl_kernel _square22 = nullptr, _square4 = nullptr, _fwd4p = nullptr, _mul22 = nullptr, _mul4 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
+	cl_kernel _forward64_5 = nullptr, _backward64_5 = nullptr, _forward64_6 = nullptr, _backward64_6 = nullptr;
 	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
 	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
@@ -242,6 +243,8 @@ public:
 		std::ostringstream ss; ss << "Create ocl kernels." << std::endl;
 		pio::display(ss.str());
 #endif
+		const int ln = _ln;
+
 		_forward4 = createTransformKernel("forward4");
 		_backward4 = createTransformKernel("backward4");
 		_forward4_0 = createTransformKernel("forward4_0");
@@ -261,6 +264,17 @@ public:
 		_forward1024 = createTransformKernel("forward1024");
 		_backward1024 = createTransformKernel("backward1024");
 		_forward1024_0 = createTransformKernel("forward1024_0");
+
+		if (ln % 2 != 0)
+		{
+			_forward64_5 = createTransformKernel("forward64_5");
+			_backward64_5 = createTransformKernel("backward64_5");
+		}
+		else
+		{
+			_forward64_6 = createTransformKernel("forward64_6");
+			_backward64_6 = createTransformKernel("backward64_6");
+		}
 
 		_square32 = createTransformKernel("square32");
 		_square64 = createTransformKernel("square64");
@@ -312,6 +326,7 @@ public:
 		_releaseKernel(_fwd4p); _releaseKernel(_mul22); _releaseKernel(_mul4);
 
 		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0);
+		_releaseKernel(_forward64_5); _releaseKernel(_backward64_5); _releaseKernel(_forward64_6); _releaseKernel(_backward64_6);
 		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0);
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0);
 		 
@@ -363,6 +378,11 @@ private:
 	void forward64(const int lm) { ek_fb(_forward64, lm, 64 / 4 * CHUNK64m); }
 	void backward64(const int lm) { ek_fb(_backward64, lm, 64 / 4 * CHUNK64m); }
 	void forward64_0() { ek(_forward64_0, 64 / 4 * CHUNK64m); }
+	void forward64_5() { ek(_forward64_5, 64 / 4 * CHUNK64m); }
+	void backward64_5() { ek(_backward64_5, 64 / 4 * CHUNK64m); }
+	void forward64_6() { ek(_forward64_6, 64 / 4 * CHUNK64m); }
+	void backward64_6() { ek(_backward64_6, 64 / 4 * CHUNK64m); }
+
 	void forward256(const int lm) { ek_fb(_forward256, lm, 256 / 4 * CHUNK256m); }
 	void backward256(const int lm) { ek_fb(_backward256, lm, 256 / 4 * CHUNK256m); }
 	void forward256_0() { ek(_forward256_0, 256 / 4 * CHUNK256m); }
@@ -456,7 +476,7 @@ private:
 	}
 
 private:
-	void _mul(const size_t sIndex, const bool isSquare, const bool verbose)
+	void _mul(const size_t sIndex, const bool isSquare)
 	{
 #if defined(CHECK_FUNC_1)
 		if (_ln == 11) { forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256(11 - 8); return; }
@@ -492,30 +512,33 @@ private:
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
 
-		for (size_t i = 1; i < s; ++i)
+		const uint32_t k0 = pSplit->getPart(sIndex, 0);
+		lm -= int(k0);
+		if (k0 == 10) forward1024_0();
+		else if (k0 == 8) forward256_0();
+		else forward64_0();	// k0 = 6
+
+		for (size_t i = 2; i < s; ++i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
+			lm -= int(k);
 			if (k == 10)
 			{
-				lm -= 10;
-				if (i != 1) forward1024(lm); else forward1024_0();
-				if (verbose) std::cout << "forward1024 (" << lm << ") ";
+				forward1024(lm);
 			}
 			else if (k == 8)
 			{
-				lm -= 8;
-				if (i != 1) forward256(lm); else forward256_0();
-				if (verbose) std::cout << "forward256 (" << lm << ") ";
+				forward256(lm);
 			}
-			else // if (k == 6)
+			else // k = 6
 			{
-				lm -= 6;
-				if (i != 1) forward64(lm); else forward64_0();
-				if (verbose) std::cout << "forward64 (" << lm << ") ";
+				if (lm == 5) forward64_5();
+				else if (lm == 6) forward64_6();
+				else forward64(lm);
 			}
 		}
 
-		// lm = split.GetPart(sIndex, s - 1);
+		// lm = pSplit->getPart(sIndex, s - 1);
 		if (isSquare)
 		{
 			if (lm == 11) square2048();
@@ -536,7 +559,6 @@ private:
 			else if (lm == 6) mul64();
 			else if (lm == 5) mul32();
 		}
-		if (verbose) std::cout << "square" << (1u << lm) << " ";
 
 		for (size_t i = s - 1; i > 0; --i)
 		{
@@ -544,40 +566,39 @@ private:
 			if (k == 10)
 			{
 				backward1024(lm);
-				if (verbose) std::cout << "backward1024 (" << lm << ") ";
-				lm += 10;
 			}
 			else if (k == 8)
 			{
 				backward256(lm);
-				if (verbose) std::cout << "backward256 (" << lm << ") ";
-				lm += 8;
 			}
-			else // if (k == 6)
+			else // k = 6
 			{
-				backward64(lm);
-				if (verbose) std::cout << "backward64 (" << lm << ") ";
-				lm += 6;
+				if (lm == 5) backward64_5();
+				else if (lm == 6) backward64_6();
+				else backward64(lm);
 			}
+			lm += int(k);
 		}
-
-		if (verbose) std::cout << std::endl;
 	}
 
 public:
 	void square()
 	{
 #if defined(CHECK_ALL_FUNCTIONS)
-		_mul(size_t(rand()) % _pSplit->getSize(), true, false);
+		_mul(size_t(rand()) % _pSplit->getSize(), true);
 #else
-		_mul(_splitIndex, true, _first);
+		_mul(_splitIndex, true);
 #endif
-		if (_first) _first = false;
+		if (_first)
+		{
+			info();
+			_first = false;
+		} 
 	}
 
 	void mul()
 	{
-		_mul(_splitIndex, false, false);
+		_mul(_splitIndex, false);
 	}
 
 	void initMultiplicand(const size_t src)
@@ -624,27 +645,22 @@ public:
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
-		for (size_t i = 1; i < s; ++i)
+		const uint32_t k0 = pSplit->getPart(sIndex, 0);
+		lm -= int(k0);
+		if (k0 == 10) forward1024p_0();
+		else if (k0 == 8) forward256p_0();
+		else forward64p_0();	// k0 = 6
+
+		for (size_t i = 2; i < s; ++i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
-			if (k == 10)
-			{
-				lm -= 10;
-				if (i != 1) forward1024p(lm); else forward1024p_0();
-			}
-			else if (k == 8)
-			{
-				lm -= 8;
-				if (i != 1) forward256p(lm); else forward256p_0();
-			}
-			else // if (k == 6)
-			{
-				lm -= 6;
-				if (i != 1) forward64p(lm); else forward64p_0();
-			}
+			lm -= int(k);
+			if (k == 10) forward1024p(lm);
+			else if (k == 8) forward256p(lm);
+			else forward64p(lm);	// k = 6
 		}
 
-		// lm = split.GetPart(sIndex, s - 1);
+		// lm = pSplit->getPart(sIndex, s - 1);
 		if (lm == 11) fwd2048p();
 		else if (lm == 10) fwd1024p();
 		else if (lm == 9) fwd512p();
@@ -727,7 +743,7 @@ private:
 		for (size_t j = 0; j != count; ++j)
 		{
 			writeMemory_z(Z);
-			_mul(sIndex, true, false);
+			_mul(sIndex, true);
 		}
 	}
 
@@ -850,16 +866,28 @@ public:
 	void info()
 	{
 		std::ostringstream ss; ss << "split:";
-		for (size_t i = 0, ns = _pSplit->getSize(); i < ns; ++i)
+		for (size_t sIndex = 0, ns = _pSplit->getSize(); sIndex < ns; ++sIndex)
 		{
-			for (size_t j = 0, nps = _pSplit->getPartSize(i); j < nps; ++j) ss << " " << _pSplit->getPart(i, j);
-			if (i == _splitIndex) ss << " *";
+			int lm = _ln;
+			const size_t s = _pSplit->getPartSize(sIndex);
+			for (size_t i = 1; i < s; ++i)
+			{
+				const uint32_t k = _pSplit->getPart(sIndex, i - 1);
+				lm -= int(k);
+				ss << " " << k;
+				if (i != 1) ss << "(" << lm << ")"; else ss << "_0";
+			}
+			ss << " s" << lm;
+
+			if (sIndex == _splitIndex) ss << " *";
 			ss << ",";
 		}
+
 		ss << " blk = " << _baseModBlk << ", wsize1 = " << _naLocalWS << ", wsize2 = " << _nbLocalWS << "." << std::endl;
 		pio::display(ss.str());
 	}
 };
+
 
 template<size_t RNS_SIZE>
 class transformGPUs : public transform

@@ -497,8 +497,6 @@ void mul4(__global uint * restrict const zg, __global const uint * restrict cons
 // --- transform ---
 
 #define DECLARE_VAR(B_N, CHUNK_N) \
-	__local uint Z[4 * B_N * CHUNK_N]; \
-	\
 	/* threadIdx < B_N */ \
 	DECLARE_VAR_REG(); \
 	const sz_t local_id = id % (B_N * CHUNK_N), group_id = id / (B_N * CHUNK_N); \
@@ -542,11 +540,8 @@ void mul4(__global uint * restrict const zg, __global const uint * restrict cons
 
 #define B_64	(64 / 4)
 
-__kernel
-#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
-	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
-#endif
-void forward64(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
+INLINE void _forward64(__global uint * restrict const zg, __global const uint * restrict const wg,
+	__local uint * const Z, const int lm, const unsigned int s)
 {
 	FORWARD_I(B_64, CHUNK64);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
@@ -558,14 +553,34 @@ __kernel
 #if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
 	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
 #endif
+void forward64(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
+{
+	__local uint Z[4 * B_64 * CHUNK64];
+	_forward64(zg, wg, Z, lm, s);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
 void forward64_0(__global uint * restrict const zg, __global const uint * restrict const wg)
 {
 	const int lm = LNSZ - 6; const unsigned int s = 64 / 4;
 
+	__local uint Z[4 * B_64 * CHUNK64];
 	FORWARD_I_0(B_64, CHUNK64);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	forward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4);
 	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK64, &Zi[CHUNK64 * 4 * threadIdx], w, sj / 1);
+}
+
+INLINE void _backward64(__global uint * restrict const zg, __global const uint * restrict const wg,
+	__local uint * const Z, const int lm, const unsigned int s)
+{
+	BACKWARD_I(B_64, CHUNK64);
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
+	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sji / 4);
+	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], w, sji / B_64);
 }
 
 __kernel
@@ -574,10 +589,8 @@ __kernel
 #endif
 void backward64(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
 {
-	BACKWARD_I(B_64, CHUNK64);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sji / 4);
-	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], w, sji / B_64);
+	__local uint Z[4 * B_64 * CHUNK64];
+	_backward64(zg, wg, Z, lm, s);
 }
 
 // -----------------
@@ -590,6 +603,7 @@ __kernel
 #endif
 void forward256(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
 {
+	__local uint Z[4 * B_256 * CHUNK256];
 	FORWARD_I(B_256, CHUNK256);
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	forward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
@@ -606,6 +620,7 @@ void forward256_0(__global uint * restrict const zg, __global const uint * restr
 {
 	const int lm = LNSZ - 8; const unsigned int s = 256 / 4;
 
+	__local uint Z[4 * B_256 * CHUNK256];
 	FORWARD_I_0(B_256, CHUNK256);
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
 	forward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], w, sj / 16);
@@ -620,6 +635,7 @@ __kernel
 #endif
 void backward256(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
 {
+	__local uint Z[4 * B_256 * CHUNK256];
 	BACKWARD_I(B_256, CHUNK256);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], w, sji / 4);
@@ -638,6 +654,7 @@ __kernel
 #endif
 void forward1024(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
 {
+	__local uint Z[4 * B_1024 * CHUNK1024];
 	FORWARD_I(B_1024, CHUNK1024);
 	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
 	forward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
@@ -656,6 +673,7 @@ void forward1024_0(__global uint * restrict const zg, __global const uint * rest
 {
 	const int lm = LNSZ - 10; const unsigned int s = 1024 / 4;
 
+	__local uint Z[4 * B_1024 * CHUNK1024];
 	FORWARD_I_0(B_1024, CHUNK1024);
 	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64 );
 	forward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sj / 64);
@@ -672,6 +690,7 @@ __kernel
 #endif
 void backward1024(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)
 {
+	__local uint Z[4 * B_1024 * CHUNK1024];
 	BACKWARD_I(B_1024, CHUNK1024);
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
 	backward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sji / 4);
@@ -681,6 +700,54 @@ void backward1024(__global uint * restrict const zg, __global const uint * restr
 	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], w, sji / 64);
 	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], w, sji / B_1024);
 }
+
+// -----------------
+
+#if LNSZ % 2 != 0
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void forward64_5(__global uint * restrict const zg, __global const uint * restrict const wg)
+{
+	__local uint Z[4 * B_64 * CHUNK64];
+	_forward64(zg, wg, Z, 5, (NSIZE / 4) >> 5);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void backward64_5(__global uint * restrict const zg, __global const uint * restrict const wg)
+{
+	__local uint Z[4 * B_64 * CHUNK64];
+	_backward64(zg, wg, Z, 5, (NSIZE / 4) >> 5);
+}
+
+#else // LNSZ % 2 == 0
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void forward64_6(__global uint * restrict const zg, __global const uint * restrict const wg)
+{
+	__local uint Z[4 * B_64 * CHUNK64];
+	_forward64(zg, wg, Z, 6, (NSIZE / 4) >> 6);
+}
+
+__kernel
+#if MAX_WORK_GROUP_SIZE >= B_64 * CHUNK64
+	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))
+#endif
+void backward64_6(__global uint * restrict const zg, __global const uint * restrict const wg)
+{
+	__local uint Z[4 * B_64 * CHUNK64];
+	_backward64(zg, wg, Z, 6, (NSIZE / 4) >> 6);
+}
+
+#endif
 
 // -----------------
 

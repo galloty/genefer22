@@ -966,12 +966,23 @@ public:
 	void info()
 	{
 		std::ostringstream ss; ss << "split:";
-		for (size_t i = 0, ns = _pSplit->getSize(); i < ns; ++i)
+		for (size_t sIndex = 0, ns = _pSplit->getSize(); sIndex < ns; ++sIndex)
 		{
-			for (size_t j = 0, nps = _pSplit->getPartSize(i); j < nps; ++j) ss << " " << _pSplit->getPart(i, j);
-			if (i == _splitIndex) ss << " *";
+			int lm = _ln;
+			const size_t s = _pSplit->getPartSize(sIndex);
+			for (size_t i = 1; i < s; ++i)
+			{
+				const uint32_t k = _pSplit->getPart(sIndex, i - 1);
+				lm -= int(k);
+				ss << " " << k;
+				if (i != 1) ss << "(" << lm << ")"; else ss << "_0";
+			}
+			ss << " s" << lm;
+
+			if (sIndex == _splitIndex) ss << " *";
 			ss << ",";
 		}
+
 		ss << " blk = " << _baseModBlk << ", wsize1 = " << _naLocalWS << ", wsize2 = " << _nbLocalWS << "." << std::endl;
 		pio::display(ss.str());
 	}

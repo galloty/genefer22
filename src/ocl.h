@@ -616,7 +616,7 @@ protected:
 		{
 			oclFatal(clReleaseKernel(kernel));
 			kernel = nullptr;
-		}		
+		}
 	}
 
 protected:

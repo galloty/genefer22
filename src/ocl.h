@@ -163,11 +163,12 @@ protected:
 	}
 
 protected:
-	static void oclFatal(const cl_int res)
+	static void oclFatal(const cl_int res, const char * const ext = nullptr)
 	{
 		if (!oclError(res))
 		{
 			std::ostringstream ss; ss << "opencl error: " << errorString(res);
+			if (ext != nullptr) ss << " (" << ext << ")";
 			throw std::runtime_error(ss.str());
 		}
 	}
@@ -604,7 +605,7 @@ protected:
 	{
 		cl_int err;
 		cl_kernel kernel = clCreateKernel(_program, kernelName, &err);
-		oclFatal(err);
+		oclFatal(err, kernelName);
 		_profileMap[kernel] = profile(kernelName);
 		return kernel;
 	}

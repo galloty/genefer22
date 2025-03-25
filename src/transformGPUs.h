@@ -16,6 +16,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernels.h"
 
+// #define USE_WI
+
 // #define CHECK_ALL_FUNCTIONS		1
 // #define CHECK_RADIX4_FUNCTIONS	1
 // #define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward4, forward64, forward256_0, forward256
@@ -189,7 +191,7 @@ public:
 		{
 			_z = _createBuffer(CL_MEM_READ_WRITE, RNS_SIZE * n * _num_regs * sizeof(ZP));
 			_zp = _createBuffer(CL_MEM_READ_WRITE, RNS_SIZE * n * sizeof(ZP));
-			_w = _createBuffer(CL_MEM_READ_ONLY, RNS_SIZE * n / 2 * sizeof(ZP));
+			_w = _createBuffer(CL_MEM_READ_ONLY, RNS_SIZE * n * sizeof(ZP));
 			_c = _createBuffer(CL_MEM_READ_WRITE, n / 4 * sizeof(cl_long));
 		}
 	}
@@ -268,8 +270,8 @@ public:
 		CREATE_TRANSFORM_KERNEL(square22);
 		CREATE_TRANSFORM_KERNEL(square4);
 		CREATE_TRANSFORM_KERNELP(fwd4p);
-		CREATE_TRANSFORM_KERNEL(mul22);
-		CREATE_TRANSFORM_KERNEL(mul4);
+		CREATE_MUL_KERNEL(mul22);
+		CREATE_MUL_KERNEL(mul4);
 
 		CREATE_TRANSFORM_KERNEL(forward64);
 		CREATE_TRANSFORM_KERNEL(backward64);
@@ -378,7 +380,7 @@ public:
 
 	void readMemory_z(ZP * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
 	void writeMemory_z(const ZP * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
-	void writeMemory_w(const ZP * const wPtr, const size_t offset) { _writeBuffer(_w, wPtr, _n / 2 * sizeof(ZP), offset * _n / 2 * sizeof(ZP)); }
+	void writeMemory_w(const ZP * const wPtr, const size_t offset) { _writeBuffer(_w, wPtr, _n * sizeof(ZP), offset * _n * sizeof(ZP)); }
 
 ///////////////////////////////
 
@@ -906,9 +908,14 @@ public:
 	transformGPUs(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
 		: transform(size_t(1) << n, n, b, (RNS_SIZE == 2) ? EKind::NTT2s : EKind::NTT3s),
+#if defined(USE_WI)
+		_mem_size(RNS_SIZE * (size_t(1) << n) * (num_regs + 2) * sizeof(ZP) + (size_t(1) << n) / 4 * sizeof(cl_long)),
+		_cache_size(RNS_SIZE * (size_t(1) << n) * 2 * sizeof(ZP)),
+#else
 		_mem_size(RNS_SIZE * (size_t(1) << n) * (2 * num_regs + 3) / 2 * sizeof(ZP) + (size_t(1) << n) / 4 * sizeof(cl_long)),
-		_cache_size(RNS_SIZE * (size_t(1) << n) * 3 / 2 * sizeof(ZP)), _num_regs(num_regs),
-		_z(new ZP[RNS_SIZE * (size_t(1) << n) * num_regs])
+		_cache_size(RNS_SIZE * (size_t(1) << n) * 3 / 2 * sizeof(ZP)),
+#endif
+		_num_regs(num_regs), _z(new ZP[RNS_SIZE * (size_t(1) << n) * num_regs])
 	{
 		const size_t size = getSize();
 
@@ -919,15 +926,19 @@ public:
 
 		std::ostringstream src;
 
-		src << "#define NSIZE\t" << (1u << n) << "u" << std::endl;
-		src << "#define LNSZ\t" << n << std::endl;
-		src << "#define RNSSIZE\t" << RNS_SIZE << std::endl;
+		src << "#define N_SZ\t" << (1u << n) << "u" << std::endl;
+		src << "#define LN_SZ\t" << n << std::endl;
+		src << "#define RNS_SZ\t" << RNS_SIZE << std::endl;
 
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM3\t" << ZP3::norm(uint32(size / 2)).get() << "u" << std::endl;
 
-		src << "#define WOFFSET\t" << size / 2 << "u" << std::endl;
+		src << "#define W_SHFT\t" << size << "u" << std::endl;
+		src << "#define WI_SHFT\t" << size / 2 << "u" << std::endl;
+#if defined(USE_WI)
+		src << "#define USE_WI\t" << 1 << std::endl;
+#endif
 
 		src << "#define BLK32\t" << BLK32m << std::endl;
 		src << "#define BLK64\t" << BLK64m << std::endl;
@@ -939,7 +950,7 @@ public:
 		src << "#define CHUNK256\t" << CHUNK256m << std::endl;
 		src << "#define CHUNK1024\t" << CHUNK1024m << std::endl;
 
-		src << "#define MAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
+		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
 		if (isBoinc || !_pEngine->readOpenCL("ocl/kernels.cl", "src/ocl/kernels.h", "src_ocl_kernels", src)) src << src_ocl_kernels;
 
@@ -947,44 +958,40 @@ public:
 		_pEngine->allocMemory();
 		_pEngine->createKernels(b);
 
-		ZP1 * const wr1 = new ZP1[size / 2];
+		ZP1 * const wr1 = new ZP1[size];
+		ZP2 * const wr2 = new ZP2[size];
 		for (size_t s = 1; s < size / 2; s *= 2)
 		{
-			const ZP1 r_s = ZP1::primroot_n(4 * s);
+			const ZP1 r_s1 = ZP1::primroot_n(4 * s);
+			const ZP2 r_s2 = ZP2::primroot_n(4 * s);
 			for (size_t j = 0; j < s; ++j)
 			{
-				wr1[s + j] = r_s.pow(bitRev(j, 2 * s) + 1);
+				const size_t sj = s + j, sji = s + (s - j - 1);
+				const size_t e = bitRev(j, 2 * s) + 1;
+				wr1[size / 2 + sji] = wr1[sj] = r_s1.pow(e);
+				wr2[size / 2 + sji] = wr2[sj] = r_s2.pow(e);
 			}
 		}
 		_pEngine->writeMemory_w(wr1, 0);
-		delete[] wr1;
-
-		ZP2 * const wr2 = new ZP2[size / 2];
-		for (size_t s = 1; s < size / 2; s *= 2)
-		{
-			const ZP2 r_s = ZP2::primroot_n(4 * s);
-			for (size_t j = 0; j < s; ++j)
-			{
-				wr2[s + j] = r_s.pow(bitRev(j, 2 * s) + 1);
-			}
-		}
 		_pEngine->writeMemory_w(wr2, 1);
+		delete[] wr1;
 		delete[] wr2;
 
 		if (RNS_SIZE == 3)
 		{
-			ZP3 * const wr3 = new ZP3[size / 2];
+			ZP3 * const wr3 = new ZP3[size];
 			for (size_t s = 1; s < size / 2; s *= 2)
 			{
-				const ZP3 r_s = ZP3::primroot_n(4 * s);
+				const ZP3 r_s3 = ZP3::primroot_n(4 * s);
 				for (size_t j = 0; j < s; ++j)
 				{
-					wr3[s + j] = r_s.pow(bitRev(j, 2 * s) + 1);
+					wr3[size / 2 + s + (s - j - 1)] = wr3[s + j] = r_s3.pow(bitRev(j, 2 * s) + 1);
 				}
 			}
 			_pEngine->writeMemory_w(wr3, 2);
 			delete[] wr3;
 		}
+
 		_pEngine->tune(b);
 	}
 

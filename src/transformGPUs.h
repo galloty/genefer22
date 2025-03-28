@@ -16,10 +16,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernels.h"
 
-// #define USE_WI
+#define USE_WI
 
 // #define CHECK_ALL_FUNCTIONS		1
-// #define CHECK_RADIX4_FUNCTIONS	1
+#define CHECK_RADIX4_FUNCTIONS	1
 // #define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward4, forward64, forward256_0, forward256
 // #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward64_0, forward1024
 // #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024_0
@@ -131,14 +131,14 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CREATE_SETCOPY_KERNEL(name) _##name = createSetCopyKernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = createCopypKernel(#name);
 
-#define DEFINE_FORWARDG(u) void forward##u(const int lm) { ek_fb(_forward##u, lm, u / 4 * CHUNK##u##m); }
-#define DEFINE_BACKWARDG(u) void backward##u(const int lm) { ek_fb(_backward##u, lm, u / 4 * CHUNK##u##m); }
-#define DEFINE_FORWARD(u, v) void forward##u##_##v() { ek(_forward##u##_##v, u / 4 * CHUNK##u##m); }
-#define DEFINE_BACKWARD(u, v) void backward##u##_##v() { ek(_backward##u##_##v, u / 4 * CHUNK##u##m); }
+#define DEFINE_FORWARDG(u) void forward##u(const int lm) { ek_fb(_forward##u, lm, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_BACKWARDG(u) void backward##u(const int lm) { ek_fb(_backward##u, lm, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_FORWARD(u, v) void forward##u##_##v() { ek(_forward##u##_##v, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_BACKWARD(u, v) void backward##u##_##v() { ek(_backward##u##_##v, u / 4 * CHUNK##u##m, 4); }
 
-#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m))); }
-#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / 4, size_t(u / 4 * BLK##u##m))); }
-#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m))); }
+#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
+#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
+#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
 
 #define DEFINE_FORWARDP(u) \
 	void forward##u##p(const int lm) { setTransformArgs(_forward##u, false); forward##u(lm); setTransformArgs(_forward##u);	}
@@ -156,7 +156,10 @@ private:
 	const size_t _num_regs;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
-	cl_kernel _square22 = nullptr, _square4 = nullptr, _fwd4p = nullptr, _mul22 = nullptr, _mul4 = nullptr;
+	cl_kernel _forward4x2 = nullptr, _backward4x2 = nullptr, _forward4x2_0 = nullptr;
+	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
+	cl_kernel _fwd4p = nullptr, _fwd4x2p = nullptr, _fwd8p = nullptr;
+	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
 	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
 	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
@@ -164,9 +167,9 @@ private:
 	cl_kernel _forward64_7 = nullptr, _backward64_7 = nullptr, _forward64_8 = nullptr, _backward64_8 = nullptr;
 	cl_kernel _forward256_5 = nullptr, _backward256_5 = nullptr, _forward256_6 = nullptr, _backward256_6 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
-	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
+	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
 	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
@@ -267,12 +270,22 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward4);
 		CREATE_TRANSFORM_KERNEL(backward4);
 		CREATE_TRANSFORM_KERNEL(forward4_0);
-		CREATE_TRANSFORM_KERNEL(square22);
+		CREATE_TRANSFORM_KERNEL(forward4x2);
+		CREATE_TRANSFORM_KERNEL(backward4x2);
+		CREATE_TRANSFORM_KERNEL(forward4x2_0);
+		CREATE_TRANSFORM_KERNEL(square2x2);
 		CREATE_TRANSFORM_KERNEL(square4);
+		CREATE_TRANSFORM_KERNEL(square4x2);
+		CREATE_TRANSFORM_KERNEL(square8);
 		CREATE_TRANSFORM_KERNELP(fwd4p);
-		CREATE_MUL_KERNEL(mul22);
+		CREATE_TRANSFORM_KERNELP(fwd4x2p);
+		CREATE_TRANSFORM_KERNELP(fwd8p);
+		CREATE_MUL_KERNEL(mul2x2);
 		CREATE_MUL_KERNEL(mul4);
+		CREATE_MUL_KERNEL(mul4x2);
+		CREATE_MUL_KERNEL(mul8);
 
+#if !defined(CHECK_RADIX4_FUNCTIONS)
 		CREATE_TRANSFORM_KERNEL(forward64);
 		CREATE_TRANSFORM_KERNEL(backward64);
 		CREATE_TRANSFORM_KERNEL(forward64_0);
@@ -316,13 +329,6 @@ public:
 		CREATE_TRANSFORM_KERNEL(square1024);
 		CREATE_TRANSFORM_KERNEL(square2048);
 
-		const cl_uint b_ui = static_cast<cl_uint>(b);
-		const cl_int b_s = static_cast<cl_int>(31 - __builtin_clz(b) - 1);
-		const cl_uint b_inv = static_cast<cl_uint>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
-		CREATE_NORMALIZE_KERNEL(normalize1, b_ui, b_inv, b_s);
-		CREATE_NORMALIZE_KERNEL(normalize2, b_ui, b_inv, b_s);
-		CREATE_NORMALIZE_KERNEL(mulscalar, b_ui, b_inv, b_s);
-
 		CREATE_TRANSFORM_KERNELP(fwd32p);
 		CREATE_TRANSFORM_KERNELP(fwd64p);
 		CREATE_TRANSFORM_KERNELP(fwd128p);
@@ -338,12 +344,19 @@ public:
 		CREATE_MUL_KERNEL(mul512);
 		CREATE_MUL_KERNEL(mul1024);
 		CREATE_MUL_KERNEL(mul2048);
+#endif
+		const cl_uint b_ui = static_cast<cl_uint>(b);
+		const cl_int b_s = static_cast<cl_int>(31 - __builtin_clz(b) - 1);
+		const cl_uint b_inv = static_cast<cl_uint>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
+		CREATE_NORMALIZE_KERNEL(normalize1, b_ui, b_inv, b_s);
+		CREATE_NORMALIZE_KERNEL(normalize2, b_ui, b_inv, b_s);
+		CREATE_NORMALIZE_KERNEL(mulscalar, b_ui, b_inv, b_s);
 
 		CREATE_SETCOPY_KERNEL(set);
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
 
-		_pSplit = new splitter(size_t(_ln), CHUNK256m, CHUNK1024m, sizeof(ZP), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(ln), CHUNK256m, CHUNK1024m, sizeof(ZP), 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -355,8 +368,10 @@ public:
 		delete _pSplit;
 
 		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0);
-		_releaseKernel(_square22); _releaseKernel(_square4);
-		_releaseKernel(_fwd4p); _releaseKernel(_mul22); _releaseKernel(_mul4);
+		_releaseKernel(_forward4x2); _releaseKernel(_backward4x2); _releaseKernel(_forward4x2_0);
+		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		_releaseKernel(_fwd4p); _releaseKernel(_fwd4x2p); _releaseKernel(_fwd8p);
+		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
 
 		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0);
 		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0);
@@ -367,11 +382,12 @@ public:
 		 
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
-		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
 		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
 		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048);
+
+		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 
 		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
 	}
@@ -385,30 +401,40 @@ public:
 ///////////////////////////////
 
 private:
-	void ek(cl_kernel & kernel, const size_t localWorkSize)
+	void ek(cl_kernel & kernel, const size_t localWorkSize, const size_t step)
 	{
-		const size_t n_4 = _n / 4;
-		_executeKernel(kernel, RNS_SIZE * n_4, localWorkSize);
+		const size_t n_s = _n / step;
+		_executeKernel(kernel, RNS_SIZE * n_s, localWorkSize);
 	}
 
-	void ek_fb(cl_kernel & kernel, const int lm, const size_t localWorkSize)
+	void ek_fb(cl_kernel & kernel, const int lm, const size_t localWorkSize, const size_t step)
 	{
-		const size_t n_4 = _n / 4;
+		const size_t n_s = _n / step;
 		const cl_int ilm = static_cast<cl_int>(lm);
-		const cl_uint is = static_cast<cl_uint>(n_4 >> lm);
+		const cl_uint is = static_cast<cl_uint>(n_s >> lm);
 		_setKernelArg(kernel, 2, sizeof(cl_int), &ilm);
 		_setKernelArg(kernel, 3, sizeof(cl_uint), &is);
-		_executeKernel(kernel, RNS_SIZE * n_4, localWorkSize);
+		_executeKernel(kernel, RNS_SIZE * n_s, localWorkSize);
 	}
 
-	void forward4(const int lm) { ek_fb(_forward4, lm, 0); }
-	void backward4(const int lm) { ek_fb(_backward4, lm, 0); }
-	void forward4_0() { ek(_forward4_0, 0); }
-	void square22() { ek(_square22, 0); }
-	void square4() { ek(_square4, 0); }
-	void fwd4p() { ek(_fwd4p, 0); }
-	void mul22() { ek(_mul22, 0); }
-	void mul4() { ek(_mul4, 0); }
+	void forward4(const int lm) { ek_fb(_forward4, lm, 0, 4); }
+	void backward4(const int lm) { ek_fb(_backward4, lm, 0, 4); }
+	void forward4_0() { ek(_forward4_0, 0, 4); }
+	void forward4x2(const int lm) { ek_fb(_forward4x2, lm - 1, 0, 4 * 2); }
+	void backward4x2(const int lm) { ek_fb(_backward4x2, lm - 1, 0, 4 * 2); }
+	void forward4x2_0() { ek(_forward4x2_0, 0, 4 * 2); }
+
+	void square2x2() { ek(_square2x2, 0, 4); }
+	void square4() { ek(_square4, 0, 4); }
+	void square4x2() { ek(_square4x2, 0, 4 * 2); }
+	void square8() { ek(_square8, 0, 8); }
+	void fwd4p() { ek(_fwd4p, 0, 4); }
+	void fwd4x2p() { ek(_fwd4x2p, 0, 4 * 2); }
+	void fwd8p() { ek(_fwd8p, 0, 8); }
+	void mul2x2() { ek(_mul2x2, 0, 4); }
+	void mul4() { ek(_mul4, 0, 4); }
+	void mul4x2() { ek(_mul4x2, 0, 4 * 2); }
+	void mul8() { ek(_mul8, 0, 8); }
 
 	DEFINE_FORWARDG(64);
 	DEFINE_BACKWARDG(64);
@@ -439,24 +465,24 @@ private:
 	DEFINE_SQUARE(128);
 	DEFINE_SQUARE(256);
 	DEFINE_SQUARE(512);
-	void square1024() { ek(_square1024, 1024 / 4); }
-	void square2048() { ek(_square2048, 2048 / 4); }
+	void square1024() { ek(_square1024, 1024 / 4, 4); }
+	void square2048() { ek(_square2048, 2048 / 4, 4); }
 
 	DEFINE_FWDP(32);
 	DEFINE_FWDP(64);
 	DEFINE_FWDP(128);
 	DEFINE_FWDP(256);
 	DEFINE_FWDP(512);
-	void fwd1024p() { ek(_fwd1024p, 1024 / 4); }
-	void fwd2048p() { ek(_fwd2048p, 2048 / 4); }
+	void fwd1024p() { ek(_fwd1024p, 1024 / 4, 4); }
+	void fwd2048p() { ek(_fwd2048p, 2048 / 4, 4); }
 
 	DEFINE_MUL(32);
 	DEFINE_MUL(64);
 	DEFINE_MUL(128);
 	DEFINE_MUL(256);
 	DEFINE_MUL(512);
-	void mul1024() { ek(_mul1024, 1024 / 4); }
-	void mul2048() { ek(_mul2048, 2048 / 4); }
+	void mul1024() { ek(_mul1024, 1024 / 4, 4); }
+	void mul2048() { ek(_mul2048, 2048 / 4, 4); }
 
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
@@ -464,11 +490,13 @@ private:
 	}
 
 	DEFINE_FORWARDP(4);
+	void forward4x2p(const int lm) { setTransformArgs(_forward4x2, false); forward4x2(lm); setTransformArgs(_forward4x2); }
 	DEFINE_FORWARDP(64);
 	DEFINE_FORWARDP(256);
 	DEFINE_FORWARDP(1024);
 
 	DEFINE_FORWARDP0(4);
+	void forward4x2p_0() { setTransformArgs(_forward4x2_0, false); forward4x2_0(); setTransformArgs(_forward4x2_0); }
 	DEFINE_FORWARDP0(64);
 	DEFINE_FORWARDP0(256);
 	DEFINE_FORWARDP0(1024);
@@ -500,10 +528,10 @@ private:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
-		lm -= 2; forward4_0();
-		while (lm > 2) { lm -= 2; forward4(lm); }
-		if (isSquare) { if (lm == 1) square22(); else square4(); } else if (lm == 1) mul22(); else mul4();
-		while (lm < _ln) { backward4(lm); lm += 2; }
+		lm -= 2; forward4x2_0();
+		while (lm > 3) { lm -= 2; forward4x2(lm); }
+		if (isSquare) { if (lm == 3) square8(); else square4x2(); } else if (lm == 3) mul8(); else mul4x2();
+		while (lm < _ln) { backward4x2(lm); lm += 2; }
 		return;
 #endif
 
@@ -642,9 +670,9 @@ public:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
-		lm -= 2; forward4p_0();
-		while (lm > 2) { lm -= 2; forward4p(lm); }
-		if (lm == 2) fwd4p();
+		lm -= 2; forward4x2p_0();
+		while (lm > 3) { lm -= 2; forward4x2p(lm); }
+		if (lm == 3) fwd8p(); else fwd4x2p();
 		return;
 #endif
 
@@ -939,7 +967,6 @@ public:
 #if defined(USE_WI)
 		src << "#define USE_WI\t" << 1 << std::endl;
 #endif
-
 		src << "#define BLK32\t" << BLK32m << std::endl;
 		src << "#define BLK64\t" << BLK64m << std::endl;
 		src << "#define BLK128\t" << BLK128m << std::endl;
@@ -950,6 +977,9 @@ public:
 		src << "#define CHUNK256\t" << CHUNK256m << std::endl;
 		src << "#define CHUNK1024\t" << CHUNK1024m << std::endl;
 
+#if defined(CHECK_RADIX4_FUNCTIONS)
+		src << "#define SHORT_VER\t" << 1 << std::endl;
+#endif
 		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
 		if (isBoinc || !_pEngine->readOpenCL("ocl/kernels.cl", "src/ocl/kernels.h", "src_ocl_kernels", src)) src << src_ocl_kernels;

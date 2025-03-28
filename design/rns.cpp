@@ -23,7 +23,12 @@ typedef uint64		uint64_4 __attribute__ ((vector_size(32)));
 typedef int64		int64_4 __attribute__ ((vector_size(32)));
 
 inline uint32 mul_hi(const uint32 lhs, const uint32 rhs) { return uint32((lhs * uint64(rhs)) >> 32); }
-inline uint32_4 mul_hi(const uint32_4 lhs, const uint32_4 rhs) { uint32_4 hi; for (size_t j = 0; j < 4; ++j) hi[j] = mul_hi(lhs[j], rhs[j]); return hi; }
+
+inline uint32_4 mul_hi(const uint32_4 lhs, const uint32_4 rhs)
+{
+	const uint64_4 t = __builtin_convertvector(lhs, uint64_4) * __builtin_convertvector(rhs, uint64_4);
+	return __builtin_convertvector(t >> 32, uint32_4);
+}
 
 #define	P1		(127 * (uint32(1) << 24) + 1)
 #define	Q1		2164260865u		// p * q = 1 (mod 2^32)
@@ -183,44 +188,41 @@ public:
 
 	static void forward4(Zp4T * const z, const Zp * const wr, const size_t m, const size_t s)
 	{
-		const size_t m_4 = m / 4;
 		for (size_t j = 0; j < s; ++j)
 		{
 			const Zp w1 = wr[1 * (s + j)];
 			Zp w2[2]; Zp::load(2, w2, &wr[2 * (s + j)], 1);
 
-			for (size_t i = 0; i < m_4; ++i)
+			for (size_t i = 0; i < m; ++i)
 			{
-				const size_t k = 4 * m_4 * j + i;
-				Zp4T zl[4]; Zp4T::load(4, zl, &z[k], m_4);
+				const size_t k = 4 * m * j + i;
+				Zp4T zl[4]; Zp4T::load(4, zl, &z[k], m);
 				Zp4T::_forward4(zl, w1, w2);
-				Zp4T::store(4, &z[k], m_4, zl);
+				Zp4T::store(4, &z[k], m, zl);
 			}
 		}
 	}
 
 	static void backward4(Zp4T * const z, const Zp * const wr, const size_t m, const size_t s)
 	{
-		const size_t m_4 = m / 4;
 		for (size_t j = 0; j < s; ++j)
 		{
 			const size_t ji = s - j - 1;
 			const Zp win1 = wr[1 * (s + ji)];
 			Zp win2[2]; Zp::loadr(2, win2, &wr[2 * (s + ji)], 1);
 
-			for (size_t i = 0; i < m_4; ++i)
+			for (size_t i = 0; i < m; ++i)
 			{
-				const size_t k = 4 * m_4 * j + i;
-				Zp4T zl[4]; Zp4T::load(4, zl, &z[k], m_4);
+				const size_t k = 4 * m * j + i;
+				Zp4T zl[4]; Zp4T::load(4, zl, &z[k], m);
 				Zp4T::_backward4(zl, win1, win2);
-				Zp4T::store(4, &z[k], m_4, zl);
+				Zp4T::store(4, &z[k], m, zl);
 			}
 		}
 	}
 
-	static void forward4_0(Zp4T * const z, const size_t n_4)
+	static void forward4_0(Zp4T * const z, const size_t n_16)
 	{
-		const size_t n_16 = n_4 / 4;
 		for (size_t i = 0; i < n_16; ++i)
 		{
 			const size_t k = i;
@@ -230,33 +232,35 @@ public:
 		}
 	}
 
-	static void square4x2(Zp4T * const z, const Zp * const wr, const size_t n_8)
+	static void square4x2(Zp4T * const z, const Zp * const wr, const size_t n_16)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		for (size_t j = 0; j < n_16; ++j)
 		{
-			const size_t ji = n_8 - j - 1;
-			Zp w2[2]; Zp::load(2, w2, &wr[2 * (n_8 + j)], 1);
-			Zp win2[2]; Zp::loadr(2, win2, &wr[2 * (n_8 + ji)], 1);
+			const size_t ji =  n_16 - j - 1;
+			Zp w2[4]; Zp::load(4, w2, &wr[4 * (n_16 + j)], 1);
+			Zp win2[4]; Zp::loadr(4, win2, &wr[4 * (n_16 + ji)], 1);
 
-			Zp4T zl[2]; Zp4T::load(2, zl, &z[2 * j], 1);
-			Zp4T::_square4x2(zl, w2, win2);
-			Zp4T::store(2, &z[2 * j], 1, zl);
+			Zp4T zl[4]; Zp4T::load(4, zl, &z[4 * j], 1);
+			Zp4T::_square4x2(&zl[0], &w2[0], &win2[0]);
+			Zp4T::_square4x2(&zl[2], &w2[2], &win2[2]);
+			Zp4T::store(4, &z[4 * j], 1, zl);
 		}
 	}
 
-	static void square8(Zp4T * const z, const Zp * const wr, const size_t n_8)
+	static void square8x2(Zp4T * const z, const Zp * const wr, const size_t n_16)
 	{
-		for (size_t j = 0; j < n_8; ++j)
+		for (size_t j = 0; j < n_16; ++j)
 		{
-			const size_t ji = n_8 - j - 1;
-			const Zp w1 = wr[1 * (n_8 + j)];
-			Zp w2[2]; Zp::load(2, w2, &wr[2 * (n_8 + j)], 1);
-			const Zp win1 = wr[1 * (n_8 + ji)];
-			Zp win2[2]; Zp::loadr(2, win2, &wr[2 * (n_8 + ji)], 1);
+			const size_t ji =  n_16 - j - 1;
+			Zp w1[2]; Zp::load(2, w1, &wr[2 * (n_16 + j)], 1);
+			Zp win1[2]; Zp::loadr(2, win1, &wr[2 * (n_16 + ji)], 1);
+			Zp w2[4]; Zp::load(4, w2, &wr[4 * (n_16 + j)], 1);
+			Zp win2[4]; Zp::loadr(4, win2, &wr[4 * (n_16 + ji)], 1);
 
-			Zp4T zl[2]; Zp4T::load(2, zl, &z[2 * j], 1);
-			Zp4T::_square8(zl, w1, win1, w2, win2);
-			Zp4T::store(2, &z[2 * j], 1, zl);
+			Zp4T zl[4]; Zp4T::load(4, zl, &z[4 * j], 1);
+			Zp4T::_square8(&zl[0], w1[0], win1[0], &w2[0], &win2[0]);
+			Zp4T::_square8(&zl[2], w1[1], win1[1], &w2[2], &win2[2]);
+			Zp4T::store(4, &z[4 * j], 1, zl);
 		}
 	}
 };
@@ -279,7 +283,9 @@ private:
 	std::vector<Zp1> _vwr1;
 	std::vector<Zp2> _vwr2;
 	std::vector<Zp3> _vwr3;
-	const int32 _base;
+	const uint32 _base;
+	const int _b_s;
+	const uint32 _b_inv;
 	const int32 _multiplier;
 	const Zp1 _norm1;
 	const Zp2 _norm2;
@@ -292,6 +298,44 @@ private:
 		size_t r = 0;
 		for (size_t k = n, j = i; k != 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
 		return r;
+	}
+
+	static uint32 barrett(const uint64 a, const uint32 b, const uint32 b_inv, const int b_s, uint32 & a_p)
+	{
+		const uint32 d = mul_hi(uint32(a >> b_s), b_inv), r = uint32(a) - d * b;
+		const bool o = (r >= b);
+		a_p = d + (o ? 1 : 0);
+		return r - (o ? b : 0);
+	}
+	
+	static int32 reduce64(int64 & f, const uint32 b, const uint32 b_inv, const int b_s)
+	{
+		const bool s = (f < 0);
+		const uint64 t = uint64(s ? -f : f);
+		const uint64 t_h = t >> 29;
+		const uint32 t_l = (uint32)(t) & ((1u << 29) - 1);
+	
+		uint32 d_h, r_h = barrett(t_h, b, b_inv, b_s, d_h);
+		uint32 d_l, r_l = barrett((uint64(r_h) << 29) | t_l, b, b_inv, b_s, d_l);
+		const uint64 d = (uint64(d_h) << 29) | d_l;
+	
+		f = s ? -int64(d) : int64(d);
+		return s ? -int32(r_l) : int32(r_l);
+	}
+	
+	static int32 reduce96(__int128_t & f, const uint32 b, const uint32 b_inv, const int b_s)
+	{
+		const bool s = (f < 0);
+		const __uint128_t t = __uint128_t(s ? -f : f);
+		const uint64 t_h = uint64(t >> 29);
+		const uint32 t_l = uint32(t) & ((1u << 29) - 1);
+	
+		uint32 d_h, r_h = barrett(t_h, b, b_inv, b_s, d_h);
+		uint32 d_l, r_l = barrett((uint64(r_h) << 29) | t_l, b, b_inv, b_s, d_l);
+		const uint64 d = (uint64(d_h) << 29) | d_l;
+	
+		f = s ? -__int128_t(d) : __int128_t(d);
+		return s ? -int32(r_l) : int32(r_l);
 	}
 
 	static int64 garner2(const Zp1 r1, const Zp2 r2)
@@ -327,8 +371,8 @@ private:
 
 		// Not converted into Montgomery form such that output is converted out of MF
 		const Zp1 norm1 = _norm1; const Zp2 norm2 = _norm2; const Zp3 norm3 = _norm3;
-		const int32 m = _multiplier, base = _base;
-		__int128_t f = 0;
+		const int32 m = _multiplier; const uint32 b = _base; const int b_s = _b_s; const uint32 b_inv = _b_inv;
+		__int128_t f96 = 0;
 		__uint128_t fmax = 0;
 
 		for (size_t k = 0; k < n; ++k)
@@ -338,29 +382,26 @@ private:
 			const Zp3 u3 = Zp3(z3[k / 4].get(k % 4)).mul(norm3);
 			__int128_t l = garner3(u1, u2, u3);
 			if (mul) l *= m;
-			f += l;
-			const __uint128_t uf = __uint128_t((f < 0) ? -f : f);
+			f96 += l;
+			const __uint128_t uf = __uint128_t((f96 < 0) ? -f96 : f96);
 			fmax = (uf > fmax) ? uf : fmax;
-			const __int128_t r = f / base;
-			const int32 i = int32(f - r * base);
-			f = r;
-			z1[k / 4].set_int(k % 4, i); z2[k / 4].set_int(k % 4, i); z3[k / 4].set_int(k % 4, i);
+			const int32 r = reduce96(f96, b, b_inv, b_s);
+			z1[k / 4].set_int(k % 4, r); z2[k / 4].set_int(k % 4, r); z3[k / 4].set_int(k % 4, r);
 		}
 
 		if (fmax > _fmax) _fmax = fmax;
 
-		while (f != 0)
+		int64 f64 = int64(f96);
+		while (f64 != 0)
 		{
-			f = -f;		// a_n = -a_0
+			f64 = -f64;		// a_n = -a_0
 
 			for (size_t k = 0; k < n; ++k)
 			{
-				f += z1[k / 4].get_int(k % 4);
-				const __int128_t r = f / base;
-				const int32 i = int32(f - r * base);
-				z1[k / 4].set_int(k % 4, i); z2[k / 4].set_int(k % 4, i); z3[k / 4].set_int(k % 4, i);
-				f = r;
-				if (r == 0) break;
+				f64 += z1[k / 4].get_int(k % 4);
+				const int32 r = reduce64(f64, b, b_inv, b_s);
+				z1[k / 4].set_int(k % 4, r); z2[k / 4].set_int(k % 4, r); z3[k / 4].set_int(k % 4, r);
+				if (f64 == 0) break;
 			}
 		}
 	}
@@ -368,7 +409,7 @@ private:
 public:
 	Transform(const uint32_t b, const int n, const uint32_t a)
 		: _size(size_t(1) << n), _vz1(_size / 4), _vz2(_size / 4), _vz3(_size / 4), _vwr1(_size / 2), _vwr2(_size / 2), _vwr3(_size / 2),
-		_base(int32(b)), _multiplier(int32(a)),
+		_base(b), _b_s(int(31 - __builtin_clz(b) - 1)), _b_inv(uint32((uint64(1) << (_b_s + 32)) / b)), _multiplier(int32(a)),
 		_norm1(Zp1::norm(uint32(_size / 2))), _norm2(Zp2::norm(uint32(_size / 2))), _norm3(Zp3::norm(uint32(_size / 2)))
 	{
 		const size_t size = _size;
@@ -417,7 +458,7 @@ public:
 public:
 	void squareMul(const bool mul)
 	{
-		const size_t n_4 = _size / 4, n_8 = _size / 8;
+		const size_t n_16 = _size / 16;
 		Zp1v * const z1 = _vz1.data();
 		Zp2v * const z2 = _vz2.data();
 		Zp3v * const z3 = _vz3.data();
@@ -425,23 +466,26 @@ public:
 		const Zp2 * const wr2 = _vwr2.data();
 		const Zp3 * const wr3 = _vwr3.data();
 
-		Zp1v::forward4_0(z1, n_4);
-		size_t m = n_4 / 4, s = 4;
-		for (; m > 2; m /= 4, s *= 4) Zp1v::forward4(z1, wr1, m, s);
-		if (m == 2) Zp1v::square8(z1, wr1, n_8); else Zp1v::square4x2(z1, wr1, n_8);
-		for (m *= 4, s /= 4; m <= n_4; m *= 4, s /= 4) Zp1v::backward4(z1, wr1, m, s);
+		size_t m = n_16, s = 1;
+		Zp1v::forward4_0(z1, n_16);
+		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp1v::forward4(z1, wr1, m, s);
+		s /= 4; m = n_16 / s;
+		if (m == 2) Zp1v::square8x2(z1, wr1, n_16); else Zp1v::square4x2(z1, wr1, n_16);
+		for (; m <= n_16; m *= 4, s /= 4) Zp1v::backward4(z1, wr1, m, s);
 
-		Zp2v::forward4_0(z2, n_4);
-		m = n_4 / 4, s = 4;
-		for (; m > 2; m /= 4, s *= 4) Zp2v::forward4(z2, wr2, m, s);
-		if (m == 2) Zp2v::square8(z2, wr2, n_8); else Zp2v::square4x2(z2, wr2, n_8);
-		for (m *= 4, s /= 4; m <= n_4; m *= 4, s /= 4) Zp2v::backward4(z2, wr2, m, s);
+		m = n_16, s = 1;
+		Zp2v::forward4_0(z2, n_16);
+		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp2v::forward4(z2, wr2, m, s);
+		s /= 4; m = n_16 / s;
+		if (m == 2) Zp2v::square8x2(z2, wr2, n_16); else Zp2v::square4x2(z2, wr2, n_16);
+		for (; m <= n_16; m *= 4, s /= 4) Zp2v::backward4(z2, wr2, m, s);
 
-		Zp3v::forward4_0(z3, n_4);
-		m = n_4 / 4, s = 4;
-		for (; m > 2; m /= 4, s *= 4) Zp3v::forward4(z3, wr3, m, s);
-		if (m == 2) Zp3v::square8(z3, wr3, n_8); else Zp3v::square4x2(z3, wr3, n_8);
-		for (m *= 4, s /= 4; m <= n_4; m *= 4, s /= 4) Zp3v::backward4(z3, wr3, m, s);
+		m = n_16, s = 1;
+		Zp3v::forward4_0(z3, n_16);
+		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp3v::forward4(z3, wr3, m, s);
+		s /= 4; m = n_16 / s;
+		if (m == 2) Zp3v::square8x2(z3, wr3, n_16); else Zp3v::square4x2(z3, wr3, n_16);
+		for (; m <= n_16; m *= 4, s /= 4) Zp3v::backward4(z3, wr3, m, s);
 
 		carry(mul);
 	}
@@ -457,7 +501,7 @@ public:
 
 		for (size_t i = 0; i < n; ++i) zi[i] = z1[i / 4].get_int(i % 4);
 
-		const int32_t base = _base;
+		const int32_t base = int32_t(_base);
 		int64_t f;
 		do
 		{

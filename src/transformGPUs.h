@@ -16,7 +16,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernels.h"
 
-#define USE_WI
+// #define USE_WI
+
+// #define V2
+#define V4
 
 // #define CHECK_ALL_FUNCTIONS		1
 #define CHECK_RADIX4_FUNCTIONS	1
@@ -157,9 +160,10 @@ private:
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
 	cl_kernel _forward4x2 = nullptr, _backward4x2 = nullptr, _forward4x2_0 = nullptr;
-	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square4x2 = nullptr, _square8 = nullptr;
-	cl_kernel _fwd4p = nullptr, _fwd4x2p = nullptr, _fwd8p = nullptr;
-	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr;
+	cl_kernel _forward4x4 = nullptr, _backward4x4 = nullptr, _forward4x4_0 = nullptr;
+	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square4x2 = nullptr, _square8 = nullptr, _square4x4 = nullptr, _square8x2 = nullptr;
+	cl_kernel _fwd4p = nullptr, _fwd4x2p = nullptr, _fwd8p = nullptr, _fwd4x4p = nullptr, _fwd8x2p = nullptr;
+	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr, _mul4x4 = nullptr, _mul8x2 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
 	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
 	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
@@ -273,17 +277,29 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward4x2);
 		CREATE_TRANSFORM_KERNEL(backward4x2);
 		CREATE_TRANSFORM_KERNEL(forward4x2_0);
+		CREATE_TRANSFORM_KERNEL(forward4x4);
+		CREATE_TRANSFORM_KERNEL(backward4x4);
+		CREATE_TRANSFORM_KERNEL(forward4x4_0);
+
 		CREATE_TRANSFORM_KERNEL(square2x2);
 		CREATE_TRANSFORM_KERNEL(square4);
 		CREATE_TRANSFORM_KERNEL(square4x2);
 		CREATE_TRANSFORM_KERNEL(square8);
+		CREATE_TRANSFORM_KERNEL(square4x4);
+		CREATE_TRANSFORM_KERNEL(square8x2);
+
 		CREATE_TRANSFORM_KERNELP(fwd4p);
 		CREATE_TRANSFORM_KERNELP(fwd4x2p);
 		CREATE_TRANSFORM_KERNELP(fwd8p);
+		CREATE_TRANSFORM_KERNELP(fwd4x4p);
+		CREATE_TRANSFORM_KERNELP(fwd8x2p);
+
 		CREATE_MUL_KERNEL(mul2x2);
 		CREATE_MUL_KERNEL(mul4);
 		CREATE_MUL_KERNEL(mul4x2);
 		CREATE_MUL_KERNEL(mul8);
+		CREATE_MUL_KERNEL(mul4x4);
+		CREATE_MUL_KERNEL(mul8x2);
 
 #if !defined(CHECK_RADIX4_FUNCTIONS)
 		CREATE_TRANSFORM_KERNEL(forward64);
@@ -369,9 +385,13 @@ public:
 
 		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0);
 		_releaseKernel(_forward4x2); _releaseKernel(_backward4x2); _releaseKernel(_forward4x2_0);
-		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square4x2); _releaseKernel(_square8);
+		_releaseKernel(_forward4x4); _releaseKernel(_backward4x4); _releaseKernel(_forward4x4_0);
+		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square4x2);
+		_releaseKernel(_square8); _releaseKernel(_square4x4); _releaseKernel(_square8x2);
 		_releaseKernel(_fwd4p); _releaseKernel(_fwd4x2p); _releaseKernel(_fwd8p);
-		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul4x2); _releaseKernel(_mul8);
+		_releaseKernel(_fwd4x4p); _releaseKernel(_fwd8x2p);
+		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul4x2);
+		_releaseKernel(_mul8); _releaseKernel(_mul4x4); _releaseKernel(_mul8x2);
 
 		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0);
 		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0);
@@ -423,18 +443,29 @@ private:
 	void forward4x2(const int lm) { ek_fb(_forward4x2, lm - 1, 0, 4 * 2); }
 	void backward4x2(const int lm) { ek_fb(_backward4x2, lm - 1, 0, 4 * 2); }
 	void forward4x2_0() { ek(_forward4x2_0, 0, 4 * 2); }
+	void forward4x4(const int lm) { ek_fb(_forward4x4, lm - 2, 0, 4 * 4); }
+	void backward4x4(const int lm) { ek_fb(_backward4x4, lm - 2, 0, 4 * 4); }
+	void forward4x4_0() { ek(_forward4x4_0, 0, 4 * 4); }
 
 	void square2x2() { ek(_square2x2, 0, 4); }
 	void square4() { ek(_square4, 0, 4); }
 	void square4x2() { ek(_square4x2, 0, 4 * 2); }
 	void square8() { ek(_square8, 0, 8); }
+	void square4x4() { ek(_square4x4, 0, 4 * 4); }
+	void square8x2() { ek(_square8x2, 0, 8 * 2); }
+
 	void fwd4p() { ek(_fwd4p, 0, 4); }
 	void fwd4x2p() { ek(_fwd4x2p, 0, 4 * 2); }
 	void fwd8p() { ek(_fwd8p, 0, 8); }
+	void fwd4x4p() { ek(_fwd4x4p, 0, 4 * 4); }
+	void fwd8x2p() { ek(_fwd8x2p, 0, 8 * 2); }
+
 	void mul2x2() { ek(_mul2x2, 0, 4); }
 	void mul4() { ek(_mul4, 0, 4); }
 	void mul4x2() { ek(_mul4x2, 0, 4 * 2); }
 	void mul8() { ek(_mul8, 0, 8); }
+	void mul4x4() { ek(_mul4x4, 0, 4 * 4); }
+	void mul8x2() { ek(_mul8x2, 0, 8 * 2); }
 
 	DEFINE_FORWARDG(64);
 	DEFINE_BACKWARDG(64);
@@ -491,12 +522,14 @@ private:
 
 	DEFINE_FORWARDP(4);
 	void forward4x2p(const int lm) { setTransformArgs(_forward4x2, false); forward4x2(lm); setTransformArgs(_forward4x2); }
+	void forward4x4p(const int lm) { setTransformArgs(_forward4x4, false); forward4x4(lm); setTransformArgs(_forward4x4); }
 	DEFINE_FORWARDP(64);
 	DEFINE_FORWARDP(256);
 	DEFINE_FORWARDP(1024);
 
 	DEFINE_FORWARDP0(4);
 	void forward4x2p_0() { setTransformArgs(_forward4x2_0, false); forward4x2_0(); setTransformArgs(_forward4x2_0); }
+	void forward4x4p_0() { setTransformArgs(_forward4x4_0, false); forward4x4_0(); setTransformArgs(_forward4x4_0); }
 	DEFINE_FORWARDP0(64);
 	DEFINE_FORWARDP0(256);
 	DEFINE_FORWARDP0(1024);
@@ -528,10 +561,22 @@ private:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
+#if defined(V4)
+		lm -= 2; forward4x4_0();
+		while (lm > 3) { lm -= 2; forward4x4(lm); }
+		if (isSquare) { if (lm == 3) square8x2(); else square4x4(); } else if (lm == 3) mul8x2(); else mul4x4();
+		while (lm < _ln) { backward4x4(lm); lm += 2; }
+#elif defined(V2)
 		lm -= 2; forward4x2_0();
 		while (lm > 3) { lm -= 2; forward4x2(lm); }
 		if (isSquare) { if (lm == 3) square8(); else square4x2(); } else if (lm == 3) mul8(); else mul4x2();
 		while (lm < _ln) { backward4x2(lm); lm += 2; }
+#else
+		lm -= 2; forward4_0();
+		while (lm > 2) { lm -= 2; forward4(lm); }
+		if (isSquare) { if (lm == 1) square2x2(); else square4(); } else if (lm == 1) mul2x2(); else mul4();
+		while (lm < _ln) { backward4(lm); lm += 2; }
+#endif
 		return;
 #endif
 
@@ -670,9 +715,19 @@ public:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
+#if defined(V4)
+		lm -= 2; forward4x4p_0();
+		while (lm > 3) { lm -= 2; forward4x4p(lm); }
+		if (lm == 3) fwd8x2p(); else fwd4x4p();
+#elif defined(V2)
 		lm -= 2; forward4x2p_0();
 		while (lm > 3) { lm -= 2; forward4x2p(lm); }
 		if (lm == 3) fwd8p(); else fwd4x2p();
+#else
+		lm -= 2; forward4p_0();
+		while (lm > 2) { lm -= 2; forward4p(lm); }
+		if (lm == 2) fwd4p();
+#endif
 		return;
 #endif
 

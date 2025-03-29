@@ -232,7 +232,7 @@ public:
 		}
 	}
 
-	static void square4x2(Zp4T * const z, const Zp * const wr, const size_t n_16)
+	static void square4x4(Zp4T * const z, const Zp * const wr, const size_t n_16)
 	{
 		for (size_t j = 0; j < n_16; ++j)
 		{
@@ -470,21 +470,21 @@ public:
 		Zp1v::forward4_0(z1, n_16);
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp1v::forward4(z1, wr1, m, s);
 		s /= 4; m = n_16 / s;
-		if (m == 2) Zp1v::square8x2(z1, wr1, n_16); else Zp1v::square4x2(z1, wr1, n_16);
+		if (m == 2) Zp1v::square8x2(z1, wr1, n_16); else Zp1v::square4x4(z1, wr1, n_16);
 		for (; m <= n_16; m *= 4, s /= 4) Zp1v::backward4(z1, wr1, m, s);
 
 		m = n_16, s = 1;
 		Zp2v::forward4_0(z2, n_16);
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp2v::forward4(z2, wr2, m, s);
 		s /= 4; m = n_16 / s;
-		if (m == 2) Zp2v::square8x2(z2, wr2, n_16); else Zp2v::square4x2(z2, wr2, n_16);
+		if (m == 2) Zp2v::square8x2(z2, wr2, n_16); else Zp2v::square4x4(z2, wr2, n_16);
 		for (; m <= n_16; m *= 4, s /= 4) Zp2v::backward4(z2, wr2, m, s);
 
 		m = n_16, s = 1;
 		Zp3v::forward4_0(z3, n_16);
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp3v::forward4(z3, wr3, m, s);
 		s /= 4; m = n_16 / s;
-		if (m == 2) Zp3v::square8x2(z3, wr3, n_16); else Zp3v::square4x2(z3, wr3, n_16);
+		if (m == 2) Zp3v::square8x2(z3, wr3, n_16); else Zp3v::square4x4(z3, wr3, n_16);
 		for (; m <= n_16; m *= 4, s /= 4) Zp3v::backward4(z3, wr3, m, s);
 
 		carry(mul);

@@ -16,10 +16,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernels.h"
 
-// #define USE_WI
+// #define USE_WI	1
 
-// #define V2
-#define V4
+#define VSIZE	4
 
 // #define CHECK_ALL_FUNCTIONS		1
 #define CHECK_RADIX4_FUNCTIONS	1
@@ -113,6 +112,14 @@ typedef ZPT<P1S, Q1S, R1S, H1S> ZP1;
 typedef ZPT<P2S, Q2S, R2S, H2S> ZP2;
 typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 
+#if VSIZE == 4
+#define LVSIZE	2
+#elif VSIZE == 2
+#define LVSIZE	1
+#else
+#define LVSIZE	0
+#endif
+
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
 #define BLK32m		32		// local size =  4KB, workgroup size = 256
@@ -134,14 +141,13 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CREATE_SETCOPY_KERNEL(name) _##name = createSetCopyKernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = createCopypKernel(#name);
 
-#define DEFINE_FORWARDG(u) void forward##u(const int lm) { ek_fb(_forward##u, lm, u / 4 * CHUNK##u##m, 4); }
-#define DEFINE_BACKWARDG(u) void backward##u(const int lm) { ek_fb(_backward##u, lm, u / 4 * CHUNK##u##m, 4); }
-#define DEFINE_FORWARD(u, v) void forward##u##_##v() { ek(_forward##u##_##v, u / 4 * CHUNK##u##m, 4); }
-#define DEFINE_BACKWARD(u, v) void backward##u##_##v() { ek(_backward##u##_##v, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u##m, 4); }
 
-#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
-#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
-#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, std::min(_n / 4, size_t(u / 4 * BLK##u##m)), 4); }
+#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / 4 / VSIZE, size_t(u / 4 * BLK##u##m)), 4 * VSIZE); }
+#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / 4 / VSIZE, size_t(u / 4 * BLK##u##m)), 4 * VSIZE); }
+#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, std::min(_n / 4 / VSIZE, size_t(u / 4 * BLK##u##m)), 4 * VSIZE); }
 
 #define DEFINE_FORWARDP(u) \
 	void forward##u##p(const int lm) { setTransformArgs(_forward##u, false); forward##u(lm); setTransformArgs(_forward##u);	}
@@ -159,17 +165,12 @@ private:
 	const size_t _num_regs;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
-	cl_kernel _forward4x2 = nullptr, _backward4x2 = nullptr, _forward4x2_0 = nullptr;
-	cl_kernel _forward4x4 = nullptr, _backward4x4 = nullptr, _forward4x4_0 = nullptr;
-	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square4x2 = nullptr, _square8 = nullptr, _square4x4 = nullptr, _square8x2 = nullptr;
-	cl_kernel _fwd4p = nullptr, _fwd4x2p = nullptr, _fwd8p = nullptr, _fwd4x4p = nullptr, _fwd8x2p = nullptr;
-	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul4x2 = nullptr, _mul8 = nullptr, _mul4x4 = nullptr, _mul8x2 = nullptr;
+	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square8 = nullptr;
+	cl_kernel _fwd4p = nullptr, _fwd8p = nullptr;
+	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul8 = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
 	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
 	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
-	cl_kernel _forward64_5 = nullptr, _backward64_5 = nullptr, _forward64_6 = nullptr, _backward64_6 = nullptr;
-	cl_kernel _forward64_7 = nullptr, _backward64_7 = nullptr, _forward64_8 = nullptr, _backward64_8 = nullptr;
-	cl_kernel _forward256_5 = nullptr, _backward256_5 = nullptr, _forward256_6 = nullptr, _backward256_6 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
@@ -274,32 +275,17 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward4);
 		CREATE_TRANSFORM_KERNEL(backward4);
 		CREATE_TRANSFORM_KERNEL(forward4_0);
-		CREATE_TRANSFORM_KERNEL(forward4x2);
-		CREATE_TRANSFORM_KERNEL(backward4x2);
-		CREATE_TRANSFORM_KERNEL(forward4x2_0);
-		CREATE_TRANSFORM_KERNEL(forward4x4);
-		CREATE_TRANSFORM_KERNEL(backward4x4);
-		CREATE_TRANSFORM_KERNEL(forward4x4_0);
 
 		CREATE_TRANSFORM_KERNEL(square2x2);
 		CREATE_TRANSFORM_KERNEL(square4);
-		CREATE_TRANSFORM_KERNEL(square4x2);
 		CREATE_TRANSFORM_KERNEL(square8);
-		CREATE_TRANSFORM_KERNEL(square4x4);
-		CREATE_TRANSFORM_KERNEL(square8x2);
 
 		CREATE_TRANSFORM_KERNELP(fwd4p);
-		CREATE_TRANSFORM_KERNELP(fwd4x2p);
 		CREATE_TRANSFORM_KERNELP(fwd8p);
-		CREATE_TRANSFORM_KERNELP(fwd4x4p);
-		CREATE_TRANSFORM_KERNELP(fwd8x2p);
 
 		CREATE_MUL_KERNEL(mul2x2);
 		CREATE_MUL_KERNEL(mul4);
-		CREATE_MUL_KERNEL(mul4x2);
 		CREATE_MUL_KERNEL(mul8);
-		CREATE_MUL_KERNEL(mul4x4);
-		CREATE_MUL_KERNEL(mul8x2);
 
 #if !defined(CHECK_RADIX4_FUNCTIONS)
 		CREATE_TRANSFORM_KERNEL(forward64);
@@ -311,31 +297,6 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward1024);
 		CREATE_TRANSFORM_KERNEL(backward1024);
 		CREATE_TRANSFORM_KERNEL(forward1024_0);
-
-		if (ln % 2 != 0)
-		{
-			CREATE_TRANSFORM_KERNEL(forward64_5);
-			CREATE_TRANSFORM_KERNEL(backward64_5);
-			if (ln >= 19)
-			{
-				CREATE_TRANSFORM_KERNEL(forward64_7);
-				CREATE_TRANSFORM_KERNEL(backward64_7);
-				CREATE_TRANSFORM_KERNEL(forward256_5);
-				CREATE_TRANSFORM_KERNEL(backward256_5);
-			}
-		}
-		else
-		{
-			CREATE_TRANSFORM_KERNEL(forward64_6);
-			CREATE_TRANSFORM_KERNEL(backward64_6);
-			if (ln >= 20)
-			{
-				CREATE_TRANSFORM_KERNEL(forward64_8);
-				CREATE_TRANSFORM_KERNEL(backward64_8);
-				CREATE_TRANSFORM_KERNEL(forward256_6);
-				CREATE_TRANSFORM_KERNEL(backward256_6);
-			}
-		}
 
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
@@ -384,21 +345,13 @@ public:
 		delete _pSplit;
 
 		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0);
-		_releaseKernel(_forward4x2); _releaseKernel(_backward4x2); _releaseKernel(_forward4x2_0);
-		_releaseKernel(_forward4x4); _releaseKernel(_backward4x4); _releaseKernel(_forward4x4_0);
-		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square4x2);
-		_releaseKernel(_square8); _releaseKernel(_square4x4); _releaseKernel(_square8x2);
-		_releaseKernel(_fwd4p); _releaseKernel(_fwd4x2p); _releaseKernel(_fwd8p);
-		_releaseKernel(_fwd4x4p); _releaseKernel(_fwd8x2p);
-		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul4x2);
-		_releaseKernel(_mul8); _releaseKernel(_mul4x4); _releaseKernel(_mul8x2);
+		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square8);
+		_releaseKernel(_fwd4p); _releaseKernel(_fwd8p);
+		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul8);
 
 		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0);
 		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0);
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0);
-		_releaseKernel(_forward64_5); _releaseKernel(_backward64_5); _releaseKernel(_forward64_6); _releaseKernel(_backward64_6);
-		_releaseKernel(_forward64_7); _releaseKernel(_backward64_7); _releaseKernel(_forward64_8); _releaseKernel(_backward64_8);
-		_releaseKernel(_forward256_5); _releaseKernel(_backward256_5); _releaseKernel(_forward256_6); _releaseKernel(_backward256_6);
 		 
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
@@ -437,59 +390,33 @@ private:
 		_executeKernel(kernel, RNS_SIZE * n_s, localWorkSize);
 	}
 
-	void forward4(const int lm) { ek_fb(_forward4, lm, 0, 4); }
-	void backward4(const int lm) { ek_fb(_backward4, lm, 0, 4); }
-	void forward4_0() { ek(_forward4_0, 0, 4); }
-	void forward4x2(const int lm) { ek_fb(_forward4x2, lm - 1, 0, 4 * 2); }
-	void backward4x2(const int lm) { ek_fb(_backward4x2, lm - 1, 0, 4 * 2); }
-	void forward4x2_0() { ek(_forward4x2_0, 0, 4 * 2); }
-	void forward4x4(const int lm) { ek_fb(_forward4x4, lm - 2, 0, 4 * 4); }
-	void backward4x4(const int lm) { ek_fb(_backward4x4, lm - 2, 0, 4 * 4); }
-	void forward4x4_0() { ek(_forward4x4_0, 0, 4 * 4); }
+	void forward4(const int lm) { ek_fb(_forward4, lm - LVSIZE, 0, 4 * VSIZE); }
+	void backward4(const int lm) { ek_fb(_backward4, lm - LVSIZE, 0, 4 * VSIZE); }
+	void forward4_0() { ek(_forward4_0, 0, 4 * VSIZE); }
 
-	void square2x2() { ek(_square2x2, 0, 4); }
-	void square4() { ek(_square4, 0, 4); }
-	void square4x2() { ek(_square4x2, 0, 4 * 2); }
-	void square8() { ek(_square8, 0, 8); }
-	void square4x4() { ek(_square4x4, 0, 4 * 4); }
-	void square8x2() { ek(_square8x2, 0, 8 * 2); }
+	void square4() { ek(_square4, 0, 4 * VSIZE); }
+	void fwd4p() { ek(_fwd4p, 0, 4 * VSIZE); }
+	void mul4() { ek(_mul4, 0, 4 * VSIZE); }
+	
+#if VSIZE == 1
+	void square8() { forward4(1); ek(_square2x2, 0, 4); backward4(1); }
+	void fwd8p() { forward4p(1); }
+	void mul8() { forward4(1); ek(_mul2x2, 0, 4); backward4(1); }
+#else
+	void square8() { ek(_square8, 0, 4 * VSIZE); }
+	void fwd8p() { ek(_fwd8p, 0, 4 * VSIZE); }
+	void mul8() { ek(_mul8, 0, 4 * VSIZE); }
+#endif
 
-	void fwd4p() { ek(_fwd4p, 0, 4); }
-	void fwd4x2p() { ek(_fwd4x2p, 0, 4 * 2); }
-	void fwd8p() { ek(_fwd8p, 0, 8); }
-	void fwd4x4p() { ek(_fwd4x4p, 0, 4 * 4); }
-	void fwd8x2p() { ek(_fwd8x2p, 0, 8 * 2); }
-
-	void mul2x2() { ek(_mul2x2, 0, 4); }
-	void mul4() { ek(_mul4, 0, 4); }
-	void mul4x2() { ek(_mul4x2, 0, 4 * 2); }
-	void mul8() { ek(_mul8, 0, 8); }
-	void mul4x4() { ek(_mul4x4, 0, 4 * 4); }
-	void mul8x2() { ek(_mul8x2, 0, 8 * 2); }
-
-	DEFINE_FORWARDG(64);
-	DEFINE_BACKWARDG(64);
-	DEFINE_FORWARD(64, 0);
-	DEFINE_FORWARDG(256);
-	DEFINE_BACKWARDG(256);
-	DEFINE_FORWARD(256, 0);
-	DEFINE_FORWARDG(1024);
-	DEFINE_BACKWARDG(1024);
-	DEFINE_FORWARD(1024, 0);
-
-	DEFINE_FORWARD(64, 5);
-	DEFINE_BACKWARD(64, 5);
-	DEFINE_FORWARD(64, 6);
-	DEFINE_BACKWARD(64, 6);
-	DEFINE_FORWARD(64, 7);
-	DEFINE_BACKWARD(64, 7);
-	DEFINE_FORWARD(64, 8);
-	DEFINE_BACKWARD(64, 8);
-
-	DEFINE_FORWARD(256, 5);
-	DEFINE_BACKWARD(256, 5);
-	DEFINE_FORWARD(256, 6);
-	DEFINE_BACKWARD(256, 6);
+	DEFINE_FORWARD(64);
+	DEFINE_BACKWARD(64);
+	DEFINE_FORWARD0(64);
+	DEFINE_FORWARD(256);
+	DEFINE_BACKWARD(256);
+	DEFINE_FORWARD0(256);
+	DEFINE_FORWARD(1024);
+	DEFINE_BACKWARD(1024);
+	DEFINE_FORWARD0(1024);
 
 	DEFINE_SQUARE(32);
 	DEFINE_SQUARE(64);
@@ -521,15 +448,11 @@ private:
 	}
 
 	DEFINE_FORWARDP(4);
-	void forward4x2p(const int lm) { setTransformArgs(_forward4x2, false); forward4x2(lm); setTransformArgs(_forward4x2); }
-	void forward4x4p(const int lm) { setTransformArgs(_forward4x4, false); forward4x4(lm); setTransformArgs(_forward4x4); }
 	DEFINE_FORWARDP(64);
 	DEFINE_FORWARDP(256);
 	DEFINE_FORWARDP(1024);
 
 	DEFINE_FORWARDP0(4);
-	void forward4x2p_0() { setTransformArgs(_forward4x2_0, false); forward4x2_0(); setTransformArgs(_forward4x2_0); }
-	void forward4x4p_0() { setTransformArgs(_forward4x4_0, false); forward4x4_0(); setTransformArgs(_forward4x4_0); }
 	DEFINE_FORWARDP0(64);
 	DEFINE_FORWARDP0(256);
 	DEFINE_FORWARDP0(1024);
@@ -561,25 +484,12 @@ private:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
-#if defined(V4)
-		lm -= 2; forward4x4_0();
-		while (lm > 3) { lm -= 2; forward4x4(lm); }
-		if (isSquare) { if (lm == 3) square8x2(); else square4x4(); } else if (lm == 3) mul8x2(); else mul4x4();
-		while (lm < _ln) { backward4x4(lm); lm += 2; }
-#elif defined(V2)
-		lm -= 2; forward4x2_0();
-		while (lm > 3) { lm -= 2; forward4x2(lm); }
-		if (isSquare) { if (lm == 3) square8(); else square4x2(); } else if (lm == 3) mul8(); else mul4x2();
-		while (lm < _ln) { backward4x2(lm); lm += 2; }
-#else
 		lm -= 2; forward4_0();
-		while (lm > 2) { lm -= 2; forward4(lm); }
-		if (isSquare) { if (lm == 1) square2x2(); else square4(); } else if (lm == 1) mul2x2(); else mul4();
+		while (lm > 3) { lm -= 2; forward4(lm); }
+		if (isSquare) { if (lm == 3) square8(); else square4(); } else { if (lm == 3) mul8(); else mul4(); }
 		while (lm < _ln) { backward4(lm); lm += 2; }
-#endif
 		return;
 #endif
-
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
 
@@ -593,24 +503,9 @@ private:
 		{
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
 			lm -= int(k);
-			if (k == 10)
-			{
-				forward1024(lm);
-			}
-			else if (k == 8)
-			{
-				if (lm == 5) forward256_5();
-				else if (lm == 6) forward256_6();
-				else forward256(lm);
-			}
-			else // k = 6
-			{
-				if (lm == 5) forward64_5();
-				else if (lm == 6) forward64_6();
-				else if (lm == 7) forward64_7();
-				else if (lm == 8) forward64_8();
-				else forward64(lm);
-			}
+			if (k == 10) forward1024(lm);
+			else if (k == 8) forward256(lm);
+			else forward64(lm); // k = 6
 		}
 
 		// lm = pSplit->getPart(sIndex, s - 1);
@@ -638,24 +533,9 @@ private:
 		for (size_t i = s - 1; i > 0; --i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
-			if (k == 10)
-			{
-				backward1024(lm);
-			}
-			else if (k == 8)
-			{
-				if (lm == 5) backward256_5();
-				else if (lm == 6) backward256_6();
-				else backward256(lm);
-			}
-			else // k = 6
-			{
-				if (lm == 5) backward64_5();
-				else if (lm == 6) backward64_6();
-				else if (lm == 7) backward64_7();
-				else if (lm == 8) backward64_8();
-				else backward64(lm);
-			}
+			if (k == 10) backward1024(lm);
+			else if (k == 8) backward256(lm);
+			else backward64(lm);	// k = 6
 			lm += int(k);
 		}
 	}
@@ -715,19 +595,9 @@ public:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
-#if defined(V4)
-		lm -= 2; forward4x4p_0();
-		while (lm > 3) { lm -= 2; forward4x4p(lm); }
-		if (lm == 3) fwd8x2p(); else fwd4x4p();
-#elif defined(V2)
-		lm -= 2; forward4x2p_0();
-		while (lm > 3) { lm -= 2; forward4x2p(lm); }
-		if (lm == 3) fwd8p(); else fwd4x2p();
-#else
 		lm -= 2; forward4p_0();
-		while (lm > 2) { lm -= 2; forward4p(lm); }
-		if (lm == 2) fwd4p();
-#endif
+		while (lm > 3) { lm -= 2; forward4p(lm); }
+		if (lm == 3) fwd8p(); else fwd4p();
 		return;
 #endif
 
@@ -1012,6 +882,8 @@ public:
 		src << "#define N_SZ\t" << (1u << n) << "u" << std::endl;
 		src << "#define LN_SZ\t" << n << std::endl;
 		src << "#define RNS_SZ\t" << RNS_SIZE << std::endl;
+		src << "#define VSIZE\t" << VSIZE << std::endl;
+		src << "#define LVSIZE\t" << LVSIZE << std::endl;
 
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;

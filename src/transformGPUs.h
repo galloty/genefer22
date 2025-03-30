@@ -18,12 +18,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 // #define USE_WI	1
 
-#define VSIZE	4
+#define VSIZE	2
 
 // #define CHECK_ALL_FUNCTIONS		1
-#define CHECK_RADIX4_FUNCTIONS	1
-// #define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward4, forward64, forward256_0, forward256
-// #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward64_0, forward1024
+// #define CHECK_RADIX4_FUNCTIONS	1
+#define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
+// #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward4, forward64_0, forward1024
 // #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024_0
 // #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048
 
@@ -130,9 +130,9 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 //      BLK1024m	1		   local size =  4KB, workgroup size = 256
 //      BLK2048m	1		   local size =  8KB, workgroup size = 512
 
-#define CHUNK64m	16		// local size =  4KB, workgroup size = 256
-#define CHUNK256m	4		// local size =  4KB, workgroup size = 256
-#define CHUNK1024m	1		// local size =  4KB, workgroup size = 256
+#define CHUNK64m	4		// local size =  VSIZE * 1KB, workgroup size = 64
+#define CHUNK256m	2		// local size =  VSIZE * 2KB, workgroup size = 128
+#define CHUNK1024m	1		// local size =  VSIZE * 4KB, workgroup size = 256
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = createTransformKernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = createTransformKernel(#name, false);
@@ -141,9 +141,9 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CREATE_SETCOPY_KERNEL(name) _##name = createSetCopyKernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = createCopypKernel(#name);
 
-#define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm, u / 4 * CHUNK##u##m, 4); }
-#define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm, u / 4 * CHUNK##u##m, 4); }
-#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u##m, 4); }
+#define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm - LVSIZE, u / 4 * CHUNK##u##m, 4 * VSIZE); }
+#define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u##m, 4 * VSIZE); }
+#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u##m, 4 * VSIZE); }
 
 #define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / 4 / VSIZE, size_t(u / 4 * BLK##u##m)), 4 * VSIZE); }
 #define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / 4 / VSIZE, size_t(u / 4 * BLK##u##m)), 4 * VSIZE); }
@@ -461,9 +461,9 @@ private:
 	void _mul(const size_t sIndex, const bool isSquare)
 	{
 #if defined(CHECK_FUNC_1)
-		if (_ln == 11) { forward256_0(); forward4(11 - 10); if (isSquare) square22(); else mul22(); backward4(11 - 10); backward256(11 - 8); return; }
+		if (_ln == 11) { forward256_0(); if (isSquare) square8(); else mul8(); backward256(11 - 8); return; }
 		if (_ln == 12) { forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4(12 - 2); return; }
-		if (_ln == 13) { forward4_0(); forward64(13 - 8); if (isSquare) square32(); else mul32(); backward64(13 - 8); backward4(13 - 2); return; }
+		// if (_ln == 13) { forward4_0(); forward64(13 - 8); if (isSquare) square32(); else mul32(); backward64(13 - 8); backward4(13 - 2); return; }
 #endif
 #if defined(CHECK_FUNC_2)
 		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4(11 - 2); return; }
@@ -567,7 +567,7 @@ public:
 		_executeKernel(_copyp, RNS_SIZE * _n);
 
 #if defined(CHECK_FUNC_1)
-		if (_ln == 11) { forward256p_0(); forward4p(11 - 10); return; }
+		if (_ln == 11) { forward256p_0(); fwd8p(); return; }
 		if (_ln == 12) { forward4p_0(); forward256p(12 - 10); fwd4p(); return; }
 		if (_ln == 13) { forward4p_0(); forward64p(13 - 8); fwd32p(); return; }
 #endif

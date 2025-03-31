@@ -1059,6 +1059,44 @@ INLINE void mul_8x2(const uint32_2 pq, __local uint4 * restrict const Z, const s
 	_storel4(4, Z, 1, zl);
 }
 
+// --- v1, v2, v4 -- no barrier
+
+INLINE void square_4(const uint32_2 pq, __local VTYPE * restrict const Z,
+	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)
+{
+#if VSIZE == 4
+	square_4x4(pq, Z, w, wi, sj, sji);
+#elif VSIZE == 2
+	square_4x2(pq, Z, w, wi, sj, sji);
+#else
+	square_4x1(pq, Z, w[sj], wi[sji]);
+#endif
+}
+
+INLINE void fwd4_write(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z,
+	__local const VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)
+{
+#if VSIZE == 4
+	fwd4x4_write(pq, mg, z, Z, w, sj);
+#elif VSIZE == 2
+	fwd4x2_write(pq, mg, z, Z, w, sj);
+#else
+	fwd4x1_write(pq, mg, z, Z, w[sj]);
+#endif
+}
+
+INLINE void mul_4(const uint32_2 pq, __local VTYPE * restrict const Z, const sz_t mg, const __global VTYPE * restrict const zp,
+	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)
+{
+#if VSIZE == 4
+	mul_4x4(pq, Z, mg, zp, w, wi, sj, sji);
+#elif VSIZE == 2
+	mul_4x2(pq, Z, mg, zp, w, wi, sj, sji);
+#else
+	mul_4x1(pq, Z, mg, zp, w[sj], wi[sji]);
+#endif
+}
+
 // --- v2, v4 -- no barrier
 
 INLINE void square_8(const uint32_2 pq, __local VTYPE * restrict const Z,
@@ -1068,16 +1106,6 @@ INLINE void square_8(const uint32_2 pq, __local VTYPE * restrict const Z,
 	square_8x2(pq, Z, w, wi, sj, sji);
 #else	// VSIZE == 2
 	square_8x1(pq, Z, w, wi, sj, sji);
-#endif
-}
-
-INLINE void fwd4_write(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z,
-	__local const VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)
-{
-#if VSIZE == 4
-	fwd4x4_write(pq, mg, z, Z, w, sj);
-#else	// VSIZE == 2
-	fwd4x2_write(pq, mg, z, Z, w, sj);
 #endif
 }
 
@@ -1508,36 +1536,38 @@ void square32(__global VTYPE * restrict const zg, __global const uint * restrict
 	backward_4o(pq, L32S / 4, zk, L32S / 4, Zi8, wi, sji / (L32S / 4));
 }
 
+#define L64S	(64 / VSIZE)
+
 #define DECLARE_VAR_64() \
-	__local VTYPE Z[64 * BLK64]; \
+	__local VTYPE Z[L64S * BLK64]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (64 / 4 * BLK64), group_id = id / (64 / 4 * BLK64); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L64S / 4 * BLK64), group_id = id / (L64S / 4 * BLK64); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i64 = (local_id & ~(64 / 4 - 1)) * 4, i16 = local_id % (64 / 4); \
-	const sz_t k64 = group_id * 64 * BLK64 + i64 + i16; \
+	const sz_t i64 = (local_id & ~(L64S / 4 - 1)) * 4, i16 = local_id % (L64S / 4); \
+	const sz_t k64 = group_id * L64S * BLK64 + i64 + i16; \
 	\
 	__global VTYPE * restrict const zk = &z[k64]; \
 	__local VTYPE * const Z64 = &Z[i64]; \
 	__local VTYPE * const Zi16 = &Z64[i16]; \
-	const sz_t i4 = ((4 * i16) & ~(4 * 4 - 1)) + (i16 % 4); \
+	const sz_t i4 = ((4 * i16) & ~(4 * (L64S / 16) - 1)) + (i16 % (L64S / 16)); \
 	__local VTYPE * const Zi4 = &Z64[i4]; \
 	__local VTYPE * const Z4 = &Z64[4 * i16];
 
 __kernel
-#if MAX_WG_SZ >= 64 / 4 * BLK64
-	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
+#if MAX_WG_SZ >= L64S / 4 * BLK64
+	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))
 #endif
 void square64(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_64();
 
-	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// square_4x1(pq, Z4, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4o(pq, 16, zk, 16, Zi16, wi, sji / 16);
+	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));
+	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));
+	square_4(pq, Z4, w, wi, sj, sji);
+	backward_4(pq, L64S / 16, Zi4, wi, sji / (L64S / 16));
+	backward_4o(pq, L64S / 4, zk, L64S / 4, Zi16, wi, sji / (L64S / 4));
 }
 
 #define DECLARE_VAR_128() \
@@ -1754,16 +1784,16 @@ void fwd32p(__global VTYPE * restrict const zg, __global const uint * restrict c
 }
 
 __kernel
-#if MAX_WG_SZ >= 64 / 4 * BLK64
-	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
+#if MAX_WG_SZ >= L64S / 4 * BLK64
+	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))
 #endif
 void fwd64p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_64();
 
-	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// fwd4x1_write(pq, 16, zk, Z4, w[sj]);
+	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));
+	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));
+	fwd4_write(pq, L64S / 4, zk, Z4, w, sj);
 }
 
 __kernel
@@ -1864,8 +1894,8 @@ void mul32(__global VTYPE * restrict const zg, __global const VTYPE * restrict c
 }
 
 __kernel
-#if MAX_WG_SZ >= 64 / 4 * BLK64
-	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))
+#if MAX_WG_SZ >= L64S / 4 * BLK64
+	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))
 #endif
 void mul64(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -1873,11 +1903,11 @@ void mul64(__global VTYPE * restrict const zg, __global const VTYPE * restrict c
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k64];
 
-	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// mul_4x1(pq, Z4, 16, zpk, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4o(pq, 16, zk, 16, Zi16, wi, sji / 16);
+	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));
+	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));
+	mul_4(pq, Z4, L64S / 4, zpk, w, wi, sj, sji);
+	backward_4(pq, L64S / 16, Zi4, wi, sji / (L64S / 16));
+	backward_4o(pq, L64S / 4, zk, L64S / 4, Zi16, wi, sji / (L64S / 4));
 }
 
 __kernel

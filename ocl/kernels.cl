@@ -773,7 +773,7 @@ INLINE void square8io(const uint32_2 pq, __global VTYPE * restrict const z,
 {
 #if VSIZE == 4
 	square8x2io(pq, z, w, wi, sj, sji);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	square8x1io(pq, z, w, wi, sj, sji);
 #endif
 }
@@ -782,7 +782,7 @@ INLINE void fwd8io(const uint32_2 pq, __global VTYPE * restrict const z, __globa
 {
 #if VSIZE == 4
 	fwd8x2io(pq, z, w, sj);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	fwd8x1io(pq, z, w, sj);
 #endif
 }
@@ -792,7 +792,7 @@ INLINE void mul8io(const uint32_2 pq, __global VTYPE * restrict const z, const _
 {
 #if VSIZE == 4
 	mul8x2io(pq, z, zp, w, wi, sj, sji);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	mul8x1io(pq, z, zp, w, wi, sj, sji);
 #endif
 }
@@ -1012,7 +1012,7 @@ INLINE void square_8x2(const uint32_2 pq, __local uint4 * restrict const Z,
 }
 
 INLINE void fwd4x4_write(const uint32_2 pq, const sz_t mg, __global uint4 * restrict const z,
-	__local uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)
+	__local const uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)
 {
 	DECLARE_W2_4(sj);
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -1023,7 +1023,7 @@ INLINE void fwd4x4_write(const uint32_2 pq, const sz_t mg, __global uint4 * rest
 }
 
 INLINE void fwd8x2_write(const uint32_2 pq, const sz_t mg, __global uint4 * restrict const z,
-	__local uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)
+	__local const uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)
 {
 	DECLARE_W12_24(sj);
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -1104,7 +1104,7 @@ INLINE void square_8(const uint32_2 pq, __local VTYPE * restrict const Z,
 {
 #if VSIZE == 4
 	square_8x2(pq, Z, w, wi, sj, sji);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	square_8x1(pq, Z, w, wi, sj, sji);
 #endif
 }
@@ -1114,7 +1114,7 @@ INLINE void fwd8_write(const uint32_2 pq, const sz_t mg, __global VTYPE * restri
 {
 #if VSIZE == 4
 	fwd8x2_write(pq, mg, z, Z, w, sj);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	fwd8x1_write(pq, mg, z, Z, w, sj);
 #endif
 }
@@ -1124,7 +1124,7 @@ INLINE void mul_8(const uint32_2 pq, __local VTYPE * restrict const Z, const sz_
 {
 #if VSIZE == 4
 	mul_8x2(pq, Z, mg, zp, w, wi, sj, sji);
-#else	// VSIZE == 2
+#elif VSIZE == 2
 	mul_8x1(pq, Z, mg, zp, w, wi, sj, sji);
 #endif
 }
@@ -1570,198 +1570,220 @@ void square64(__global VTYPE * restrict const zg, __global const uint * restrict
 	backward_4o(pq, L64S / 4, zk, L64S / 4, Zi16, wi, sji / (L64S / 4));
 }
 
+#define L128S	(128 / VSIZE)
+
 #define DECLARE_VAR_128() \
-	__local VTYPE Z[128 * BLK128]; \
+	__local VTYPE Z[L128S * BLK128]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (128 / 4 * BLK128), group_id = id / (128 / 4 * BLK128); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L128S / 4 * BLK128), group_id = id / (L128S / 4 * BLK128); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i128 = (local_id & ~(128 / 4 - 1)) * 4, i32 = local_id % (128 / 4); \
-	const sz_t k128 = group_id * 128 * BLK128 + i128 + i32; \
+	const sz_t i128 = (local_id & ~(L128S / 4 - 1)) * 4, i32 = local_id % (L128S / 4); \
+	const sz_t k128 = group_id * L128S * BLK128 + i128 + i32; \
 	\
 	__global VTYPE * restrict const zk = &z[k128]; \
 	__local VTYPE * const Z128 = &Z[i128]; \
 	__local VTYPE * const Zi32 = &Z128[i32]; \
-	const sz_t i8 = ((4 * i32) & ~(4 * 8 - 1)) + (i32 % 8); \
+	const sz_t i8 = ((4 * i32) & ~(4 * (L128S / 16) - 1)) + (i32 % (L128S / 16)); \
 	__local VTYPE * const Zi8 = &Z128[i8]; \
 	const sz_t i2 = ((4 * i32) & ~(4 * 2 - 1)) + (i32 % 2); \
 	__local VTYPE * const Zi2 = &Z128[i2]; \
 	__local VTYPE * const Z4 = &Z128[4 * i32];
 
 __kernel
-#if MAX_WG_SZ >= 128 / 4 * BLK128
-	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
+#if MAX_WG_SZ >= L128S / 4 * BLK128
+	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))
 #endif
 void square128(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_128();
 
-	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));
+	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	// square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4o(pq, 32, zk, 32, Zi32, wi, sji / 32);
+#else
+	square_8(pq, Z4, w, wi, sj, sji);
+#endif
+	backward_4(pq, L128S / 16, Zi8, wi, sji / (L128S / 16));
+	backward_4o(pq, L128S / 4, zk, L128S / 4, Zi32, wi, sji / (L128S / 4));
 }
 
+#define L256S	(256 / VSIZE)
+
 #define DECLARE_VAR_256() \
-	__local VTYPE Z[256 * BLK256]; \
+	__local VTYPE Z[L256S * BLK256]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (256 / 4 * BLK256), group_id = id / (256 / 4 * BLK256); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L256S / 4 * BLK256), group_id = id / (L256S / 4 * BLK256); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i256 = (local_id & ~(256 / 4 - 1)) * 4, i64 = local_id % (256 / 4); \
-	const sz_t k256 = group_id * 256 * BLK256 + i256 + i64; \
+	const sz_t i256 = (local_id & ~(L256S / 4 - 1)) * 4, i64 = local_id % (L256S / 4); \
+	const sz_t k256 = group_id * L256S * BLK256 + i256 + i64; \
 	\
 	__global VTYPE * restrict const zk = &z[k256]; \
 	__local VTYPE * const Z256 = &Z[i256]; \
 	__local VTYPE * const Zi64 = &Z256[i64]; \
-	const sz_t i16 = ((4 * i64) & ~(4 * 16 - 1)) + (i64 % 16); \
+	const sz_t i16 = ((4 * i64) & ~(4 * (L256S / 16) - 1)) + (i64 % (L256S / 16)); \
 	__local VTYPE * const Zi16 = &Z256[i16]; \
-	const sz_t i4 = ((4 * i64) & ~(4 * 4 - 1)) + (i64 % 4); \
+	const sz_t i4 = ((4 * i64) & ~(4 * (L256S / 64) - 1)) + (i64 % (L256S / 64)); \
 	__local VTYPE * const Zi4 = &Z256[i4]; \
 	__local VTYPE * const Z4 = &Z256[4 * i64];
 
 __kernel
-#if MAX_WG_SZ >= 256 / 4 * BLK256
-	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
+#if MAX_WG_SZ >= L256S / 4 * BLK256
+	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))
 #endif
 void square256(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_256();
 
-	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// square_4x1(pq, Z4, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4(pq, 16, Zi16, wi, sji / 16);
-	backward_4o(pq, 64, zk, 64, Zi64, wi, sji / 64);
+	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));
+	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));
+	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));
+	square_4(pq, Z4, w, wi, sj, sji);
+	backward_4(pq, L256S / 64, Zi4, wi, sji / (L256S / 64));
+	backward_4(pq, L256S / 16, Zi16, wi, sji / (L256S / 16));
+	backward_4o(pq, L256S / 4, zk, L256S / 4, Zi64, wi, sji / (L256S / 4));
 }
 
-// if BLK512 != 1 then const sz_t i512 = (i & ~(512 / 4 - 1)) * 4, i128 = i % (512 / 4);
+#define L512S	(512 / VSIZE)
+
+// if BLK512 != 1 then const sz_t i512 = (i & ~(L512S / 4 - 1)) * 4, i128 = i % (L512S / 4);
 // if BLK512 = 1 then const sz_t i512 = 0, i128 = i;
 #define DECLARE_VAR_512() \
-	__local VTYPE Z[512 * BLK512]; \
+	__local VTYPE Z[L512S * BLK512]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (512 / 4 * BLK512), group_id = id / (512 / 4 * BLK512); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L512S / 4 * BLK512), group_id = id / (L512S / 4 * BLK512); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i512 = (local_id & ~(512 / 4 - 1)) * 4, i128 = local_id % (512 / 4); \
-	const sz_t k512 = group_id * 512 * BLK512 + i512 + i128; \
+	const sz_t i512 = (local_id & ~(L512S / 4 - 1)) * 4, i128 = local_id % (L512S / 4); \
+	const sz_t k512 = group_id * L512S * BLK512 + i512 + i128; \
 	\
 	__global VTYPE * restrict const zk = &z[k512]; \
 	__local VTYPE * const Z512 = &Z[i512]; \
 	__local VTYPE * const Zi128 = &Z512[i128]; \
-	const sz_t i32 = ((4 * i128) & ~(4 * 32 - 1)) + (i128 % 32); \
+	const sz_t i32 = ((4 * i128) & ~(4 * (L512S / 16) - 1)) + (i128 % (L512S / 16)); \
 	__local VTYPE * const Zi32 = &Z512[i32]; \
-	const sz_t i8 = ((4 * i128) & ~(4 * 8 - 1)) + (i128 % 8); \
+	const sz_t i8 = ((4 * i128) & ~(4 * (L512S / 64) - 1)) + (i128 % (L512S / 64)); \
 	__local VTYPE * const Zi8 = &Z512[i8]; \
 	const sz_t i2 = ((4 * i128) & ~(4 * 2 - 1)) + (i128 % 2); \
 	__local VTYPE * const Zi2 = &Z512[i2]; \
 	__local VTYPE * const Z4 = &Z512[4 * i128];
 
 __kernel
-#if MAX_WG_SZ >= 512 / 4
-	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
+#if MAX_WG_SZ >= L512S / 4
+	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))
 #endif
 void square512(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_512();
 
-	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));
+	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));
+	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	// square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4(pq, 32, Zi32, wi, sji / 32);
-	backward_4o(pq, 128, zk, 128, Zi128, wi, sji / 128);
+#else
+	square_8(pq, Z4, w, wi, sj, sji);
+#endif
+	backward_4(pq, L512S / 64, Zi8, wi, sji / (L512S / 64));
+	backward_4(pq, L512S / 16, Zi32, wi, sji / (L512S / 16));
+	backward_4o(pq, L512S / 4, zk, L512S / 4, Zi128, wi, sji / (L512S / 4));
 }
 
+#define L1024S	(1024 / VSIZE)
+
 #define DECLARE_VAR_1024() \
-	__local VTYPE Z[1024]; \
+	__local VTYPE Z[L1024S]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (1024 / 4), group_id = id / (1024 / 4); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L1024S / 4), group_id = id / (L1024S / 4); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i256 = local_id, k1024 = group_id * 1024 + i256; \
+	const sz_t i256 = local_id, k1024 = group_id * L1024S + i256; \
 	\
 	__global VTYPE * restrict const zk = &z[k1024]; \
 	__local VTYPE * const Zi256 = &Z[i256]; \
-	const sz_t i64 = ((4 * i256) & ~(4 * 64 - 1)) + (i256 % 64); \
+	const sz_t i64 = ((4 * i256) & ~(4 * (L1024S / 16) - 1)) + (i256 % (L1024S / 16)); \
 	__local VTYPE * const Zi64 = &Z[i64]; \
-	const sz_t i16 = ((4 * i256) & ~(4 * 16 - 1)) + (i256 % 16); \
+	const sz_t i16 = ((4 * i256) & ~(4 * (L1024S / 64) - 1)) + (i256 % (L1024S / 64)); \
 	__local VTYPE * const Zi16 = &Z[i16]; \
-	const sz_t i4 = ((4 * i256) & ~(4 * 4 - 1)) + (i256 % 4); \
+	const sz_t i4 = ((4 * i256) & ~(4 * (L1024S / 256) - 1)) + (i256 % (L1024S / 256)); \
 	__local VTYPE * const Zi4 = &Z[i4]; \
 	__local VTYPE * const Z4 = &Z[4 * i256];
 
 __kernel
-#if MAX_WG_SZ >= 1024 / 4
-	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4
+	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))
 #endif
 void square1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_1024();
 
-	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);
-	forward_4(pq, 64, Zi64, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// square_4x1(pq, Z4, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4(pq, 16, Zi16, wi, sji / 16);
-	backward_4(pq, 64, Zi64, wi, sji / 64);
-	backward_4o(pq, 256, zk, 256, Zi256, wi, sji / 256);
+	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));
+	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));
+	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));
+	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));
+	square_4(pq, Z4, w, wi, sj, sji);
+	backward_4(pq, L1024S / 256, Zi4, wi, sji / (L1024S / 256));
+	backward_4(pq, L1024S / 64, Zi16, wi, sji / (L1024S / 64));
+	backward_4(pq, L1024S / 16, Zi64, wi, sji / (L1024S / 16));
+	backward_4o(pq, L1024S / 4, zk, L1024S / 4, Zi256, wi, sji / (L1024S / 4));
 }
 
+#define L2048S	(2048 / VSIZE)
+
 #define DECLARE_VAR_2048() \
-	__local VTYPE Z[2048]; \
+	__local VTYPE Z[L2048S]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (2048 / 4), group_id = id / (2048 / 4); \
-	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \
+	const sz_t local_id = id % (L2048S / 4), group_id = id / (L2048S / 4); \
+	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i512 = local_id, k2048 = group_id * 2048 + i512; \
+	const sz_t i512 = local_id, k2048 = group_id * L2048S + i512; \
 	\
 	__global VTYPE * restrict const zk = &z[k2048]; \
 	__local VTYPE * const Zi512 = &Z[i512]; \
-	const sz_t i128 = ((4 * i512) & ~(4 * 128 - 1)) + (i512 % 128); \
+	const sz_t i128 = ((4 * i512) & ~(4 * (L2048S / 16) - 1)) + (i512 % (L2048S / 16)); \
 	__local VTYPE * const Zi128 = &Z[i128]; \
-	const sz_t i32 = ((4 * i512) & ~(4 * 32 - 1)) + (i512 % 32); \
+	const sz_t i32 = ((4 * i512) & ~(4 * (L2048S / 64) - 1)) + (i512 % (L2048S / 64)); \
 	__local VTYPE * const Zi32 = &Z[i32]; \
-	const sz_t i8 = ((4 * i512) & ~(4 * 8 - 1)) + (i512 % 8); \
+	const sz_t i8 = ((4 * i512) & ~(4 * (L2048S / 256) - 1)) + (i512 % (L2048S / 256)); \
 	__local VTYPE * const Zi8 = &Z[i8]; \
 	const sz_t i2 = ((4 * i512) & ~(4 * 2 - 1)) + (i512 % 2); \
 	__local VTYPE * const Zi2 = &Z[i2]; \
 	__local VTYPE * const Z4 = &Z[4 * i512];
 
 __kernel
-#if MAX_WG_SZ >= 2048 / 4
-	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
+#if MAX_WG_SZ >= L2048S / 4
+	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))
 #endif
 void square2048(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_2048();
 
-	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);
-	forward_4(pq, 128, Zi128, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));
+	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));
+	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));
+	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	// square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4(pq, 32, Zi32, wi, sji / 32);
-	backward_4(pq, 128, Zi128, wi, sji / 128);
-	backward_4o(pq, 512, zk, 512, Zi512, wi, sji / 512);
+#else
+	square_8(pq, Z4, w, wi, sj, sji);
+#endif
+	backward_4(pq, L2048S / 256, Zi8, wi, sji / (L2048S / 256));
+	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));
+	backward_4(pq, L2048S / 16, Zi128, wi, sji / (L2048S / 16));
+	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));
 }
 
 // -----------------
@@ -1797,77 +1819,89 @@ void fwd64p(__global VTYPE * restrict const zg, __global const uint * restrict c
 }
 
 __kernel
-#if MAX_WG_SZ >= 128 / 4 * BLK128
-	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
+#if MAX_WG_SZ >= L128S / 4 * BLK128
+	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))
 #endif
 void fwd128p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_128();
 
-	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));
+	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
 	write_4(32, zk, Z4);
+#else
+	fwd8_write(pq, L128S / 4, zk, Z4, w, sj);
+#endif
 }
 
 __kernel
-#if MAX_WG_SZ >= 256 / 4 * BLK256
-	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
+#if MAX_WG_SZ >= L256S / 4 * BLK256
+	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))
 #endif
 void fwd256p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_256();
 
-	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// fwd4x1_write(pq, 64, zk, Z4, w[sj]);
+	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));
+	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));
+	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));
+	fwd4_write(pq, L256S / 4, zk, Z4, w, sj);
 }
 
 __kernel
-#if MAX_WG_SZ >= 512 / 4
-	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
+#if MAX_WG_SZ >= L512S / 4
+	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))
 #endif
 void fwd512p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_512();
 
-	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));
+	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));
+	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
 	write_4(128, zk, Z4);
+#else
+	fwd8_write(pq, L512S / 4, zk, Z4, w, sj);
+#endif
 }
 
 __kernel
-#if MAX_WG_SZ >= 1024 / 4
-	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4
+	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))
 #endif
 void fwd1024p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_1024();
 
-	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);
-	forward_4(pq, 64, Zi64, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// fwd4x1_write(pq, 256, zk, Z4, w[sj]);
+	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));
+	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));
+	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));
+	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));
+	fwd4_write(pq, L1024S / 4, zk, Z4, w, sj);
 }
 
 __kernel
-#if MAX_WG_SZ >= 2048 / 4
-	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
+#if MAX_WG_SZ >= L2048S / 4
+	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))
 #endif
 void fwd2048p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
 	DECLARE_VAR_2048();
 
-	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);
-	forward_4(pq, 128, Zi128, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));
+	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));
+	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));
+	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
 	write_4(512, zk, Z4);
+#else
+	fwd8_write(pq, L2048S / 4, zk, Z4, w, sj);
+#endif
 }
 
 // -----------------
@@ -1911,8 +1945,8 @@ void mul64(__global VTYPE * restrict const zg, __global const VTYPE * restrict c
 }
 
 __kernel
-#if MAX_WG_SZ >= 128 / 4 * BLK128
-	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))
+#if MAX_WG_SZ >= L128S / 4 * BLK128
+	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))
 #endif
 void mul128(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -1920,18 +1954,22 @@ void mul128(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k128];
 
-	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));
+	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	// mul_2x2(pq, Z4, 32, zpk, w[sj]);
+	mul_2x2(pq, Z4, 32, zpk, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4o(pq, 32, zk, 32, Zi32, wi, sji / 32);
+#else
+	mul_8(pq, Z4, L128S / 4, zpk, w, wi, sj, sji);
+#endif
+	backward_4(pq, L128S / 16, Zi8, wi, sji / (L128S / 16));
+	backward_4o(pq, L128S / 4, zk, L128S / 4, Zi32, wi, sji / (L128S / 4));
 }
 
 __kernel
-#if MAX_WG_SZ >= 256 / 4 * BLK256
-	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))
+#if MAX_WG_SZ >= L256S / 4 * BLK256
+	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))
 #endif
 void mul256(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -1939,18 +1977,18 @@ void mul256(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k256];
 
-	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// mul_4x1(pq, Z4, 64, zpk, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4(pq, 16, Zi16, wi, sji / 16);
-	backward_4o(pq, 64, zk, 64, Zi64, wi, sji / 64);
+	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));
+	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));
+	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));
+	mul_4(pq, Z4, L256S / 4, zpk, w, wi, sj, sji);
+	backward_4(pq, L256S / 64, Zi4, wi, sji / (L256S / 64));
+	backward_4(pq, L256S / 16, Zi16, wi, sji / (L256S / 16));
+	backward_4o(pq, L256S / 4, zk, L256S / 4, Zi64, wi, sji / (L256S / 4));
 }
 
 __kernel
-#if MAX_WG_SZ >= 512 / 4
-	__attribute__((work_group_size_hint(512 / 4, 1, 1)))
+#if MAX_WG_SZ >= L512S / 4
+	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))
 #endif
 void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -1958,20 +1996,24 @@ void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k512];
 
-	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));
+	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));
+	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	// mul_2x2(pq, Z4, 128, zpk, w[sj]);
+	mul_2x2(pq, Z4, 128, zpk, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4(pq, 32, Zi32, wi, sji / 32);
-	backward_4o(pq, 128, zk, 128, Zi128, wi, sji / 128);
+#else
+	mul_8(pq, Z4, L512S / 4, zpk, w, wi, sj, sji);
+#endif
+	backward_4(pq, L512S / 64, Zi8, wi, sji / (L512S / 64));
+	backward_4(pq, L512S / 16, Zi32, wi, sji / (L512S / 16));
+	backward_4o(pq, L512S / 4, zk, L512S / 4, Zi128, wi, sji / (L512S / 4));
 }
 
 __kernel
-#if MAX_WG_SZ >= 1024 / 4
-	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4
+	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))
 #endif
 void mul1024(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -1979,20 +2021,20 @@ void mul1024(__global VTYPE * restrict const zg, __global const VTYPE * restrict
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k1024];
 
-	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);
-	forward_4(pq, 64, Zi64, w, sj / 64);
-	forward_4(pq, 16, Zi16, w, sj / 16);
-	forward_4(pq, 4, Zi4, w, sj / 4);
-	// mul_4x1(pq, Z4, 256, zpk, w[sj], wi[sji]);
-	backward_4(pq, 4, Zi4, wi, sji / 4);
-	backward_4(pq, 16, Zi16, wi, sji / 16);
-	backward_4(pq, 64, Zi64, wi, sji / 64);
-	backward_4o(pq, 256, zk, 256, Zi256, wi, sji / 256);
+	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));
+	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));
+	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));
+	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));
+	mul_4(pq, Z4, L1024S / 4, zpk, w, wi, sj, sji);
+	backward_4(pq, L1024S / 256, Zi4, wi, sji / (L1024S / 256));
+	backward_4(pq, L1024S / 64, Zi16, wi, sji / (L1024S / 64));
+	backward_4(pq, L1024S / 16, Zi64, wi, sji / (L1024S / 16));
+	backward_4o(pq, L1024S / 4, zk, L1024S / 4, Zi256, wi, sji / (L1024S / 4));
 }
 
 __kernel
-#if MAX_WG_SZ >= 2048 / 4
-	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))
+#if MAX_WG_SZ >= L2048S / 4
+	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))
 #endif
 void mul2048(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {
@@ -2000,17 +2042,21 @@ void mul2048(__global VTYPE * restrict const zg, __global const VTYPE * restrict
 	DECLARE_VARP_REG();
 	__global const VTYPE * restrict const zpk = &zp[k2048];
 
-	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);
-	forward_4(pq, 128, Zi128, w, sj / 128);
-	forward_4(pq, 32, Zi32, w, sj / 32);
-	forward_4(pq, 8, Zi8, w, sj / 8);
+	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));
+	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));
+	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));
+	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
+#if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
 	mul_2x2(pq, Z4, 512, zpk, w[sj]);
 	backward_4(pq, 2, Zi2, wi, sji / 2);
-	backward_4(pq, 8, Zi8, wi, sji / 8);
-	backward_4(pq, 32, Zi32, wi, sji / 32);
-	backward_4(pq, 128, Zi128, wi, sji / 128);
-	backward_4o(pq, 512, zk, 512, Zi512, wi, sji / 512);
+#else
+	mul_8(pq, Z4, L2048S / 4, zpk, w, wi, sj, sji);
+#endif
+	backward_4(pq, L2048S / 256, Zi8, wi, sji / (L2048S / 256));
+	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));
+	backward_4(pq, L2048S / 16, Zi128, wi, sji / (L2048S / 16));
+	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));
 }
 
 #endif	// SHORT_VER

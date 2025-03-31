@@ -22,10 +22,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 // #define CHECK_ALL_FUNCTIONS		1
 // #define CHECK_RADIX4_FUNCTIONS	1
-#define CHECK_FUNC_1		1	// GFN-12&13&14: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
-// #define CHECK_FUNC_2		1	// GFN-12&13&14: square64, square128, forward4, forward64_0, forward1024
-// #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024_0
-// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048
+// #define CHECK_FUNC_1		1	// GFN-11&12&13: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
+// #define CHECK_FUNC_2		1	// GFN-11&12&13: square64, square128, forward4, forward64_0, forward1024_0
+// #define CHECK_FUNC_3		1	// GFN-12&13: square256, square512
+// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048, forward1024
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -122,7 +122,7 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 
 // Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32m		8		// local size =  4KB, workgroup size = 256
+#define BLK32m		32		// local size =  4KB, workgroup size = 256
 #define BLK64m		16		// local size =  4KB, workgroup size = 256
 #define BLK128m		8		// local size =  4KB, workgroup size = 256
 #define BLK256m		4		// local size =  4KB, workgroup size = 256
@@ -423,24 +423,24 @@ private:
 	DEFINE_SQUARE(128);
 	DEFINE_SQUARE(256);
 	DEFINE_SQUARE(512);
-	void square1024() { ek(_square1024, 1024 / 4, 4); }
-	void square2048() { ek(_square2048, 2048 / 4, 4); }
+	void square1024() { ek(_square1024, 1024 / (4 * VSIZE), 4 * VSIZE); }
+	void square2048() { ek(_square2048, 2048 / (4 * VSIZE), 4 * VSIZE); }
 
 	DEFINE_FWDP(32);
 	DEFINE_FWDP(64);
 	DEFINE_FWDP(128);
 	DEFINE_FWDP(256);
 	DEFINE_FWDP(512);
-	void fwd1024p() { ek(_fwd1024p, 1024 / 4, 4); }
-	void fwd2048p() { ek(_fwd2048p, 2048 / 4, 4); }
+	void fwd1024p() { ek(_fwd1024p, 1024 / (4 * VSIZE), 4 * VSIZE); }
+	void fwd2048p() { ek(_fwd2048p, 2048 / (4 * VSIZE), 4 * VSIZE); }
 
 	DEFINE_MUL(32);
 	DEFINE_MUL(64);
 	DEFINE_MUL(128);
 	DEFINE_MUL(256);
 	DEFINE_MUL(512);
-	void mul1024() { ek(_mul1024, 1024 / 4, 4); }
-	void mul2048() { ek(_mul2048, 2048 / 4, 4); }
+	void mul1024() { ek(_mul1024, 1024 / (4 * VSIZE), 4 * VSIZE); }
+	void mul2048() { ek(_mul2048, 2048 / (4 * VSIZE), 4 * VSIZE); }
 
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
@@ -468,17 +468,16 @@ private:
 #if defined(CHECK_FUNC_2)
 		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4(11 - 2); return; }
 		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64(12 - 6); return; }
-		if (_ln == 13) { forward4_0(); forward1024(13 - 12); if (isSquare) square22(); else mul22(); backward1024(13 - 12); backward4(13 - 2); return; }
+		if (_ln == 13) { forward1024_0(); if (isSquare) square8(); else mul8(); backward1024(13 - 10); return; }
 #endif
 #if defined(CHECK_FUNC_3)
-		if (_ln == 11) { forward1024_0(); if (isSquare) square22(); else mul22(); backward1024(11 - 10); return; }
 		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4(12 - 2); return; }
 		if (_ln == 13) { forward4_0(); forward4(13 - 4); if (isSquare) square512(); else mul512(); backward4(13 - 4); backward4(13 - 2); return; }
 #endif
 #if defined(CHECK_FUNC_4)
-		if (_ln == 11) { forward64_0(); if (isSquare) square32(); else mul32(); backward64(11 - 6); return; }
 		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4(12 - 2); return; }
 		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4(13 - 2); return; }
+		if (_ln == 14) { forward4_0(); forward1024(14 - 12); if (isSquare) square4(); else mul4(); backward1024(14 - 12); backward4(14 - 2); return; }
 #endif
 
 		int lm = _ln;
@@ -574,17 +573,16 @@ public:
 #if defined(CHECK_FUNC_2)
 		if (_ln == 11) { forward4p_0(); forward4p(11 - 4); fwd128p(); return; }
 		if (_ln == 12) { forward64p_0(); fwd64p(); return; }
-		if (_ln == 13) { forward4p_0(); forward1024p(13 - 12); return; }
+		if (_ln == 13) { forward1024p_0(); fwd8p(); return; }
 #endif
 #if defined(CHECK_FUNC_3)
-		if (_ln == 11) { forward1024p_0(); return; }
 		if (_ln == 12) { forward4p_0(); forward4p(12 - 4); fwd256p(); return; }
 		if (_ln == 13) { forward4p_0(); forward4p(13 - 4); fwd512p(); return; }
 #endif
 #if defined(CHECK_FUNC_4)
-		if (_ln == 11) { forward64p_0(); fwd32p(); return; }
 		if (_ln == 12) { forward4p_0(); fwd1024p(); return; }
 		if (_ln == 13) { forward4p_0(); fwd2048p(); return; }
+		if (_ln == 14) { forward4p_0(); forward1024p(14 - 12); fwd4p(); return; }
 #endif
 
 		const splitter * const pSplit = _pSplit;

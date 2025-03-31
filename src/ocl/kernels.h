@@ -23,14 +23,16 @@ static const char * const src_ocl_kernels = \
 "	#define INLINE\n" \
 "#endif\n" \
 "\n" \
-"#ifdef __NV_CL_C_VERSION\n" \
+"#if defined(__NV_CL_C_VERSION)\n" \
 "	#define PTX_ASM	1\n" \
 "#endif\n" \
 "\n" \
-"#ifndef N_SZ\n" \
+"#if !defined(N_SZ)\n" \
 "#define N_SZ		65536u\n" \
 "#define LN_SZ		16\n" \
 "#define RNS_SZ		3\n" \
+"#define VSIZE		2\n" \
+"#define LVSIZE		1\n" \
 "#define NORM1		2130641409u\n" \
 "#define NORM2		2113864705u\n" \
 "#define NORM3		2013204481u\n" \
@@ -45,6 +47,7 @@ static const char * const src_ocl_kernels = \
 "#define CHUNK64		16\n" \
 "#define CHUNK256	4\n" \
 "#define CHUNK1024	1\n" \
+"// #define SHORT_VER	1\n" \
 "#define MAX_WG_SZ	256\n" \
 "#endif\n" \
 "\n" \
@@ -89,7 +92,7 @@ static const char * const src_ocl_kernels = \
 "#define	SQRTI3	1032137103u\n" \
 "#define	ISQRTI3	1964242958u\n" \
 "\n" \
-"// ---\n" \
+"// --- modular arithmetic\n" \
 "\n" \
 "#define	PQ1		(uint32_2)(P1, Q1)\n" \
 "#define	PQ2		(uint32_2)(P2, Q2)\n" \
@@ -110,6 +113,7 @@ static const char * const src_ocl_kernels = \
 "	return t + (((int32)(t) < 0) ? p : 0);\n" \
 "}\n" \
 "\n" \
+"// 2 mul + 2 mul_hi\n" \
 "INLINE uint32 mulmod(const uint32 lhs, const uint32 rhs, const uint32_2 pq)\n" \
 "{\n" \
 "	const uint64 t = lhs * (uint64)(rhs);\n" \
@@ -122,6 +126,40 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "INLINE int32 get_int(const uint32 n, const uint32 p) { return (n >= p / 2) ? (int32)(n - p) : (int32)(n); }	// ? 2n >= p ?\n" \
 "INLINE uint32 set_int(const int32 i, const uint32 p) { return (i < 0) ? ((uint32)(i) + p) : (uint32)(i); }\n" \
+"\n" \
+"// --- v2\n" \
+"\n" \
+"INLINE uint32_2 addmod2(const uint32_2 lhs, const uint32_2 rhs, const uint32 p)\n" \
+"{\n" \
+"	return (uint32_2)(addmod(lhs.s0, rhs.s0, p), addmod(lhs.s1, rhs.s1, p));\n" \
+"}\n" \
+"\n" \
+"INLINE uint32_2 submod2(const uint32_2 lhs, const uint32_2 rhs, const uint32 p)\n" \
+"{\n" \
+"	return (uint32_2)(submod(lhs.s0, rhs.s0, p), submod(lhs.s1, rhs.s1, p));\n" \
+"}\n" \
+"\n" \
+"INLINE uint32_2 mulmod2(const uint32_2 lhs, const uint32_2 rhs, const uint32_2 pq)\n" \
+"{\n" \
+"	return (uint32_2)(mulmod(lhs.s0, rhs.s0, pq), mulmod(lhs.s1, rhs.s1, pq));\n" \
+"}\n" \
+"\n" \
+"// --- v4\n" \
+"\n" \
+"INLINE uint32_4 addmod4(const uint32_4 lhs, const uint32_4 rhs, const uint32 p)\n" \
+"{\n" \
+"	return (uint32_4)(addmod2(lhs.s01, rhs.s01, p), addmod2(lhs.s23, rhs.s23, p));\n" \
+"}\n" \
+"\n" \
+"INLINE uint32_4 submod4(const uint32_4 lhs, const uint32_4 rhs, const uint32 p)\n" \
+"{\n" \
+"	return (uint32_4)(submod2(lhs.s01, rhs.s01, p), submod2(lhs.s23, rhs.s23, p));\n" \
+"}\n" \
+"\n" \
+"INLINE uint32_4 mulmod4(const uint32_4 lhs, const uint32_4 rhs, const uint32_2 pq)\n" \
+"{\n" \
+"	return (uint32_4)(mulmod2(lhs.s01, rhs.s01, pq), mulmod2(lhs.s23, rhs.s23, pq));\n" \
+"}\n" \
 "\n" \
 "// --- uint96/int96 ---\n" \
 "\n" \
@@ -153,7 +191,7 @@ static const char * const src_ocl_kernels = \
 "INLINE int96 int96_add(const int96 x, const int96 y)\n" \
 "{\n" \
 "	int96 r;\n" \
-"#ifdef PTX_ASM\n" \
+"#if defined(PTX_ASM)\n" \
 "	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
 "	asm volatile (\"addc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
 "#else\n" \
@@ -166,7 +204,7 @@ static const char * const src_ocl_kernels = \
 "INLINE uint96 uint96_add_64(const uint96 x, const ulong y)\n" \
 "{\n" \
 "	uint96 r;\n" \
-"#ifdef PTX_ASM\n" \
+"#if defined(PTX_ASM)\n" \
 "	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
 "	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
 "#else\n" \
@@ -179,7 +217,7 @@ static const char * const src_ocl_kernels = \
 "INLINE int96 uint96_subi(const uint96 x, const uint96 y)\n" \
 "{\n" \
 "	int96 r;\n" \
-"#ifdef PTX_ASM\n" \
+"#if defined(PTX_ASM)\n" \
 "	asm volatile (\"sub.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
 "	asm volatile (\"subc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
 "#else\n" \
@@ -197,330 +235,1059 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "// --- transform/macro ---\n" \
 "\n" \
-"// 16 mul + 16 mul_hi\n" \
-"#define FORWARD_4(pq, zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w1, w20, w21) \\\n" \
+"#define FWD2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = zi0, u2 = mulmod(zi2, w1, pq), u1 = zi1, u3 = mulmod(zi3, w1, pq); \\\n" \
-"	const uint32 v0 = addmod(u0, u2, p), v2 = submod(u0, u2, p); \\\n" \
-"	const uint32 v1 = mulmod(addmod(u1, u3, p), w20, pq), v3 = mulmod(submod(u1, u3, p), w21, pq); \\\n" \
-"	zo0 = addmod(v0, v1, p); zo1 = submod(v0, v1, p); zo2 = addmod(v2, v3, p); zo3 = submod(v2, v3, p); \\\n" \
+"	const uint32 t = mulmod(z1, w, pq); \\\n" \
+"	z1 = submod(z0, t, pq.s0); z0 = addmod(z0, t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define BACKWARD_4(pq, zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, win1, win20, win21) \\\n" \
+"#define BCK2(z0, z1, win) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = zi0, u1 = zi1, u2 = zi2, u3 = zi3; \\\n" \
-"	const uint32 v0 = addmod(u0, u1, p), v1 = mulmod(submod(u1, u0, p), win20, pq); \\\n" \
-"	const uint32 v2 = addmod(u2, u3, p), v3 = mulmod(submod(u3, u2, p), win21, pq); \\\n" \
-"	zo0 = addmod(v0, v2, p); zo2 = mulmod(submod(v2, v0, p), win1, pq); \\\n" \
-"	zo1 = addmod(v1, v3, p); zo3 = mulmod(submod(v3, v1, p), win1, pq); \\\n" \
+"	const uint32 t = submod(z1, z0, pq.s0); z0 = addmod(z0, z1, pq.s0); \\\n" \
+"	z1 = mulmod(t, win, pq); \\\n" \
 "}\n" \
 "\n" \
-"#define FORWARD_4_0(pq, f0, zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3) \\\n" \
+"#define SQR2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0, rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3; \\\n" \
-"	const uint32 u0 = mulmod(zi0, rsq, pq), u2 = mulmod(zi2, im, pq); \\\n" \
-"	const uint32 u1 = mulmod(zi1, rsq, pq), u3 = mulmod(zi3, im, pq); \\\n" \
-"	const uint32 v0 = addmod(u0, u2, p), v2 = submod(u0, u2, p); \\\n" \
-"	const uint32 v1 = mulmod(addmod(u1, u3, p), sqrti, pq), v3 = mulmod(submod(u1, u3, p), isqrti, pq); \\\n" \
-"	zo0 = addmod(v0, v1, p); zo1 = submod(v0, v1, p); zo2 = addmod(v2, v3, p); zo3 = submod(v2, v3, p); \\\n" \
+"	const uint32 t = mulmod(sqrmod(z1, pq), w, pq); \\\n" \
+"	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \\\n" \
+"	z0 = addmod(sqrmod(z0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define SQUARE_22(pq, z0, z1, z2, z3, w) \\\n" \
+"#define SQR2N(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = z0, u1 = z1, u2 = z2, u3 = z3; \\\n" \
-"	z0 = addmod(sqrmod(u0, pq), mulmod(sqrmod(u1, pq), w, pq), p); z1 = mulmod(addmod(u0, u0, p), u1, pq); \\\n" \
-"	z2 = submod(sqrmod(u2, pq), mulmod(sqrmod(u3, pq), w, pq), p); z3 = mulmod(addmod(u2, u2, p), u3, pq); \\\n" \
+"	const uint32 t = mulmod(sqrmod(z1, pq), w, pq); \\\n" \
+"	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \\\n" \
+"	z0 = submod(sqrmod(z0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define SQUARE_4(pq, z0, z1, z2, z3, w, win) \\\n" \
+"#define MUL2(z0, z1, zp0, zp1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = z0, u2 = mulmod(z2, w, pq), u1 = z1, u3 = mulmod(z3, w, pq); \\\n" \
-"	const uint32 v0 = addmod(u0, u2, p), v2 = submod(u0, u2, p), v1 = addmod(u1, u3, p), v3 = submod(u1, u3, p); \\\n" \
-"	const uint32 s0 = addmod(sqrmod(v0, pq), mulmod(sqrmod(v1, pq), w, pq), p); \\\n" \
-"	const uint32 s1 = mulmod(addmod(v0, v0, p), v1, pq); \\\n" \
-"	const uint32 s2 = submod(sqrmod(v2, pq), mulmod(sqrmod(v3, pq), w, pq), p); \\\n" \
-"	const uint32 s3 = mulmod(addmod(v2, v2, p), v3, pq); \\\n" \
-"	z0 = addmod(s0, s2, p); z2 = mulmod(submod(s2, s0, p), win, pq); \\\n" \
-"	z1 = addmod(s1, s3, p); z3 = mulmod(submod(s3, s1, p), win, pq); \\\n" \
+"	const uint32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \\\n" \
+"	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \\\n" \
+"	z0 = addmod(mulmod(z0, zp0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define FWD_2(pq, zi0, zi1, zi2, zi3, zo0, zo1, zo2, zo3, w) \\\n" \
+"#define MUL2N(z0, z1, zp0, zp1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = zi0, u2 = mulmod(zi2, w, pq), u1 = zi1, u3 = mulmod(zi3, w, pq); \\\n" \
-"	zo0 = addmod(u0, u2, p); zo2 = submod(u0, u2, p); zo1 = addmod(u1, u3, p); zo3 = submod(u1, u3, p); \\\n" \
+"	const uint32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \\\n" \
+"	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \\\n" \
+"	z0 = submod(mulmod(z0, zp0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define MUL_22(pq, z0, z1, z2, z3, z0p, z1p, z2p, z3p, w) \\\n" \
+"#define FWD2v2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0p = z0p, u1p = z1p, u2p = z2p, u3p = z3p; \\\n" \
-"	const uint32 u0 = z0, u1 = z1, u2 = z2, u3 = z3; \\\n" \
-"	z0 = addmod(mulmod(u0, u0p, pq), mulmod(mulmod(u1, u1p, pq), w, pq), p); \\\n" \
-"	z1 = addmod(mulmod(u0, u1p, pq), mulmod(u0p, u1, pq), p); \\\n" \
-"	z2 = submod(mulmod(u2, u2p, pq), mulmod(mulmod(u3, u3p, pq), w, pq), p); \\\n" \
-"	z3 = addmod(mulmod(u2, u3p, pq), mulmod(u2p, u3, pq), p); \\\n" \
+"	const uint32_2 t = mulmod2(z1, w, pq); \\\n" \
+"	z1 = submod2(z0, t, pq.s0); z0 = addmod2(z0, t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
-"#define MUL_4(pq, z0, z1, z2, z3, z0p, z1p, z2p, z3p, w, win) \\\n" \
+"#define BCK2v2(z0, z1, win) \\\n" \
 "{ \\\n" \
-"	const uint32 p = pq.s0; \\\n" \
-"	const uint32 u0 = z0, u2 = mulmod(z2, w, pq), u1 = z1, u3 = mulmod(z3, w, pq); \\\n" \
-"	const uint32 v0 = addmod(u0, u2, p), v2 = submod(u0, u2, p), v1 = addmod(u1, u3, p), v3 = submod(u1, u3, p); \\\n" \
-"	const uint32 v0p = z0p, v1p = z1p, v2p = z2p, v3p = z3p; \\\n" \
-"	const uint32 s0 = addmod(mulmod(v0, v0p, pq), mulmod(mulmod(v1, v1p, pq), w, pq), p); \\\n" \
-"	const uint32 s1 = addmod(mulmod(v0, v1p, pq), mulmod(v0p, v1, pq), p); \\\n" \
-"	const uint32 s2 = submod(mulmod(v2, v2p, pq), mulmod(mulmod(v3, v3p, pq), w, pq), p); \\\n" \
-"	const uint32 s3 = addmod(mulmod(v2, v3p, pq), mulmod(v2p, v3, pq), p); \\\n" \
-"	z0 = addmod(s0, s2, p); z2 = mulmod(submod(s2, s0, p), win, pq); \\\n" \
-"	z1 = addmod(s1, s3, p); z3 = mulmod(submod(s3, s1, p), win, pq); \\\n" \
+"	const uint32_2 t = submod2(z1, z0, pq.s0); z0 = addmod2(z0, z1, pq.s0); \\\n" \
+"	z1 = mulmod2(t, win, pq); \\\n" \
+"}\n" \
+"\n" \
+"#define FWD2v4(z0, z1, w) \\\n" \
+"{ \\\n" \
+"	const uint32_4 t = mulmod4(z1, w, pq); \\\n" \
+"	z1 = submod4(z0, t, pq.s0); z0 = addmod4(z0, t, pq.s0); \\\n" \
+"}\n" \
+"\n" \
+"#define BCK2v4(z0, z1, win) \\\n" \
+"{ \\\n" \
+"	const uint32_4 t = submod4(z1, z0, pq.s0); z0 = addmod4(z0, z1, pq.s0); \\\n" \
+"	z1 = mulmod4(t, win, pq); \\\n" \
+"}\n" \
+"\n" \
+"static void _loadg1(const sz_t n, uint32 * const zl, __global const uint * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"static void _loadl1(const sz_t n, uint32 * const zl, __local const uint * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"static void _storeg1(const sz_t n, __global uint * restrict const z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"static void _storel1(const sz_t n, __local uint * restrict const Z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"\n" \
+"static void _loadg2(const sz_t n, uint32_2 * const zl, __global const uint2 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"static void _loadl2(const sz_t n, uint32_2 * const zl, __local const uint2 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"static void _storeg2(const sz_t n, __global uint2 * restrict const z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"static void _storel2(const sz_t n, __local uint2 * restrict const Z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"\n" \
+"static void _loadg4(const sz_t n, uint32_4 * const zl, __global const uint4 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"static void _loadl4(const sz_t n, uint32_4 * const zl, __local const uint4 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"static void _storeg4(const sz_t n, __global uint4 * restrict const z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"static void _storel4(const sz_t n, __local uint4 * restrict const Z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"\n" \
+"// ---\n" \
+"\n" \
+"INLINE void _forward4x1(const uint32_2 pq, uint32 z[4], const uint32 w1, const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2(z[0], z[2], w1); FWD2(z[1], z[3], w1);\n" \
+"	FWD2(z[0], z[1], w2[0]); FWD2(z[2], z[3], w2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _backward4x1(const uint32_2 pq, uint32 z[4], const uint32 win1, const uint32 win2[2])\n" \
+"{\n" \
+"	BCK2(z[0], z[1], win2[0]); BCK2(z[2], z[3], win2[1]);\n" \
+"	BCK2(z[0], z[2], win1); BCK2(z[1], z[3], win1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _forward4x1_0(const uint32_2 pq, const uint32_4 f0, uint32 z[4])\n" \
+"{\n" \
+"	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
+"	z[0] = mulmod(z[0], rsq, pq); z[1] = mulmod(z[1], rsq, pq);\n" \
+"	FWD2(z[0], z[2], im); FWD2(z[1], z[3], im);\n" \
+"	FWD2(z[0], z[1], sqrti); FWD2(z[2], z[3], isqrti);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square2x2(const uint32_2 pq, uint32 z[4], const uint32 w)\n" \
+"{\n" \
+"	SQR2(z[0], z[1], w); SQR2N(z[2], z[3], w);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square4(const uint32_2 pq, uint32 z[4], const uint32 w, const uint32 win)\n" \
+"{\n" \
+"	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);\n" \
+"	_square2x2(pq, z, w);\n" \
+"	BCK2(z[0], z[2], win); BCK2(z[1], z[3], win);\n" \
+"}\n" \
+"\n" \
+"INLINE void _fwd4(const uint32_2 pq, uint32 z[4], const uint32 w)\n" \
+"{\n" \
+"	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul2x2(const uint32_2 pq, uint32 z[4], const uint32 zp[4], const uint32 w)\n" \
+"{\n" \
+"	MUL2(z[0], z[1], zp[0], zp[1], w); MUL2N(z[2], z[3], zp[2], zp[3], w);\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul4(const uint32_2 pq, uint32 z[4], const uint32 zp[4], const uint32 w, const uint32 win)\n" \
+"{\n" \
+"	_fwd4(pq, z, w);\n" \
+"	_mul2x2(pq, z, zp, w);\n" \
+"	BCK2(z[0], z[2], win); BCK2(z[1], z[3], win);\n" \
+"}\n" \
+"\n" \
+"// --- v2\n" \
+"\n" \
+"INLINE void _forward4x2(const uint32_2 pq, uint32_2 z[4], const uint32 w1, const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
+"	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _backward4x2(const uint32_2 pq, uint32_2 z[4], const uint32 win1, const uint32 win2[2])\n" \
+"{\n" \
+"	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
+"	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _forward4x2_0(const uint32_2 pq, const uint32_4 f0, uint32_2 z[4])\n" \
+"{\n" \
+"	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
+"	z[0] = mulmod2(z[0], rsq, pq); z[1] = mulmod2(z[1], rsq, pq);\n" \
+"	FWD2v2(z[0], z[2], im); FWD2v2(z[1], z[3], im);\n" \
+"	FWD2v2(z[0], z[1], sqrti); FWD2v2(z[2], z[3], isqrti);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square4x2(const uint32_2 pq, uint32_2 z[4], const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
+"	SQR2(z[0].s0, z[0].s1, w2[0]); SQR2N(z[1].s0, z[1].s1, w2[0]);\n" \
+"	SQR2(z[2].s0, z[2].s1, w2[1]); SQR2N(z[3].s0, z[3].s1, w2[1]);\n" \
+"	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square8(const uint32_2 pq, uint32_2 z[4], const uint32 w1, const uint32 win1, const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
+"	_square4x2(pq, z, w2, win2);\n" \
+"	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _fwd4x2(const uint32_2 pq, uint32_2 z[4], const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _fwd8(const uint32_2 pq, uint32_2 z[4], const uint32 w1, const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
+"	_fwd4x2(pq, z, w2);\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul4x2(const uint32_2 pq, uint32_2 z[4], const uint32_2 zp[4], const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
+"	MUL2(z[0].s0, z[0].s1, zp[0].s0, zp[0].s1, w2[0]); MUL2N(z[1].s0, z[1].s1, zp[1].s0, zp[1].s1, w2[0]);\n" \
+"	MUL2(z[2].s0, z[2].s1, zp[2].s0, zp[2].s1, w2[1]); MUL2N(z[3].s0, z[3].s1, zp[3].s0, zp[3].s1, w2[1]);\n" \
+"	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul8(const uint32_2 pq, uint32_2 z[4], const uint32_2 zp[4], const uint32 w1, const uint32  win1, const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
+"	_mul4x2(pq, z, zp, w2, win2);\n" \
+"	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);\n" \
+"}\n" \
+"\n" \
+"// --- v4\n" \
+"\n" \
+"INLINE void _forward4x4(const uint32_2 pq, uint32_4 z[4], const uint32 w1, const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2v4(z[0], z[2], w1); FWD2v4(z[1], z[3], w1);\n" \
+"	FWD2v4(z[0], z[1], w2[0]); FWD2v4(z[2], z[3], w2[1]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _backward4x4(const uint32_2 pq, uint32_4 z[4], const uint32 win1, const uint32 win2[2])\n" \
+"{\n" \
+"	BCK2v4(z[0], z[1], win2[0]); BCK2v4(z[2], z[3], win2[1]);\n" \
+"	BCK2v4(z[0], z[2], win1); BCK2v4(z[1], z[3], win1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _forward4x4_0(const uint32_2 pq, const uint32_4 f0, uint32_4 z[4])\n" \
+"{\n" \
+"	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
+"	z[0] = mulmod4(z[0], rsq, pq); z[1] = mulmod4(z[1], rsq, pq);\n" \
+"	FWD2v4(z[0], z[2], im); FWD2v4(z[1], z[3], im);\n" \
+"	FWD2v4(z[0], z[1], sqrti); FWD2v4(z[2], z[3], isqrti);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square4x2v4(const uint32_2 pq, uint32_4 z[2], const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	for (sz_t i = 0; i < 2; ++i)\n" \
+"	{\n" \
+"		FWD2v2(z[i].s01, z[i].s23, w2[i]);\n" \
+"		SQR2(z[i].s0, z[i].s1, w2[i]); SQR2N(z[i].s2, z[i].s3, w2[i]);\n" \
+"		BCK2v2(z[i].s01, z[i].s23, win2[i]);\n" \
+"	}\n" \
+"}\n" \
+"\n" \
+"INLINE void _square8v4(const uint32_2 pq, uint32_4 z[2], const uint32 w1, const uint32 win1, const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v4(z[0], z[1], w1);\n" \
+"	_square4x2v4(pq, z, w2, win2);\n" \
+"	BCK2v4(z[0], z[1], win1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _fwd4x2v4(const uint32_2 pq, uint32_4 z[2], const uint32 w2[2])\n" \
+"{\n" \
+"	for (sz_t i = 0; i < 2; ++i) FWD2v2(z[i].s01, z[i].s23, w2[i]);\n" \
+"}\n" \
+"\n" \
+"INLINE void _fwd8v4(const uint32_2 pq, uint32_4 z[2], const uint32 w1, const uint32 w2[2])\n" \
+"{\n" \
+"	FWD2v4(z[0], z[1], w1);\n" \
+"	_fwd4x2v4(pq, z, w2);\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul4x2v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	for (sz_t i = 0; i < 2; ++i)\n" \
+"	{\n" \
+"		FWD2v2(z[i].s01, z[i].s23, w2[i]);\n" \
+"		MUL2(z[i].s0, z[i].s1, zp[i].s0, zp[i].s1, w2[i]); MUL2N(z[i].s2, z[i].s3, zp[i].s2, zp[i].s3, w2[i]);\n" \
+"		BCK2v2(z[i].s01, z[i].s23, win2[i]);\n" \
+"	}\n" \
+"}\n" \
+"\n" \
+"INLINE void _mul8v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], const uint32 w1, const uint32  win1, const uint32 w2[2], const uint32 win2[2])\n" \
+"{\n" \
+"	FWD2v4(z[0], z[1], w1);\n" \
+"	_mul4x2v4(pq, z, zp, w2, win2);\n" \
+"	BCK2v4(z[0], z[1], win1);\n" \
 "}\n" \
 "\n" \
 "// --- inverse of roots is wi[s + j] or w[s + s - j - 1] ---\n" \
 "\n" \
-"#ifdef USE_WI\n" \
-"#define DECLARE_IVAR(s, j)	const sz_t sji = s + j; __global const uint * restrict const wi = &w[WI_SHFT];\n" \
-"#define DECLARE_WIN(sji)	const uint32 win1 = w[sji], win20 = w[2 * sji + 0], win21 = w[2 * sji + 1];\n" \
+"#define DECLARE_W1(sj)			const uint32 w1 = w[sj];\n" \
+"#define DECLARE_W2(sj)			uint32 w2[2]; { const uint32_2 t = ((__global const uint2 *)w)[sj]; w2[0] = t.s0; w2[1] = t.s1; }\n" \
+"#define DECLARE_W12(sj)			DECLARE_W1(sj); DECLARE_W2(sj);\n" \
+"#define DECLARE_W1_2(sj)		uint32 w1[2]; { const uint32_2 t = ((__global const uint2 *)w)[sj]; w1[0] = t.s0; w1[1] = t.s1; }\n" \
+"#define DECLARE_W2_4(sj)		uint32 w2[4]; { const uint32_4 t = ((__global const uint4 *)w)[sj]; w2[0] = t.s0; w2[1] = t.s1; w2[2] = t.s2; w2[3] = t.s3; }\n" \
+"#define DECLARE_W12_24(sj)		DECLARE_W1_2(sj); DECLARE_W2_4(sj);\n" \
+"\n" \
+"#define DECLARE_WIN1(sji)		const uint32 win1 = wi[sji];\n" \
+"#if defined(USE_WI)\n" \
+"#define DECLARE_IVAR(s, j)		const sz_t sji = s + j; __global const uint * restrict const wi = &w[WI_SHFT];\n" \
+"#define DECLARE_WIN2(sji)		uint32 win2[2]; { const uint32_2 t = ((__global const uint2 *)wi)[sji]; win2[0] = t.s0; win2[1] = t.s1; }\n" \
+"#define DECLARE_WIN1_2(sji)		uint32 win1[2]; { const uint32_2 t = ((__global const uint2 *)wi)[sji]; win1[0] = t.s0; win1[1] = t.s1; }\n" \
+"#define DECLARE_WIN2_4(sji)		uint32 win2[4]; { const uint32_4 t = ((__global const uint4 *)wi)[sji]; win2[0] = t.s0; win2[1] = t.s1; win2[2] = t.s2; win2[3] = t.s3; }\n" \
 "#else\n" \
-"#define DECLARE_IVAR(s, j)	const sz_t sji = s + s - j - 1; __global const uint * restrict const wi = w;\n" \
-"#define DECLARE_WIN(sji)	const uint32 win1 = w[sji], win20 = w[2 * sji + 1], win21 = w[2 * sji + 0];\n" \
+"#define DECLARE_IVAR(s, j)		const sz_t sji = s + s - j - 1; __global const uint * restrict const wi = w;\n" \
+"#define DECLARE_WIN2(sji)		uint32 win2[2]; { const uint32_2 t = ((__global const uint2 *)wi)[sji]; win2[0] = t.s1; win2[1] = t.s0; }\n" \
+"#define DECLARE_WIN1_2(sji)		uint32 win1[2]; { const uint32_2 t = ((__global const uint2 *)wi)[sji]; win1[0] = t.s1; win1[1] = t.s0; }\n" \
+"#define DECLARE_WIN2_4(sji)		uint32 win2[4]; { const uint32_4 t = ((__global const uint4 *)wi)[sji]; win2[0] = t.s3; win2[1] = t.s2; win2[2] = t.s1; win2[3] = t.s0; }\n" \
+"#endif\n" \
+"#define DECLARE_WIN12(sj)		DECLARE_WIN1(sj); DECLARE_WIN2(sj);\n" \
+"#define DECLARE_WIN12_24(sj)	DECLARE_WIN1_2(sj); DECLARE_WIN2_4(sj);\n" \
+"\n" \
+"// --- vector size (1, 2 or 4) ---\n" \
+"\n" \
+"#if VSIZE == 4\n" \
+"#define VTYPE				uint32_4\n" \
+"#define _loadg				_loadg4\n" \
+"#define _loadl				_loadl4\n" \
+"#define _storeg				_storeg4\n" \
+"#define _storel				_storel4\n" \
+"#define _forward4			_forward4x4\n" \
+"#define _backward4			_backward4x4\n" \
+"#define _forward4_0			_forward4x4_0\n" \
+"#elif VSIZE == 2\n" \
+"#define VTYPE				uint32_2\n" \
+"#define _loadg				_loadg2\n" \
+"#define _loadl				_loadl2\n" \
+"#define _storeg				_storeg2\n" \
+"#define _storel				_storel2\n" \
+"#define _forward4			_forward4x2\n" \
+"#define _backward4			_backward4x2\n" \
+"#define _forward4_0			_forward4x2_0\n" \
+"#else\n" \
+"#define VTYPE				uint32\n" \
+"#define _loadg				_loadg1\n" \
+"#define _loadl				_loadl1\n" \
+"#define _storeg				_storeg1\n" \
+"#define _storel				_storel1\n" \
+"#define _forward4			_forward4x1\n" \
+"#define _backward4			_backward4x1\n" \
+"#define _forward4_0			_forward4x1_0\n" \
 "#endif\n" \
 "\n" \
 "// --- transform/inline global mem ---\n" \
 "\n" \
-"INLINE void forward_4io(const uint32_2 pq, const sz_t m, __global uint * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"INLINE void forward4io(const uint32_2 pq, const sz_t m, __global VTYPE * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
 "{\n" \
-"	const uint32 w1 = w[sj], w20 = w[2 * sj + 0], w21 = w[2 * sj + 1];\n" \
-"	FORWARD_4(pq, z[0 * m], z[1 * m], z[2 * m], z[3 * m], z[0 * m], z[1 * m], z[2 * m], z[3 * m], w1, w20, w21);\n" \
+"	DECLARE_W12(sj);\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, m);\n" \
+"	_forward4(pq, zl, w1, w2);\n" \
+"	_storeg(4, z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backward_4io(const uint32_2 pq, const sz_t m, __global uint * restrict const z, __global const uint * restrict const w, const sz_t sji)\n" \
+"INLINE void backward4io(const uint32_2 pq, const sz_t m, __global VTYPE * restrict const z, __global const uint * restrict const wi, const sz_t sji)\n" \
 "{\n" \
-"	DECLARE_WIN(sji);\n" \
-"	BACKWARD_4(pq, z[0 * m], z[1 * m], z[2 * m], z[3 * m], z[0 * m], z[1 * m], z[2 * m], z[3 * m], win1, win20, win21);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, m);\n" \
+"	_backward4(pq, zl, win1, win2);\n" \
+"	_storeg(4, z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward_4io_0(const uint32_2 pq, const uint32_4 f0,	__global uint * restrict const z)\n" \
+"INLINE void forward4io_0(const uint32_2 pq, const uint32_4 f0, __global VTYPE * restrict const z)\n" \
 "{\n" \
-"	const sz_t m = N_SZ / 4;\n" \
-"	FORWARD_4_0(pq, f0, z[0 * m], z[1 * m], z[2 * m], z[3 * m], z[0 * m], z[1 * m], z[2 * m], z[3 * m]);\n" \
+"	const sz_t m = N_SZ / 4 / VSIZE;\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, m);\n" \
+"	_forward4_0(pq, f0, zl);\n" \
+"	_storeg(4, z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square_22io(const uint32_2 pq, __global uint * restrict const z, const uint w)\n" \
+"// --- v1\n" \
+"\n" \
+"INLINE void square2x2io(const uint32_2 pq, __global uint * restrict const z, const uint w)\n" \
 "{\n" \
-"	SQUARE_22(pq, z[0], z[1], z[2], z[3], w);\n" \
+"	uint32 zl[4]; _loadg1(4, zl, z, 1);\n" \
+"	_square2x2(pq, zl, w);\n" \
+"	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square_4io(const uint32_2 pq, __global uint * restrict const z, const uint w, const uint win)\n" \
+"INLINE void square4x1io(const uint32_2 pq, __global uint * restrict const z, const uint w, const uint win)\n" \
 "{\n" \
-"	SQUARE_4(pq, z[0], z[1], z[2], z[3], w, win);\n" \
+"	uint32 zl[4]; _loadg1(4, zl, z, 1);\n" \
+"	_square4(pq, zl, w, win);\n" \
+"	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void fwd_2io(const uint32_2 pq, __global uint * restrict const z, const uint w)\n" \
+"INLINE void fwd4x1io(const uint32_2 pq, __global uint * restrict const z, const uint w)\n" \
 "{\n" \
-"	FWD_2(pq, z[0], z[1], z[2], z[3], z[0], z[1], z[2], z[3], w);\n" \
+"	uint32 zl[4]; _loadg1(4, zl, z, 1);\n" \
+"	_fwd4(pq, zl, w);\n" \
+"	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul_22io(const uint32_2 pq, __global uint * restrict const z, const __global uint * restrict const zp, const uint w)\n" \
+"INLINE void mul2x2io(const uint32_2 pq, __global uint * restrict const z, const __global uint * restrict const zp, const uint w)\n" \
 "{\n" \
-"	MUL_22(pq, z[0], z[1], z[2], z[3], zp[0], zp[1], zp[2], zp[3], w);\n" \
+"	uint32 zpl[4]; _loadg1(4, zpl, zp, 1);\n" \
+"	uint32 zl[4]; _loadg1(4, zl, z, 1);\n" \
+"	_mul2x2(pq, zl, zpl, w);\n" \
+"	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul_4io(const uint32_2 pq, __global uint * restrict const z, const __global uint * restrict const zp, const uint w, const uint win)\n" \
+"INLINE void mul4x1io(const uint32_2 pq, __global uint * restrict const z, const __global uint * restrict const zp, const uint w, const uint win)\n" \
 "{\n" \
-"	MUL_4(pq, z[0], z[1], z[2], z[3], zp[0], zp[1], zp[2], zp[3], w, win);\n" \
+"	uint32 zpl[4]; _loadg1(4, zpl, zp, 1);\n" \
+"	uint32 zl[4]; _loadg1(4, zl, z, 1);\n" \
+"	_mul4(pq, zl, zpl, w, win);\n" \
+"	_storeg1(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v2\n" \
+"\n" \
+"INLINE void square4x2io(const uint32_2 pq, __global uint2 * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	DECLARE_WIN2(sji);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_square4x2(pq, zl, w2, win2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void square8x1io(const uint32_2 pq, __global uint2 * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_square8(pq, zl, w1, win1, w2, win2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4x2io(const uint32_2 pq, __global uint2 * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_fwd4x2(pq, zl, w2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8x1io(const uint32_2 pq, __global uint2 * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_fwd8(pq, zl, w1, w2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul4x2io(const uint32_2 pq, __global uint2 * restrict const z, const __global uint2 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	DECLARE_WIN2(sji);\n" \
+"	uint32_2 zpl[4]; _loadg2(4, zpl, zp, 1);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_mul4x2(pq, zl, zpl, w2, win2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul8x1io(const uint32_2 pq, __global uint2 * restrict const z, const __global uint2 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	uint32_2 zpl[4]; _loadg2(4, zpl, zp, 1);\n" \
+"	uint32_2 zl[4]; _loadg2(4, zl, z, 1);\n" \
+"	_mul8(pq, zl, zpl, w1, win1, w2, win2);\n" \
+"	_storeg2(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v4\n" \
+"\n" \
+"INLINE void square4x4io(const uint32_2 pq, __global uint4 * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	DECLARE_WIN2_4(sji);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_square4x2v4(pq, &zl[0], &w2[0], &win2[0]);\n" \
+"	_square4x2v4(pq, &zl[2], &w2[2], &win2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void square8x2io(const uint32_2 pq, __global uint4 * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	DECLARE_WIN12_24(sji);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_square8v4(pq, &zl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
+"	_square8v4(pq, &zl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4x4io(const uint32_2 pq, __global uint4 * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_fwd4x2v4(pq, &zl[0], &w2[0]);\n" \
+"	_fwd4x2v4(pq, &zl[2], &w2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8x2io(const uint32_2 pq, __global uint4 * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_fwd8v4(pq, &zl[0], w1[0], &w2[0]);\n" \
+"	_fwd8v4(pq, &zl[2], w1[1], &w2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul4x4io(const uint32_2 pq, __global uint4 * restrict const z, const __global uint4 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	DECLARE_WIN2_4(sji);\n" \
+"	uint32_4 zpl[4]; _loadg4(4, zpl, zp, 1);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_mul4x2v4(pq, &zl[0], &zpl[0], &w2[0], &win2[0]);\n" \
+"	_mul4x2v4(pq, &zl[2], &zpl[2], &w2[2], &win2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul8x2io(const uint32_2 pq, __global uint4 * restrict const z, const __global uint4 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	DECLARE_WIN12_24(sji);\n" \
+"	uint32_4 zpl[4]; _loadg4(4, zpl, zp, 1);\n" \
+"	uint32_4 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_mul8v4(pq, &zl[0], &zpl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
+"	_mul8v4(pq, &zl[2], &zpl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"	_storeg4(4, z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v1, v2, v4\n" \
+"\n" \
+"INLINE void square4io(const uint32_2 pq, __global VTYPE * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	square4x4io(pq, z, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	square4x2io(pq, z, w, wi, sj, sji);\n" \
+"#else\n" \
+"	square4x1io(pq, z, w[sj], wi[sji]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4io(const uint32_2 pq, __global VTYPE * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	fwd4x4io(pq, z, w, sj);\n" \
+"#elif VSIZE == 2\n" \
+"	fwd4x2io(pq, z, w, sj);\n" \
+"#else\n" \
+"	fwd4x1io(pq, z, w[sj]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void mul4io(const uint32_2 pq, __global VTYPE * restrict const z, const __global VTYPE * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	mul4x4io(pq, z, zp, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	mul4x2io(pq, z, zp, w, wi, sj, sji);\n" \
+"#else\n" \
+"	mul4x1io(pq, z, zp, w[sj], wi[sji]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"// --- v2, v4\n" \
+"\n" \
+"INLINE void square8io(const uint32_2 pq, __global VTYPE * restrict const z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	square8x2io(pq, z, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	square8x1io(pq, z, w, wi, sj, sji);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8io(const uint32_2 pq, __global VTYPE * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	fwd8x2io(pq, z, w, sj);\n" \
+"#elif VSIZE == 2\n" \
+"	fwd8x1io(pq, z, w, sj);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void mul8io(const uint32_2 pq, __global VTYPE * restrict const z, const __global VTYPE * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	mul8x2io(pq, z, zp, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	mul8x1io(pq, z, zp, w, wi, sj, sji);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "// --- transform/inline local & global mem ---\n" \
 "\n" \
-"INLINE void forward_4(const uint32_2 pq, const sz_t m, __local uint * restrict const Z, __global const uint * restrict const w, const sz_t j)\n" \
+"INLINE void forward_4(const uint32_2 pq, const sz_t m, __local VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
 "{\n" \
-"	const uint32 w1 = w[j], w20 = w[2 * j + 0], w21 = w[2 * j + 1];\n" \
+"	DECLARE_W12(sj);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	FORWARD_4(pq, Z[0 * m], Z[1 * m], Z[2 * m], Z[3 * m], Z[0 * m], Z[1 * m], Z[2 * m], Z[3 * m], w1, w20, w21);\n" \
+"	VTYPE zl[4]; _loadl(4, zl, Z, m);\n" \
+"	_forward4(pq, zl, w1, w2);\n" \
+"	_storel(4, Z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward_4i(const uint32_2 pq, const sz_t ml, __local uint * restrict const Z, const sz_t mg,\n" \
-"	__global const uint * restrict const z, __global const uint * restrict const w, const sz_t j)\n" \
+"INLINE void forward_4i(const uint32_2 pq, const sz_t ml, __local VTYPE * restrict const Z, const sz_t mg,\n" \
+"	__global const VTYPE * restrict const z, __global const uint * restrict const w, const sz_t sj)\n" \
 "{\n" \
-"	__global const uint * const z2mg = &z[2 * mg];\n" \
-"	const uint32 w1 = w[j], w20 = w[2 * j + 0], w21 = w[2 * j + 1];\n" \
-"	FORWARD_4(pq, z[0], z[mg], z2mg[0], z2mg[mg], Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], w1, w20, w21);\n" \
+"	DECLARE_W12(sj);\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, mg);\n" \
+"	_forward4(pq, zl, w1, w2);\n" \
+"	_storel(4, Z, ml, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward_4i_0(const uint32_2 pq, const uint32_4 f0, const sz_t ml, __local uint * restrict const Z, const sz_t mg,\n" \
-"	__global const uint * restrict const z, __global const uint * restrict const w)\n" \
+"INLINE void forward_4i_0(const uint32_2 pq, const uint32_4 f0, const sz_t ml, __local VTYPE * restrict const Z,\n" \
+"	const sz_t mg, __global const VTYPE * restrict const z)\n" \
 "{\n" \
-"	__global const uint * const z2mg = &z[2 * mg];\n" \
-"	FORWARD_4_0(pq, f0, z[0], z[mg], z2mg[0], z2mg[mg], Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml]);\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, mg);\n" \
+"	_forward4_0(pq, f0, zl);\n" \
+"	_storel(4, Z, ml, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward_4o(const uint32_2 pq, const sz_t mg, __global uint * restrict const z, const sz_t ml,\n" \
-"	__local const uint * restrict const Z, __global const uint * restrict const w, const sz_t j)\n" \
+"INLINE void forward_4o(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z, const sz_t ml,\n" \
+"	__local const VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
 "{\n" \
-"	__global uint * const z2mg = &z[2 * mg];\n" \
-"	const uint32 w1 = w[j], w20 = w[2 * j + 0], w21 = w[2 * j + 1];\n" \
+"	DECLARE_W12(sj);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	FORWARD_4(pq, Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], w1, w20, w21);\n" \
+"	VTYPE zl[4]; _loadl(4, zl, Z, ml);\n" \
+"	_forward4(pq, zl, w1, w2);\n" \
+"	_storeg(4, z, mg, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backward_4(const uint32_2 pq, const sz_t m, __local uint * restrict const Z, __global const uint * restrict const w, const sz_t sji)\n" \
+"INLINE void backward_4(const uint32_2 pq, const sz_t m, __local VTYPE * restrict const Z, __global const uint * restrict const wi, const sz_t sji)\n" \
 "{\n" \
-"	DECLARE_WIN(sji);\n" \
+"	DECLARE_WIN12(sji);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	BACKWARD_4(pq, Z[0 * m], Z[1 * m], Z[2 * m], Z[3 * m], Z[0 * m], Z[1 * m], Z[2 * m], Z[3 * m], win1, win20, win21);\n" \
+"	VTYPE zl[4]; _loadl(4, zl, Z, m);\n" \
+"	_backward4(pq, zl, win1, win2);\n" \
+"	_storel(4, Z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backward_4i(const uint32_2 pq, const sz_t ml, __local uint * restrict const Z, const sz_t mg,\n" \
-"	__global const uint * restrict const z, __global const uint * restrict const w, const sz_t sji)\n" \
+"INLINE void backward_4i(const uint32_2 pq, const sz_t ml, __local VTYPE * restrict const Z, const sz_t mg,\n" \
+"	__global const VTYPE * restrict const z, __global const uint * restrict const wi, const sz_t sji)\n" \
 "{\n" \
-"	__global const uint * const z2mg = &z[2 * mg];\n" \
-"	DECLARE_WIN(sji);\n" \
-"	BACKWARD_4(pq, z[0], z[mg], z2mg[0], z2mg[mg], Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], win1, win20, win21);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	VTYPE zl[4]; _loadg(4, zl, z, mg);\n" \
+"	_backward4(pq, zl, win1, win2);\n" \
+"	_storel(4, Z, ml, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backward_4o(const uint32_2 pq, const sz_t mg, __global uint * restrict const z, const sz_t ml,\n" \
-"	__local const uint * restrict const Z, __global const uint * restrict const w, const sz_t sji)\n" \
+"INLINE void backward_4o(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z, const sz_t ml,\n" \
+"	__local const VTYPE * restrict const Z, __global const uint * restrict const wi, const sz_t sji)\n" \
 "{\n" \
-"	__global uint * const z2mg = &z[2 * mg];\n" \
-"	DECLARE_WIN(sji);\n" \
+"	DECLARE_WIN12(sji);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	BACKWARD_4(pq, Z[0 * ml], Z[1 * ml], Z[2 * ml], Z[3 * ml], z[0], z[mg], z2mg[0], z2mg[mg], win1, win20, win21);\n" \
+"	VTYPE zl[4]; _loadl(4, zl, Z, ml);\n" \
+"	_backward4(pq, zl, win1, win2);\n" \
+"	_storeg(4, z, mg, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square_22(const uint32_2 pq, __local uint * restrict const Z, const uint w)\n" \
+"// --- v1\n" \
+"\n" \
+"INLINE void square_2x2(const uint32_2 pq, __local uint * restrict const Z, const uint w)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	SQUARE_22(pq, Z[0], Z[1], Z[2], Z[3], w);\n" \
+"	uint32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
+"	_square2x2(pq, zl, w);\n" \
+"	_storel1(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square_4(const uint32_2 pq, __local uint * restrict const Z, const uint w, const uint win)\n" \
+"INLINE void square_4x1(const uint32_2 pq, __local uint * restrict const Z, const uint w, const uint win)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	SQUARE_4(pq, Z[0], Z[1], Z[2], Z[3], w, win);\n" \
+"	uint32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
+"	_square4(pq, zl, w, win);\n" \
+"	_storel1(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void write_4(const sz_t mg, __global uint * restrict const z, __local const uint * restrict const Z)\n" \
+"INLINE void write_4(const sz_t mg, __global VTYPE * restrict const z, __local const VTYPE * restrict const Z)\n" \
 "{\n" \
-"	__global uint * const z2mg = &z[2 * mg];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	z[0] = Z[0]; z[mg] = Z[1]; z2mg[0] = Z[2]; z2mg[mg] = Z[3];\n" \
+"	VTYPE zl[4]; _loadl(4, zl, Z, 1);\n" \
+"	_storeg(4, z, mg, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void fwd2_write_4(const uint32_2 pq, const sz_t mg, __global uint * restrict const z, __local const uint * restrict const Z, const uint w)\n" \
+"INLINE void fwd4x1_write(const uint32_2 pq, const sz_t mg, __global uint * restrict const z,\n" \
+"	__local const uint * restrict const Z, const uint w)\n" \
 "{\n" \
-"	__global uint * const z2mg = &z[2 * mg];\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	FWD_2(pq, Z[0], Z[1], Z[2], Z[3], z[0], z[mg], z2mg[0], z2mg[mg], w);\n" \
+"	uint32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
+"	_fwd4(pq, zl, w);\n" \
+"	_storeg1(4, z, mg, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul_22(const uint32_2 pq, __local uint * restrict const Z, const sz_t mg, __global const uint * restrict const z, const uint w)\n" \
+"INLINE void mul_2x2(const uint32_2 pq, __local uint * restrict const Z, const sz_t mg,\n" \
+"	__global const uint * restrict const zp, const uint w)\n" \
 "{\n" \
-"	__global const uint * const z2mg = &z[2 * mg];\n" \
-"	const uint z0p = z[0], z1p = z[mg], z2p = z2mg[0], z3p = z2mg[mg];\n" \
+"	uint32 zpl[4]; _loadg1(4, zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	MUL_22(pq, Z[0], Z[1], Z[2], Z[3], z0p, z1p, z2p, z3p, w);\n" \
+"	uint32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
+"	_mul2x2(pq, zl, zpl, w);\n" \
+"	_storel1(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul_4(const uint32_2 pq, __local uint * restrict const Z, const sz_t mg, __global const uint * restrict const z, const uint w, const uint win)\n" \
+"INLINE void mul_4x1(const uint32_2 pq, __local uint * restrict const Z, const sz_t mg,\n" \
+"	__global const uint * restrict const zp, const uint w, const uint win)\n" \
 "{\n" \
-"	__global const uint * const z2mg = &z[2 * mg];\n" \
-"	const uint z0p = z[0], z1p = z[mg], z2p = z2mg[0], z3p = z2mg[mg];\n" \
+"	uint32 zpl[4]; _loadg1(4, zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	MUL_4(pq, Z[0], Z[1], Z[2], Z[3], z0p, z1p, z2p, z3p, w, win);\n" \
+"	uint32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
+"	_mul4(pq, zl, zpl, w, win);\n" \
+"	_storel1(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v2\n" \
+"\n" \
+"INLINE void square_4x2(const uint32_2 pq, __local uint2 * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	DECLARE_WIN2(sji);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_square4x2(pq, zl, w2, win2);\n" \
+"	_storel2(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void square_8x1(const uint32_2 pq, __local uint2 * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_square8(pq, zl, w1, win1, w2, win2);\n" \
+"	_storel2(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4x2_write(const uint32_2 pq, const sz_t mg, __global uint2 * restrict const z,\n" \
+"	__local const uint2 * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_fwd4x2(pq, zl, w2);\n" \
+"	_storeg2(4, z, mg, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8x1_write(const uint32_2 pq, const sz_t mg, __global uint2 * restrict const z,\n" \
+"	__local const uint2 * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_fwd8(pq, zl, w1, w2);\n" \
+"	_storeg2(4, z, mg, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_4x2(const uint32_2 pq, __local uint2 * restrict const Z, const sz_t mg, const __global uint2 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2(sj);\n" \
+"	DECLARE_WIN2(sji);\n" \
+"	uint32_2 zpl[4]; _loadg2(4, zpl, zp, mg);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_mul4x2(pq, zl, zpl, w2, win2);\n" \
+"	_storel2(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_8x1(const uint32_2 pq, __local uint2 * restrict const Z, const sz_t mg, const __global uint2 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12(sj);\n" \
+"	DECLARE_WIN12(sji);\n" \
+"	uint32_2 zpl[4]; _loadg2(4, zpl, zp, mg);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_2 zl[4]; _loadl2(4, zl, Z, 1);\n" \
+"	_mul8(pq, zl, zpl, w1, win1, w2, win2);\n" \
+"	_storel2(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v4\n" \
+"\n" \
+"INLINE void square_4x4(const uint32_2 pq, __local uint4 * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	DECLARE_WIN2_4(sji);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_square4x2v4(pq, &zl[0], &w2[0], &win2[0]);\n" \
+"	_square4x2v4(pq, &zl[2], &w2[2], &win2[2]);\n" \
+"	_storel4(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void square_8x2(const uint32_2 pq, __local uint4 * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	DECLARE_WIN12_24(sji);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_square8v4(pq, &zl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
+"	_square8v4(pq, &zl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"	_storel4(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4x4_write(const uint32_2 pq, const sz_t mg, __global uint4 * restrict const z,\n" \
+"	__local const uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_fwd4x2v4(pq, &zl[0], &w2[0]);\n" \
+"	_fwd4x2v4(pq, &zl[2], &w2[2]);\n" \
+"	_storeg4(4, z, mg, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8x2_write(const uint32_2 pq, const sz_t mg, __global uint4 * restrict const z,\n" \
+"	__local const uint4 * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_fwd8v4(pq, &zl[0], w1[0], &w2[0]);\n" \
+"	_fwd8v4(pq, &zl[2], w1[1], &w2[2]);\n" \
+"	_storeg4(4, z, mg, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_4x4(const uint32_2 pq, __local uint4 * restrict const Z, const sz_t mg, const __global uint4 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W2_4(sj);\n" \
+"	DECLARE_WIN2_4(sji);\n" \
+"	uint32_4 zpl[4]; _loadg4(4, zpl, zp, mg);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_mul4x2v4(pq, &zl[0], &zpl[0], &w2[0], &win2[0]);\n" \
+"	_mul4x2v4(pq, &zl[2], &zpl[2], &w2[2], &win2[2]);\n" \
+"	_storel4(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_8x2(const uint32_2 pq, __local uint4 * restrict const Z, const sz_t mg, const __global uint4 * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"	DECLARE_W12_24(sj);\n" \
+"	DECLARE_WIN12_24(sji);\n" \
+"	uint32_4 zpl[4]; _loadg4(4, zpl, zp, mg);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint32_4 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_mul8v4(pq, &zl[0], &zpl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
+"	_mul8v4(pq, &zl[2], &zpl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"	_storel4(4, Z, 1, zl);\n" \
+"}\n" \
+"\n" \
+"// --- v1, v2, v4 -- no barrier\n" \
+"\n" \
+"INLINE void square_4(const uint32_2 pq, __local VTYPE * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	square_4x4(pq, Z, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	square_4x2(pq, Z, w, wi, sj, sji);\n" \
+"#else\n" \
+"	square_4x1(pq, Z, w[sj], wi[sji]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd4_write(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z,\n" \
+"	__local const VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	fwd4x4_write(pq, mg, z, Z, w, sj);\n" \
+"#elif VSIZE == 2\n" \
+"	fwd4x2_write(pq, mg, z, Z, w, sj);\n" \
+"#else\n" \
+"	fwd4x1_write(pq, mg, z, Z, w[sj]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_4(const uint32_2 pq, __local VTYPE * restrict const Z, const sz_t mg, const __global VTYPE * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	mul_4x4(pq, Z, mg, zp, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	mul_4x2(pq, Z, mg, zp, w, wi, sj, sji);\n" \
+"#else\n" \
+"	mul_4x1(pq, Z, mg, zp, w[sj], wi[sji]);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"// --- v2, v4 -- no barrier\n" \
+"\n" \
+"INLINE void square_8(const uint32_2 pq, __local VTYPE * restrict const Z,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	square_8x2(pq, Z, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	square_8x1(pq, Z, w, wi, sj, sji);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void fwd8_write(const uint32_2 pq, const sz_t mg, __global VTYPE * restrict const z,\n" \
+"	__local const VTYPE * restrict const Z, __global const uint * restrict const w, const sz_t sj)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	fwd8x2_write(pq, mg, z, Z, w, sj);\n" \
+"#elif VSIZE == 2\n" \
+"	fwd8x1_write(pq, mg, z, Z, w, sj);\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"INLINE void mul_8(const uint32_2 pq, __local VTYPE * restrict const Z, const sz_t mg, const __global VTYPE * restrict const zp,\n" \
+"	__global const uint * restrict const w, __global const uint * restrict const wi, const sz_t sj, const sz_t sji)\n" \
+"{\n" \
+"#if VSIZE == 4\n" \
+"	mul_8x2(pq, Z, mg, zp, w, wi, sj, sji);\n" \
+"#elif VSIZE == 2\n" \
+"	mul_8x1(pq, Z, mg, zp, w, wi, sj, sji);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "// --- transform/macro ---\n" \
 "\n" \
-"#define DECLARE_VAR_REG() \\\n" \
+"#define DECLARE_VAR_REGv1() \\\n" \
 "	const sz_t gid = (sz_t)get_global_id(0), lid = gid >> (LN_SZ - 2), mid = gid & ~((N_SZ / 4) - 1), id = gid %  (N_SZ / 4); \\\n" \
 "	const uint32_2 pq = g_pq[lid]; \\\n" \
 "	__global uint * restrict const z = &zg[4 * mid]; \\\n" \
 "	__global const uint * restrict const w = &wg[lid * W_SHFT];\n" \
 "\n" \
-"#define DECLARE_VARP_REG() \\\n" \
+"#define DECLARE_VARP_REGv1() \\\n" \
 "	__global const uint * restrict const zp = &zpg[4 * mid];\n" \
+"\n" \
+"#define DECLARE_VAR_REGv2() \\\n" \
+"	const sz_t gid = (sz_t)get_global_id(0), lid = gid >> (LN_SZ - 3), mid = gid & ~((N_SZ / 8) - 1), id = gid %  (N_SZ / 8); \\\n" \
+"	const uint32_2 pq = g_pq[lid]; \\\n" \
+"	__global uint2 * restrict const z = &zg[4 * mid]; \\\n" \
+"	__global const uint * restrict const w = &wg[lid * W_SHFT];\n" \
+"\n" \
+"#define DECLARE_VARP_REGv2() \\\n" \
+"	__global const uint2 * restrict const zp = &zpg[4 * mid];\n" \
+"\n" \
+"#define DECLARE_VAR_REGv4() \\\n" \
+"	const sz_t gid = (sz_t)get_global_id(0), lid = gid >> (LN_SZ - 4), mid = gid & ~((N_SZ / 16) - 1), id = gid %  (N_SZ / 16); \\\n" \
+"	const uint32_2 pq = g_pq[lid]; \\\n" \
+"	__global uint4 * restrict const z = &zg[4 * mid]; \\\n" \
+"	__global const uint * restrict const w = &wg[lid * W_SHFT];\n" \
+"\n" \
+"#define DECLARE_VARP_REGv4() \\\n" \
+"	__global const uint4 * restrict const zp = &zpg[4 * mid];\n" \
+"\n" \
+"#if VSIZE == 4\n" \
+"#define DECLARE_VAR_REG		DECLARE_VAR_REGv4\n" \
+"#define DECLARE_VARP_REG	DECLARE_VARP_REGv4\n" \
+"#elif VSIZE == 2\n" \
+"#define DECLARE_VAR_REG		DECLARE_VAR_REGv2\n" \
+"#define DECLARE_VARP_REG	DECLARE_VARP_REGv2\n" \
+"#else\n" \
+"#define DECLARE_VAR_REG		DECLARE_VAR_REGv1\n" \
+"#define DECLARE_VARP_REG	DECLARE_VARP_REGv1\n" \
+"#endif\n" \
 "\n" \
 "// --- transform without local mem ---\n" \
 "\n" \
 "__kernel\n" \
-"void forward4(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void forward4(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
-"	const sz_t j = id >> lm, k = 3 * (j << lm) + id;\n" \
-"	forward_4io(pq, (sz_t)(1) << lm, &z[k], w, s + j);\n" \
+"	const sz_t m = (sz_t)(1) << lm, j = id >> lm, k = 3 * (id & ~(m - 1)) + id;\n" \
+"	forward4io(pq, m, &z[k], w, s + j);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void backward4(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void backward4(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
-"	const sz_t j = id >> lm, k = 3 * (j << lm) + id; DECLARE_IVAR(s, j);\n" \
-"	backward_4io(pq, (sz_t)(1) << lm, &z[k], wi, sji);\n" \
+"	const sz_t m = (sz_t)(1) << lm, j = id >> lm, k = 3 * (id & ~(m - 1)) + id; DECLARE_IVAR(s, j);\n" \
+"	backward4io(pq, m, &z[k], wi, sji);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void forward4_0(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void forward4_0(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
 "	const sz_t k = id;\n" \
-"	forward_4io_0(pq, g_f0[lid], &z[k]);\n" \
+"	forward4io_0(pq, g_f0[lid], &z[k]);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void square22(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square2x2(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
-"	DECLARE_VAR_REG();\n" \
+"	DECLARE_VAR_REGv1();\n" \
 "	const sz_t j = id, k = 4 * id;\n" \
-"	square_22io(pq, &z[k], w[N_SZ / 4 + j]);\n" \
+"	square2x2io(pq, &z[k], w[N_SZ / 4 + j]);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void square4(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square4(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
-"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 + j; DECLARE_IVAR(N_SZ / 4, j);\n" \
-"	square_4io(pq, &z[k], w[sj], wi[sji]);\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j);\n" \
+"	square4io(pq, &z[k], w, wi, sj, sji);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void fwd4p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd4p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
-"	const sz_t j = id, k = 4 * id;\n" \
-"	fwd_2io(pq, &z[k], w[N_SZ / 4 + j]);\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j;\n" \
+"	fwd4io(pq, &z[k], w, sj);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void mul22(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul4(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
 "	DECLARE_VARP_REG();\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j);\n" \
+"	mul4io(pq, &z[k], &zp[k], w, wi, sj, sji);\n" \
+"}\n" \
+"\n" \
+"// --- v1\n" \
+"\n" \
+"__kernel\n" \
+"void mul2x2(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_REGv1();\n" \
+"	DECLARE_VARP_REGv1();\n" \
 "	const sz_t j = id, k = 4 * id;\n" \
-"	mul_22io(pq, &z[k], &zp[k], w[N_SZ / 4 + j]);\n" \
+"	mul2x2io(pq, &z[k], &zp[k], w[N_SZ / 4 + j]);\n" \
+"}\n" \
+"\n" \
+"// --- v2, v4\n" \
+"\n" \
+"__kernel\n" \
+"void square8(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_REG();\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j);\n" \
+"	square8io(pq, &z[k], w, wi, sj, sji);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void mul4(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void fwd8p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_REG();\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j;\n" \
+"	fwd8io(pq, &z[k], w, sj);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void mul8(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_REG();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 + j; DECLARE_IVAR(N_SZ / 4, j);\n" \
-"	mul_4io(pq, &z[k], &zp[k], w[sj], wi[sji]);\n" \
+"	const sz_t j = id, k = 4 * id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j);\n" \
+"	mul8io(pq, &z[k], &zp[k], w, wi, sj, sji);\n" \
 "}\n" \
 "\n" \
 "// --- transform ---\n" \
+"\n" \
+"#if !defined(SHORT_VER)\n" \
 "\n" \
 "#define DECLARE_VAR(B_N, CHUNK_N) \\\n" \
 "	/* threadIdx < B_N */ \\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
 "	const sz_t local_id = id % (B_N * CHUNK_N), group_id = id / (B_N * CHUNK_N); \\\n" \
 "	const sz_t i = local_id, chunk_idx = i % CHUNK_N, threadIdx = i / CHUNK_N, blockIdx = group_id * CHUNK_N + chunk_idx; \\\n" \
-"	__local uint * const Zi = &Z[chunk_idx]; \\\n" \
+"	__local VTYPE * const Zi = &Z[chunk_idx]; \\\n" \
 "	\\\n" \
 "	const sz_t blockIdx_m = blockIdx >> lm, idx_m = blockIdx_m * B_N + threadIdx; \\\n" \
 "	const sz_t blockIdx_mm = blockIdx_m << lm, idx_mm = idx_m << lm; \\\n" \
@@ -530,12 +1297,12 @@ static const char * const src_ocl_kernels = \
 "	const sz_t sj = s + idx_m; DECLARE_IVAR(s, idx_m);\n" \
 "\n" \
 "#define DECLARE_VAR_FORWARD() \\\n" \
-"	__global uint * restrict const zi = &z[ki]; \\\n" \
-"	__global uint * restrict const zo = &z[ko];\n" \
+"	__global VTYPE * restrict const zi = &z[ki]; \\\n" \
+"	__global VTYPE * restrict const zo = &z[ko];\n" \
 "\n" \
 "#define DECLARE_VAR_BACKWARD() \\\n" \
-"	__global uint * restrict const zi = &z[ko]; \\\n" \
-"	__global uint * restrict const zo = &z[ki];\n" \
+"	__global VTYPE * restrict const zi = &z[ko]; \\\n" \
+"	__global VTYPE * restrict const zo = &z[ki];\n" \
 "\n" \
 "#define FORWARD_I(B_N, CHUNK_N) \\\n" \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
@@ -547,7 +1314,7 @@ static const char * const src_ocl_kernels = \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
 "	DECLARE_VAR_FORWARD(); \\\n" \
 "	\\\n" \
-"	forward_4i_0(pq, g_f0[lid], B_N * CHUNK_N, &Z[i], B_N << lm, zi, w);\n" \
+"	forward_4i_0(pq, g_f0[lid], B_N * CHUNK_N, &Z[i], B_N << lm, zi);\n" \
 "\n" \
 "#define BACKWARD_I(B_N, CHUNK_N) \\\n" \
 "	DECLARE_VAR(B_N, CHUNK_N); \\\n" \
@@ -571,15 +1338,15 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK64, &Zi[CHUNK64 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward64(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _forward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	FORWARD_I(B_64, CHUNK64);\n" \
 "	FORWARD_64();\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward64(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _backward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	BACKWARD_I(B_64, CHUNK64);\n" \
 "	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
@@ -589,27 +1356,27 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
-"void forward64(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void forward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_64 * CHUNK64];\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
 "	_forward64(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
-"void forward64_0(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void forward64_0(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
-"	const int lm = LN_SZ - 6; const unsigned int s = 64 / 4;\n" \
-"	__local uint Z[4 * B_64 * CHUNK64];\n" \
+"	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
 "	FORWARD_I_0(B_64, CHUNK64);\n" \
 "	FORWARD_64();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
-"void backward64(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void backward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_64 * CHUNK64];\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
 "	_backward64(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
@@ -631,15 +1398,15 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK256, &Zi[CHUNK256 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward256(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _forward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	FORWARD_I(B_256, CHUNK256);\n" \
 "	FORWARD_256();\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward256(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _backward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	BACKWARD_I(B_256, CHUNK256);\n" \
 "	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
@@ -651,27 +1418,27 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
-"void forward256(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void forward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_256 * CHUNK256];\n" \
+"	__local VTYPE Z[4 * B_256 * CHUNK256];\n" \
 "	_forward256(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
-"void forward256_0(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void forward256_0(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
-"	const int lm = LN_SZ - 8; const unsigned int s = 256 / 4;\n" \
-"	__local uint Z[4 * B_256 * CHUNK256];\n" \
+"	const int lm = LN_SZ - LVSIZE - 8; const unsigned int s = 256 / 4;\n" \
+"	__local VTYPE Z[4 * B_256 * CHUNK256];\n" \
 "	FORWARD_I_0(B_256, CHUNK256);\n" \
 "	FORWARD_256();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
-"void backward256(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void backward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_256 * CHUNK256];\n" \
+"	__local VTYPE Z[4 * B_256 * CHUNK256];\n" \
 "	_backward256(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
@@ -695,15 +1462,15 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK1024, &Zi[CHUNK1024 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward1024(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _forward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	FORWARD_I(B_1024, CHUNK1024);\n" \
 "	FORWARD_1024();\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward1024(__global uint * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local uint * const Z, const int lm, const unsigned int s)\n" \
+"INLINE void _backward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
+"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	BACKWARD_I(B_1024, CHUNK1024);\n" \
 "	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
@@ -717,580 +1484,594 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
-"void forward1024(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void forward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_1024 * CHUNK1024];\n" \
+"	__local VTYPE Z[4 * B_1024 * CHUNK1024];\n" \
 "	_forward1024(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
-"void forward1024_0(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void forward1024_0(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
-"	const int lm = LN_SZ - 10; const unsigned int s = 1024 / 4;\n" \
-"	__local uint Z[4 * B_1024 * CHUNK1024];\n" \
+"	const int lm = LN_SZ - LVSIZE - 10; const unsigned int s = 1024 / 4;\n" \
+"	__local VTYPE Z[4 * B_1024 * CHUNK1024];\n" \
 "	FORWARD_I_0(B_1024, CHUNK1024);\n" \
 "	FORWARD_1024();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
-"void backward1024(__global uint * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
+"void backward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
-"	__local uint Z[4 * B_1024 * CHUNK1024];\n" \
+"	__local VTYPE Z[4 * B_1024 * CHUNK1024];\n" \
 "	_backward1024(zg, wg, Z, lm, s);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
 "\n" \
-"#define DEFINE_KERNEL_FORWARD(m, n) \\\n" \
-"	__kernel \\\n" \
-"	ATTR_##m() \\\n" \
-"	void forward##m##_##n(__global uint * restrict const zg, __global const uint * restrict const wg) \\\n" \
-"	{ \\\n" \
-"		__local uint Z[4 * B_##m * CHUNK##m]; \\\n" \
-"		_forward##m(zg, wg, Z, n, (N_SZ / 4) >> n); \\\n" \
-"	}\n" \
-"\n" \
-"#define DEFINE_KERNEL_BACKWARD(m, n) \\\n" \
-"	__kernel \\\n" \
-"	ATTR_##m() \\\n" \
-"	void backward##m##_##n(__global uint * restrict const zg, __global const uint * restrict const wg) \\\n" \
-"	{ \\\n" \
-"		__local uint Z[4 * B_##m * CHUNK##m]; \\\n" \
-"		_backward##m(zg, wg, Z, n, (N_SZ / 4) >> n); \\\n" \
-"	}\n" \
-"\n" \
-"#if LN_SZ % 2 != 0\n" \
-"\n" \
-"DEFINE_KERNEL_FORWARD(64, 5);\n" \
-"DEFINE_KERNEL_BACKWARD(64, 5);\n" \
-"\n" \
-"#if LN_SZ >= 19\n" \
-"\n" \
-"DEFINE_KERNEL_FORWARD(64, 7);\n" \
-"DEFINE_KERNEL_BACKWARD(64, 7);\n" \
-"DEFINE_KERNEL_FORWARD(256, 5);\n" \
-"DEFINE_KERNEL_BACKWARD(256, 5);\n" \
-"\n" \
-"#endif\n" \
-"\n" \
-"#else // LN_SZ % 2 == 0\n" \
-"\n" \
-"DEFINE_KERNEL_FORWARD(64, 6);\n" \
-"DEFINE_KERNEL_BACKWARD(64, 6);\n" \
-"\n" \
-"#if LN_SZ >= 20\n" \
-"\n" \
-"DEFINE_KERNEL_FORWARD(64, 8);\n" \
-"DEFINE_KERNEL_BACKWARD(64, 8);\n" \
-"DEFINE_KERNEL_FORWARD(256, 6);\n" \
-"DEFINE_KERNEL_BACKWARD(256, 6);\n" \
-"\n" \
-"#endif\n" \
-"\n" \
-"#endif\n" \
-"\n" \
-"// -----------------\n" \
+"#define L32S	(32 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_32() \\\n" \
-"	__local uint Z[32 * BLK32]; \\\n" \
+"	__local VTYPE Z[L32S * BLK32]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (32 / 4 * BLK32), group_id = id / (32 / 4 * BLK32); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L32S / 4 * BLK32), group_id = id / (L32S / 4 * BLK32); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i32 = (local_id & ~(32 / 4 - 1)) * 4, i8 = local_id % (32 / 4); \\\n" \
-"	const sz_t k32 = group_id * 32 * BLK32 + i32 + i8; \\\n" \
+"	const sz_t i32 = (local_id & ~(L32S / 4 - 1)) * 4, i8 = local_id % (L32S / 4); \\\n" \
+"	const sz_t k32 = group_id * L32S * BLK32 + i32 + i8; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k32]; \\\n" \
-"	__local uint * const Z32 = &Z[i32]; \\\n" \
-"	__local uint * const Zi8 = &Z32[i8]; \\\n" \
+"	__global VTYPE * restrict const zk = &z[k32]; \\\n" \
+"	__local VTYPE * const Z32 = &Z[i32]; \\\n" \
+"	__local VTYPE * const Zi8 = &Z32[i8]; \\\n" \
 "	const sz_t i2 = ((4 * i8) & ~(4 * 2 - 1)) + (i8 % 2); \\\n" \
-"	__local uint * const Zi2 = &Z32[i2]; \\\n" \
-"	__local uint * const Z4 = &Z32[4 * i8];\n" \
+"	__local VTYPE * const Zi2 = &Z32[i2]; \\\n" \
+"	__local VTYPE * const Z4 = &Z32[4 * i8];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 32 / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
+"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
-"void square32(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square32(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
 "\n" \
-"	forward_4i(pq, 8, Zi8, 8, zk, w, sj / 8);\n" \
+"	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_22(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4o(pq, 8, zk, 8, Zi8, wi, sji / 8);\n" \
+"#else\n" \
+"	square_8(pq, Z4, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4o(pq, L32S / 4, zk, L32S / 4, Zi8, wi, sji / (L32S / 4));\n" \
 "}\n" \
+"\n" \
+"#define L64S	(64 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_64() \\\n" \
-"	__local uint Z[64 * BLK64]; \\\n" \
+"	__local VTYPE Z[L64S * BLK64]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (64 / 4 * BLK64), group_id = id / (64 / 4 * BLK64); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L64S / 4 * BLK64), group_id = id / (L64S / 4 * BLK64); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i64 = (local_id & ~(64 / 4 - 1)) * 4, i16 = local_id % (64 / 4); \\\n" \
-"	const sz_t k64 = group_id * 64 * BLK64 + i64 + i16; \\\n" \
+"	const sz_t i64 = (local_id & ~(L64S / 4 - 1)) * 4, i16 = local_id % (L64S / 4); \\\n" \
+"	const sz_t k64 = group_id * L64S * BLK64 + i64 + i16; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k64]; \\\n" \
-"	__local uint * const Z64 = &Z[i64]; \\\n" \
-"	__local uint * const Zi16 = &Z64[i16]; \\\n" \
-"	const sz_t i4 = ((4 * i16) & ~(4 * 4 - 1)) + (i16 % 4); \\\n" \
-"	__local uint * const Zi4 = &Z64[i4]; \\\n" \
-"	__local uint * const Z4 = &Z64[4 * i16];\n" \
+"	__global VTYPE * restrict const zk = &z[k64]; \\\n" \
+"	__local VTYPE * const Z64 = &Z[i64]; \\\n" \
+"	__local VTYPE * const Zi16 = &Z64[i16]; \\\n" \
+"	const sz_t i4 = ((4 * i16) & ~(4 * (L64S / 16) - 1)) + (i16 % (L64S / 16)); \\\n" \
+"	__local VTYPE * const Zi4 = &Z64[i4]; \\\n" \
+"	__local VTYPE * const Z4 = &Z64[4 * i16];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 64 / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
+"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
-"void square64(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square64(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
 "\n" \
-"	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	square_4(pq, Z4, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4o(pq, 16, zk, 16, Zi16, wi, sji / 16);\n" \
+"	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));\n" \
+"	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));\n" \
+"	square_4(pq, Z4, w, wi, sj, sji);\n" \
+"	backward_4(pq, L64S / 16, Zi4, wi, sji / (L64S / 16));\n" \
+"	backward_4o(pq, L64S / 4, zk, L64S / 4, Zi16, wi, sji / (L64S / 4));\n" \
 "}\n" \
+"\n" \
+"#define L128S	(128 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_128() \\\n" \
-"	__local uint Z[128 * BLK128]; \\\n" \
+"	__local VTYPE Z[L128S * BLK128]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (128 / 4 * BLK128), group_id = id / (128 / 4 * BLK128); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L128S / 4 * BLK128), group_id = id / (L128S / 4 * BLK128); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i128 = (local_id & ~(128 / 4 - 1)) * 4, i32 = local_id % (128 / 4); \\\n" \
-"	const sz_t k128 = group_id * 128 * BLK128 + i128 + i32; \\\n" \
+"	const sz_t i128 = (local_id & ~(L128S / 4 - 1)) * 4, i32 = local_id % (L128S / 4); \\\n" \
+"	const sz_t k128 = group_id * L128S * BLK128 + i128 + i32; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k128]; \\\n" \
-"	__local uint * const Z128 = &Z[i128]; \\\n" \
-"	__local uint * const Zi32 = &Z128[i32]; \\\n" \
-"	const sz_t i8 = ((4 * i32) & ~(4 * 8 - 1)) + (i32 % 8); \\\n" \
-"	__local uint * const Zi8 = &Z128[i8]; \\\n" \
+"	__global VTYPE * restrict const zk = &z[k128]; \\\n" \
+"	__local VTYPE * const Z128 = &Z[i128]; \\\n" \
+"	__local VTYPE * const Zi32 = &Z128[i32]; \\\n" \
+"	const sz_t i8 = ((4 * i32) & ~(4 * (L128S / 16) - 1)) + (i32 % (L128S / 16)); \\\n" \
+"	__local VTYPE * const Zi8 = &Z128[i8]; \\\n" \
 "	const sz_t i2 = ((4 * i32) & ~(4 * 2 - 1)) + (i32 % 2); \\\n" \
-"	__local uint * const Zi2 = &Z128[i2]; \\\n" \
-"	__local uint * const Z4 = &Z128[4 * i32];\n" \
+"	__local VTYPE * const Zi2 = &Z128[i2]; \\\n" \
+"	__local VTYPE * const Z4 = &Z128[4 * i32];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 128 / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
+"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
-"void square128(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square128(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
 "\n" \
-"	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));\n" \
+"	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_22(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4o(pq, 32, zk, 32, Zi32, wi, sji / 32);\n" \
+"#else\n" \
+"	square_8(pq, Z4, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L128S / 16, Zi8, wi, sji / (L128S / 16));\n" \
+"	backward_4o(pq, L128S / 4, zk, L128S / 4, Zi32, wi, sji / (L128S / 4));\n" \
 "}\n" \
+"\n" \
+"#define L256S	(256 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_256() \\\n" \
-"	__local uint Z[256 * BLK256]; \\\n" \
+"	__local VTYPE Z[L256S * BLK256]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (256 / 4 * BLK256), group_id = id / (256 / 4 * BLK256); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L256S / 4 * BLK256), group_id = id / (L256S / 4 * BLK256); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i256 = (local_id & ~(256 / 4 - 1)) * 4, i64 = local_id % (256 / 4); \\\n" \
-"	const sz_t k256 = group_id * 256 * BLK256 + i256 + i64; \\\n" \
+"	const sz_t i256 = (local_id & ~(L256S / 4 - 1)) * 4, i64 = local_id % (L256S / 4); \\\n" \
+"	const sz_t k256 = group_id * L256S * BLK256 + i256 + i64; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k256]; \\\n" \
-"	__local uint * const Z256 = &Z[i256]; \\\n" \
-"	__local uint * const Zi64 = &Z256[i64]; \\\n" \
-"	const sz_t i16 = ((4 * i64) & ~(4 * 16 - 1)) + (i64 % 16); \\\n" \
-"	__local uint * const Zi16 = &Z256[i16]; \\\n" \
-"	const sz_t i4 = ((4 * i64) & ~(4 * 4 - 1)) + (i64 % 4); \\\n" \
-"	__local uint * const Zi4 = &Z256[i4]; \\\n" \
-"	__local uint * const Z4 = &Z256[4 * i64];\n" \
+"	__global VTYPE * restrict const zk = &z[k256]; \\\n" \
+"	__local VTYPE * const Z256 = &Z[i256]; \\\n" \
+"	__local VTYPE * const Zi64 = &Z256[i64]; \\\n" \
+"	const sz_t i16 = ((4 * i64) & ~(4 * (L256S / 16) - 1)) + (i64 % (L256S / 16)); \\\n" \
+"	__local VTYPE * const Zi16 = &Z256[i16]; \\\n" \
+"	const sz_t i4 = ((4 * i64) & ~(4 * (L256S / 64) - 1)) + (i64 % (L256S / 64)); \\\n" \
+"	__local VTYPE * const Zi4 = &Z256[i4]; \\\n" \
+"	__local VTYPE * const Z4 = &Z256[4 * i64];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 256 / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
+"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
-"void square256(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square256(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
 "\n" \
-"	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	square_4(pq, Z4, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4(pq, 16, Zi16, wi, sji / 16);\n" \
-"	backward_4o(pq, 64, zk, 64, Zi64, wi, sji / 64);\n" \
+"	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));\n" \
+"	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));\n" \
+"	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));\n" \
+"	square_4(pq, Z4, w, wi, sj, sji);\n" \
+"	backward_4(pq, L256S / 64, Zi4, wi, sji / (L256S / 64));\n" \
+"	backward_4(pq, L256S / 16, Zi16, wi, sji / (L256S / 16));\n" \
+"	backward_4o(pq, L256S / 4, zk, L256S / 4, Zi64, wi, sji / (L256S / 4));\n" \
 "}\n" \
 "\n" \
-"// if BLK512 != 1 then const sz_t i512 = (i & ~(512 / 4 - 1)) * 4, i128 = i % (512 / 4);\n" \
+"#define L512S	(512 / VSIZE)\n" \
+"\n" \
+"// if BLK512 != 1 then const sz_t i512 = (i & ~(L512S / 4 - 1)) * 4, i128 = i % (L512S / 4);\n" \
 "// if BLK512 = 1 then const sz_t i512 = 0, i128 = i;\n" \
 "#define DECLARE_VAR_512() \\\n" \
-"	__local uint Z[512 * BLK512]; \\\n" \
+"	__local VTYPE Z[L512S * BLK512]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (512 / 4 * BLK512), group_id = id / (512 / 4 * BLK512); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L512S / 4 * BLK512), group_id = id / (L512S / 4 * BLK512); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i512 = (local_id & ~(512 / 4 - 1)) * 4, i128 = local_id % (512 / 4); \\\n" \
-"	const sz_t k512 = group_id * 512 * BLK512 + i512 + i128; \\\n" \
+"	const sz_t i512 = (local_id & ~(L512S / 4 - 1)) * 4, i128 = local_id % (L512S / 4); \\\n" \
+"	const sz_t k512 = group_id * L512S * BLK512 + i512 + i128; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k512]; \\\n" \
-"	__local uint * const Z512 = &Z[i512]; \\\n" \
-"	__local uint * const Zi128 = &Z512[i128]; \\\n" \
-"	const sz_t i32 = ((4 * i128) & ~(4 * 32 - 1)) + (i128 % 32); \\\n" \
-"	__local uint * const Zi32 = &Z512[i32]; \\\n" \
-"	const sz_t i8 = ((4 * i128) & ~(4 * 8 - 1)) + (i128 % 8); \\\n" \
-"	__local uint * const Zi8 = &Z512[i8]; \\\n" \
+"	__global VTYPE * restrict const zk = &z[k512]; \\\n" \
+"	__local VTYPE * const Z512 = &Z[i512]; \\\n" \
+"	__local VTYPE * const Zi128 = &Z512[i128]; \\\n" \
+"	const sz_t i32 = ((4 * i128) & ~(4 * (L512S / 16) - 1)) + (i128 % (L512S / 16)); \\\n" \
+"	__local VTYPE * const Zi32 = &Z512[i32]; \\\n" \
+"	const sz_t i8 = ((4 * i128) & ~(4 * (L512S / 64) - 1)) + (i128 % (L512S / 64)); \\\n" \
+"	__local VTYPE * const Zi8 = &Z512[i8]; \\\n" \
 "	const sz_t i2 = ((4 * i128) & ~(4 * 2 - 1)) + (i128 % 2); \\\n" \
-"	__local uint * const Zi2 = &Z512[i2]; \\\n" \
-"	__local uint * const Z4 = &Z512[4 * i128];\n" \
+"	__local VTYPE * const Zi2 = &Z512[i2]; \\\n" \
+"	__local VTYPE * const Z4 = &Z512[4 * i128];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 512 / 4\n" \
-"	__attribute__((work_group_size_hint(512 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4\n" \
+"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void square512(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square512(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
 "\n" \
-"	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));\n" \
+"	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));\n" \
+"	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_22(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4(pq, 32, Zi32, wi, sji / 32);\n" \
-"	backward_4o(pq, 128, zk, 128, Zi128, wi, sji / 128);\n" \
+"#else\n" \
+"	square_8(pq, Z4, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L512S / 64, Zi8, wi, sji / (L512S / 64));\n" \
+"	backward_4(pq, L512S / 16, Zi32, wi, sji / (L512S / 16));\n" \
+"	backward_4o(pq, L512S / 4, zk, L512S / 4, Zi128, wi, sji / (L512S / 4));\n" \
 "}\n" \
+"\n" \
+"#define L1024S	(1024 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_1024() \\\n" \
-"	__local uint Z[1024]; \\\n" \
+"	__local VTYPE Z[L1024S]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (1024 / 4), group_id = id / (1024 / 4); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L1024S / 4), group_id = id / (L1024S / 4); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i256 = local_id, k1024 = group_id * 1024 + i256; \\\n" \
+"	const sz_t i256 = local_id, k1024 = group_id * L1024S + i256; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k1024]; \\\n" \
-"	__local uint * const Zi256 = &Z[i256]; \\\n" \
-"	const sz_t i64 = ((4 * i256) & ~(4 * 64 - 1)) + (i256 % 64); \\\n" \
-"	__local uint * const Zi64 = &Z[i64]; \\\n" \
-"	const sz_t i16 = ((4 * i256) & ~(4 * 16 - 1)) + (i256 % 16); \\\n" \
-"	__local uint * const Zi16 = &Z[i16]; \\\n" \
-"	const sz_t i4 = ((4 * i256) & ~(4 * 4 - 1)) + (i256 % 4); \\\n" \
-"	__local uint * const Zi4 = &Z[i4]; \\\n" \
-"	__local uint * const Z4 = &Z[4 * i256];\n" \
+"	__global VTYPE * restrict const zk = &z[k1024]; \\\n" \
+"	__local VTYPE * const Zi256 = &Z[i256]; \\\n" \
+"	const sz_t i64 = ((4 * i256) & ~(4 * (L1024S / 16) - 1)) + (i256 % (L1024S / 16)); \\\n" \
+"	__local VTYPE * const Zi64 = &Z[i64]; \\\n" \
+"	const sz_t i16 = ((4 * i256) & ~(4 * (L1024S / 64) - 1)) + (i256 % (L1024S / 64)); \\\n" \
+"	__local VTYPE * const Zi16 = &Z[i16]; \\\n" \
+"	const sz_t i4 = ((4 * i256) & ~(4 * (L1024S / 256) - 1)) + (i256 % (L1024S / 256)); \\\n" \
+"	__local VTYPE * const Zi4 = &Z[i4]; \\\n" \
+"	__local VTYPE * const Z4 = &Z[4 * i256];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 1024 / 4\n" \
-"	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4\n" \
+"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void square1024(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
 "\n" \
-"	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);\n" \
-"	forward_4(pq, 64, Zi64, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	square_4(pq, Z4, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4(pq, 16, Zi16, wi, sji / 16);\n" \
-"	backward_4(pq, 64, Zi64, wi, sji / 64);\n" \
-"	backward_4o(pq, 256, zk, 256, Zi256, wi, sji / 256);\n" \
+"	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));\n" \
+"	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));\n" \
+"	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));\n" \
+"	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));\n" \
+"	square_4(pq, Z4, w, wi, sj, sji);\n" \
+"	backward_4(pq, L1024S / 256, Zi4, wi, sji / (L1024S / 256));\n" \
+"	backward_4(pq, L1024S / 64, Zi16, wi, sji / (L1024S / 64));\n" \
+"	backward_4(pq, L1024S / 16, Zi64, wi, sji / (L1024S / 16));\n" \
+"	backward_4o(pq, L1024S / 4, zk, L1024S / 4, Zi256, wi, sji / (L1024S / 4));\n" \
 "}\n" \
+"\n" \
+"#define L2048S	(2048 / VSIZE)\n" \
 "\n" \
 "#define DECLARE_VAR_2048() \\\n" \
-"	__local uint Z[2048]; \\\n" \
+"	__local VTYPE Z[L2048S]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (2048 / 4), group_id = id / (2048 / 4); \\\n" \
-"	const sz_t sj = N_SZ / 4 + id; DECLARE_IVAR(N_SZ / 4, id); \\\n" \
+"	const sz_t local_id = id % (L2048S / 4), group_id = id / (L2048S / 4); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i512 = local_id, k2048 = group_id * 2048 + i512; \\\n" \
+"	const sz_t i512 = local_id, k2048 = group_id * L2048S + i512; \\\n" \
 "	\\\n" \
-"	__global uint * restrict const zk = &z[k2048]; \\\n" \
-"	__local uint * const Zi512 = &Z[i512]; \\\n" \
-"	const sz_t i128 = ((4 * i512) & ~(4 * 128 - 1)) + (i512 % 128); \\\n" \
-"	__local uint * const Zi128 = &Z[i128]; \\\n" \
-"	const sz_t i32 = ((4 * i512) & ~(4 * 32 - 1)) + (i512 % 32); \\\n" \
-"	__local uint * const Zi32 = &Z[i32]; \\\n" \
-"	const sz_t i8 = ((4 * i512) & ~(4 * 8 - 1)) + (i512 % 8); \\\n" \
-"	__local uint * const Zi8 = &Z[i8]; \\\n" \
+"	__global VTYPE * restrict const zk = &z[k2048]; \\\n" \
+"	__local VTYPE * const Zi512 = &Z[i512]; \\\n" \
+"	const sz_t i128 = ((4 * i512) & ~(4 * (L2048S / 16) - 1)) + (i512 % (L2048S / 16)); \\\n" \
+"	__local VTYPE * const Zi128 = &Z[i128]; \\\n" \
+"	const sz_t i32 = ((4 * i512) & ~(4 * (L2048S / 64) - 1)) + (i512 % (L2048S / 64)); \\\n" \
+"	__local VTYPE * const Zi32 = &Z[i32]; \\\n" \
+"	const sz_t i8 = ((4 * i512) & ~(4 * (L2048S / 256) - 1)) + (i512 % (L2048S / 256)); \\\n" \
+"	__local VTYPE * const Zi8 = &Z[i8]; \\\n" \
 "	const sz_t i2 = ((4 * i512) & ~(4 * 2 - 1)) + (i512 % 2); \\\n" \
-"	__local uint * const Zi2 = &Z[i2]; \\\n" \
-"	__local uint * const Z4 = &Z[4 * i512];\n" \
+"	__local VTYPE * const Zi2 = &Z[i2]; \\\n" \
+"	__local VTYPE * const Z4 = &Z[4 * i512];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 2048 / 4\n" \
-"	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L2048S / 4\n" \
+"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void square2048(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void square2048(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
 "\n" \
-"	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);\n" \
-"	forward_4(pq, 128, Zi128, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));\n" \
+"	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));\n" \
+"	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));\n" \
+"	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_22(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4(pq, 32, Zi32, wi, sji / 32);\n" \
-"	backward_4(pq, 128, Zi128, wi, sji / 128);\n" \
-"	backward_4o(pq, 512, zk, 512, Zi512, wi, sji / 512);\n" \
+"#else\n" \
+"	square_8(pq, Z4, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L2048S / 256, Zi8, wi, sji / (L2048S / 256));\n" \
+"	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));\n" \
+"	backward_4(pq, L2048S / 16, Zi128, wi, sji / (L2048S / 16));\n" \
+"	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 32 / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
+"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
-"void fwd32p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd32p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
 "\n" \
-"	forward_4i(pq, 8, Zi8, 8, zk, w, sj / 8);\n" \
+"	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
 "	write_4(8, zk, Z4);\n" \
+"#else\n" \
+"	fwd8_write(pq, L32S / 4, zk, Z4, w, sj);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 64 / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
+"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
-"void fwd64p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd64p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
 "\n" \
-"	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	fwd2_write_4(pq, 16, zk, Z4, w[sj]);\n" \
+"	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));\n" \
+"	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));\n" \
+"	fwd4_write(pq, L64S / 4, zk, Z4, w, sj);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 128 / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
+"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
-"void fwd128p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd128p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
 "\n" \
-"	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));\n" \
+"	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
 "	write_4(32, zk, Z4);\n" \
+"#else\n" \
+"	fwd8_write(pq, L128S / 4, zk, Z4, w, sj);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 256 / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
+"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
-"void fwd256p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd256p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
 "\n" \
-"	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	fwd2_write_4(pq, 64, zk, Z4, w[sj]);\n" \
+"	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));\n" \
+"	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));\n" \
+"	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));\n" \
+"	fwd4_write(pq, L256S / 4, zk, Z4, w, sj);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 512 / 4\n" \
-"	__attribute__((work_group_size_hint(512 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4\n" \
+"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void fwd512p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd512p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
 "\n" \
-"	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));\n" \
+"	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));\n" \
+"	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
 "	write_4(128, zk, Z4);\n" \
+"#else\n" \
+"	fwd8_write(pq, L512S / 4, zk, Z4, w, sj);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 1024 / 4\n" \
-"	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4\n" \
+"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void fwd1024p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd1024p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
 "\n" \
-"	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);\n" \
-"	forward_4(pq, 64, Zi64, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	fwd2_write_4(pq, 256, zk, Z4, w[sj]);\n" \
+"	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));\n" \
+"	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));\n" \
+"	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));\n" \
+"	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));\n" \
+"	fwd4_write(pq, L1024S / 4, zk, Z4, w, sj);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 2048 / 4\n" \
-"	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L2048S / 4\n" \
+"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void fwd2048p(__global uint * restrict const zg, __global const uint * restrict const wg)\n" \
+"void fwd2048p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
 "\n" \
-"	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);\n" \
-"	forward_4(pq, 128, Zi128, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));\n" \
+"	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));\n" \
+"	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));\n" \
+"	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
 "	write_4(512, zk, Z4);\n" \
+"#else\n" \
+"	fwd8_write(pq, L2048S / 4, zk, Z4, w, sj);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 32 / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(32 / 4 * BLK32, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
+"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
-"void mul32(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul32(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_32();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k32];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k32];\n" \
 "\n" \
-"	forward_4i(pq, 8, Zi8, 8, zk, w, sj / 8);\n" \
+"	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_22(pq, Z4, 8, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 8, zpk, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4o(pq, 8, zk, 8, Zi8, wi, sji / 8);\n" \
+"#else\n" \
+"	mul_8(pq, Z4, L32S / 4, zpk, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4o(pq, L32S / 4, zk, L32S / 4, Zi8, wi, sji / (L32S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 64 / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(64 / 4 * BLK64, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
+"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
-"void mul64(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul64(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_64();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k64];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k64];\n" \
 "\n" \
-"	forward_4i(pq, 16, Zi16, 16, zk, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	mul_4(pq, Z4, 16, zpk, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4o(pq, 16, zk, 16, Zi16, wi, sji / 16);\n" \
+"	forward_4i(pq, L64S / 4, Zi16, L64S / 4, zk, w, sj / (L64S / 4));\n" \
+"	forward_4(pq, L64S / 16, Zi4, w, sj / (L64S / 16));\n" \
+"	mul_4(pq, Z4, L64S / 4, zpk, w, wi, sj, sji);\n" \
+"	backward_4(pq, L64S / 16, Zi4, wi, sji / (L64S / 16));\n" \
+"	backward_4o(pq, L64S / 4, zk, L64S / 4, Zi16, wi, sji / (L64S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 128 / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(128 / 4 * BLK128, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
+"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
-"void mul128(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul128(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_128();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k128];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k128];\n" \
 "\n" \
-"	forward_4i(pq, 32, Zi32, 32, zk, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L128S / 4, Zi32, L128S / 4, zk, w, sj / (L128S / 4));\n" \
+"	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_22(pq, Z4, 32, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 32, zpk, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4o(pq, 32, zk, 32, Zi32, wi, sji / 32);\n" \
+"#else\n" \
+"	mul_8(pq, Z4, L128S / 4, zpk, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L128S / 16, Zi8, wi, sji / (L128S / 16));\n" \
+"	backward_4o(pq, L128S / 4, zk, L128S / 4, Zi32, wi, sji / (L128S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 256 / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(256 / 4 * BLK256, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
+"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
-"void mul256(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul256(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_256();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k256];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k256];\n" \
 "\n" \
-"	forward_4i(pq, 64, Zi64, 64, zk, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	mul_4(pq, Z4, 64, zpk, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4(pq, 16, Zi16, wi, sji / 16);\n" \
-"	backward_4o(pq, 64, zk, 64, Zi64, wi, sji / 64);\n" \
+"	forward_4i(pq, L256S / 4, Zi64, L256S / 4, zk, w, sj / (L256S / 4));\n" \
+"	forward_4(pq, L256S / 16, Zi16, w, sj / (L256S / 16));\n" \
+"	forward_4(pq, L256S / 64, Zi4, w, sj / (L256S / 64));\n" \
+"	mul_4(pq, Z4, L256S / 4, zpk, w, wi, sj, sji);\n" \
+"	backward_4(pq, L256S / 64, Zi4, wi, sji / (L256S / 64));\n" \
+"	backward_4(pq, L256S / 16, Zi16, wi, sji / (L256S / 16));\n" \
+"	backward_4o(pq, L256S / 4, zk, L256S / 4, Zi64, wi, sji / (L256S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 512 / 4\n" \
-"	__attribute__((work_group_size_hint(512 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4\n" \
+"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void mul512(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_512();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k512];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k512];\n" \
 "\n" \
-"	forward_4i(pq, 128, Zi128, 128, zk, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L512S / 4, Zi128, L512S / 4, zk, w, sj / (L512S / 4));\n" \
+"	forward_4(pq, L512S / 16, Zi32, w, sj / (L512S / 16));\n" \
+"	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_22(pq, Z4, 128, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 128, zpk, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4(pq, 32, Zi32, wi, sji / 32);\n" \
-"	backward_4o(pq, 128, zk, 128, Zi128, wi, sji / 128);\n" \
+"#else\n" \
+"	mul_8(pq, Z4, L512S / 4, zpk, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L512S / 64, Zi8, wi, sji / (L512S / 64));\n" \
+"	backward_4(pq, L512S / 16, Zi32, wi, sji / (L512S / 16));\n" \
+"	backward_4o(pq, L512S / 4, zk, L512S / 4, Zi128, wi, sji / (L512S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 1024 / 4\n" \
-"	__attribute__((work_group_size_hint(1024 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4\n" \
+"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void mul1024(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul1024(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_1024();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k1024];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k1024];\n" \
 "\n" \
-"	forward_4i(pq, 256, Zi256, 256, zk, w, sj / 256);\n" \
-"	forward_4(pq, 64, Zi64, w, sj / 64);\n" \
-"	forward_4(pq, 16, Zi16, w, sj / 16);\n" \
-"	forward_4(pq, 4, Zi4, w, sj / 4);\n" \
-"	mul_4(pq, Z4, 256, zpk, w[sj], wi[sji]);\n" \
-"	backward_4(pq, 4, Zi4, wi, sji / 4);\n" \
-"	backward_4(pq, 16, Zi16, wi, sji / 16);\n" \
-"	backward_4(pq, 64, Zi64, wi, sji / 64);\n" \
-"	backward_4o(pq, 256, zk, 256, Zi256, wi, sji / 256);\n" \
+"	forward_4i(pq, L1024S / 4, Zi256, L1024S / 4, zk, w, sj / (L1024S / 4));\n" \
+"	forward_4(pq, L1024S / 16, Zi64, w, sj / (L1024S / 16));\n" \
+"	forward_4(pq, L1024S / 64, Zi16, w, sj / (L1024S / 64));\n" \
+"	forward_4(pq, L1024S / 256, Zi4, w, sj / (L1024S / 256));\n" \
+"	mul_4(pq, Z4, L1024S / 4, zpk, w, wi, sj, sji);\n" \
+"	backward_4(pq, L1024S / 256, Zi4, wi, sji / (L1024S / 256));\n" \
+"	backward_4(pq, L1024S / 64, Zi16, wi, sji / (L1024S / 64));\n" \
+"	backward_4(pq, L1024S / 16, Zi64, wi, sji / (L1024S / 16));\n" \
+"	backward_4o(pq, L1024S / 4, zk, L1024S / 4, Zi256, wi, sji / (L1024S / 4));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= 2048 / 4\n" \
-"	__attribute__((work_group_size_hint(2048 / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L2048S / 4\n" \
+"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
-"void mul2048(__global uint * restrict const zg, __global const uint * restrict const zpg, __global const uint * restrict const wg)\n" \
+"void mul2048(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
 "	DECLARE_VAR_2048();\n" \
 "	DECLARE_VARP_REG();\n" \
-"	__global const uint * restrict const zpk = &zp[k2048];\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k2048];\n" \
 "\n" \
-"	forward_4i(pq, 512, Zi512, 512, zk, w, sj / 512);\n" \
-"	forward_4(pq, 128, Zi128, w, sj / 128);\n" \
-"	forward_4(pq, 32, Zi32, w, sj / 32);\n" \
-"	forward_4(pq, 8, Zi8, w, sj / 8);\n" \
+"	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));\n" \
+"	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));\n" \
+"	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));\n" \
+"	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));\n" \
+"#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_22(pq, Z4, 512, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 512, zpk, w[sj]);\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
-"	backward_4(pq, 8, Zi8, wi, sji / 8);\n" \
-"	backward_4(pq, 32, Zi32, wi, sji / 32);\n" \
-"	backward_4(pq, 128, Zi128, wi, sji / 128);\n" \
-"	backward_4o(pq, 512, zk, 512, Zi512, wi, sji / 512);\n" \
+"#else\n" \
+"	mul_8(pq, Z4, L2048S / 4, zpk, w, wi, sj, sji);\n" \
+"#endif\n" \
+"	backward_4(pq, L2048S / 256, Zi8, wi, sji / (L2048S / 256));\n" \
+"	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));\n" \
+"	backward_4(pq, L2048S / 16, Zi128, wi, sji / (L2048S / 16));\n" \
+"	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));\n" \
 "}\n" \
+"\n" \
+"#endif	// SHORT_VER\n" \
 "\n" \
 "// -----------------\n" \
 "\n" \

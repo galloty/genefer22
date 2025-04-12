@@ -90,7 +90,7 @@ private:
 		if (verbose)
 		{
 			std::ostringstream ss;
-			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getMemSize() / (1024 * 1024.0) << " MB";
+			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB";
 			ss << "." << std::endl;
 			pio::print(ss.str());
 		}

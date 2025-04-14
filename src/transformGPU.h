@@ -405,7 +405,7 @@ public:
 		_copy = createCopyKernel("copy");
 		_copyp = createCopypKernel("copyp");
 
-		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(RNS) + ((RNS_SIZE == 3) ? sizeof(RNSe) : 0), 1, 11, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()

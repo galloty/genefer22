@@ -74,11 +74,11 @@ private:
 	static size_t log_2(const size_t n) { size_t r = 0; for (size_t m = 1; m < n; m *= 2) ++r; return r; }
 
 public:
-	splitter(const size_t n, const size_t chunk256, const size_t chunk1024, const size_t sizeofRNS, const size_t mSquareMax,
-		const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
-		b256((maxWorkGroupSize >= (256 / 4) * chunk256) && (localMemSize / sizeofRNS >= 256 * chunk256)),
-		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize / sizeofRNS >= 1024 * chunk1024)),
-		mMax(std::min(mSquareMax, std::min(log_2(size_t(localMemSize / sizeofRNS)), log_2(maxWorkGroupSize * 4))))
+	splitter(const size_t n, const size_t chunk256, const size_t chunk1024, const size_t sizeofType, const size_t sizeofVec,
+		const size_t mSquareMax, const cl_ulong localMemSize, const size_t maxWorkGroupSize) :
+		b256((maxWorkGroupSize >= (256 / 4) * chunk256) && (localMemSize >= 256 * chunk256 * sizeofVec * sizeofType)),
+		b1024((maxWorkGroupSize >= (1024 / 4) * chunk1024) && (localMemSize >= 1024 * chunk1024 * sizeofVec * sizeofType)),
+		mMax(std::min(mSquareMax, std::min(log_2(size_t(localMemSize / sizeofType)), log_2(maxWorkGroupSize * 4 * sizeofVec))))
 	{
 		partition p;
 		split(n, 0, p);

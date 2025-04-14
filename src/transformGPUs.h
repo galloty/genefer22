@@ -24,8 +24,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 // #define CHECK_RADIX4_FUNCTIONS	1
 // #define CHECK_FUNC_1		1	// GFN-11&12&13: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
 // #define CHECK_FUNC_2		1	// GFN-11&12&13: square64, square128, forward4, forward64_0, forward1024_0
-// #define CHECK_FUNC_3		1	// GFN-12&13: square256, square512
-// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048, forward1024
+// #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024
+// #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048, square4096
 
 typedef cl_uint		uint32;
 typedef cl_int		int32;
@@ -120,15 +120,16 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define LVSIZE	0
 #endif
 
-// Warning: DECLARE_VAR_32/64/128/256 in kernerl.cl must be modified if BLKxx = 1 or != 1.
+// Warning: DECLARE_VAR_xx in kernels.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32m		32		// local size =  4KB, workgroup size = 256
-#define BLK64m		16		// local size =  4KB, workgroup size = 256
-#define BLK128m		8		// local size =  4KB, workgroup size = 256
-#define BLK256m		4		// local size =  4KB, workgroup size = 256
-#define BLK512m		2		// local size =  4KB, workgroup size = 256
-//      BLK1024m	1		   local size =  4KB, workgroup size = 256
-//      BLK2048m	1		   local size =  8KB, workgroup size = 512
+#define BLK32m		32		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK64m		16		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK128m		8		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK256m		4		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK512m		2		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK1024m	1		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK2048m	1		// local size =   8KB, workgroup size =  512 / VSIZE
+#define BLK4096m	1		// local size =  16KB, workgroup size = 1024 / VSIZE
 
 #define CHUNK64m	4		// local size =  VSIZE * 1KB, workgroup size = 64
 #define CHUNK256m	2		// local size =  VSIZE * 2KB, workgroup size = 128
@@ -145,9 +146,9 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u##m, 4 * VSIZE); }
 #define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u##m, 4 * VSIZE); }
 
-#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, std::min(_n / (4 * VSIZE), size_t(u / (4 * VSIZE) * BLK##u##m)), 4 * VSIZE); }
-#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, std::min(_n / (4 * VSIZE), size_t(u / (4 * VSIZE) * BLK##u##m)), 4 * VSIZE); }
-#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, std::min(_n / (4 * VSIZE), size_t(u / (4 * VSIZE) * BLK##u##m)), 4 * VSIZE); }
+#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, (u * BLK##u##m) / (4 * VSIZE), 4 * VSIZE); }
+#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, (u * BLK##u##m) / (4 * VSIZE), 4 * VSIZE); }
+#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, (u * BLK##u##m) / (4 * VSIZE), 4 * VSIZE); }
 
 #define DEFINE_FORWARDP(u) \
 	void forward##u##p(const int lm) { setTransformArgs(_forward##u, false); forward##u(lm); setTransformArgs(_forward##u);	}
@@ -171,9 +172,12 @@ private:
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
 	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
 	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
-	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
-	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
-	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
+	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr;
+	cl_kernel _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr, _square4096 = nullptr;
+	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr;
+	cl_kernel _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr, _fwd4096p = nullptr;
+	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr;
+	cl_kernel _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr, _mul4096 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
@@ -305,6 +309,7 @@ public:
 		CREATE_TRANSFORM_KERNEL(square512);
 		CREATE_TRANSFORM_KERNEL(square1024);
 		CREATE_TRANSFORM_KERNEL(square2048);
+		CREATE_TRANSFORM_KERNEL(square4096);
 
 		CREATE_TRANSFORM_KERNELP(fwd32p);
 		CREATE_TRANSFORM_KERNELP(fwd64p);
@@ -313,6 +318,7 @@ public:
 		CREATE_TRANSFORM_KERNELP(fwd512p);
 		CREATE_TRANSFORM_KERNELP(fwd1024p);
 		CREATE_TRANSFORM_KERNELP(fwd2048p);
+		CREATE_TRANSFORM_KERNELP(fwd4096p);
 
 		CREATE_MUL_KERNEL(mul32);
 		CREATE_MUL_KERNEL(mul64);
@@ -321,6 +327,7 @@ public:
 		CREATE_MUL_KERNEL(mul512);
 		CREATE_MUL_KERNEL(mul1024);
 		CREATE_MUL_KERNEL(mul2048);
+		CREATE_MUL_KERNEL(mul4096);
 #endif
 		const cl_uint b_ui = static_cast<cl_uint>(b);
 		const cl_int b_s = static_cast<cl_int>(31 - __builtin_clz(b) - 1);
@@ -333,7 +340,7 @@ public:
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
 
-		_pSplit = new splitter(size_t(ln), CHUNK256m, CHUNK1024m, sizeof(ZP), 11, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(ln), CHUNK256m, CHUNK1024m, sizeof(ZP), VSIZE, 12, getLocalMemSize(), getMaxWorkGroupSize());
 	}
 
 	void releaseKernels()
@@ -354,11 +361,11 @@ public:
 		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0);
 		 
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
-		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
+		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048); _releaseKernel(_square4096);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
-		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
+		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p); _releaseKernel(_fwd4096p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
-		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048);
+		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048); _releaseKernel(_mul4096);
 
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 
@@ -423,24 +430,27 @@ private:
 	DEFINE_SQUARE(128);
 	DEFINE_SQUARE(256);
 	DEFINE_SQUARE(512);
-	void square1024() { ek(_square1024, 1024 / (4 * VSIZE), 4 * VSIZE); }
-	void square2048() { ek(_square2048, 2048 / (4 * VSIZE), 4 * VSIZE); }
+	DEFINE_SQUARE(1024);
+	DEFINE_SQUARE(2048);
+	DEFINE_SQUARE(4096);
 
 	DEFINE_FWDP(32);
 	DEFINE_FWDP(64);
 	DEFINE_FWDP(128);
 	DEFINE_FWDP(256);
 	DEFINE_FWDP(512);
-	void fwd1024p() { ek(_fwd1024p, 1024 / (4 * VSIZE), 4 * VSIZE); }
-	void fwd2048p() { ek(_fwd2048p, 2048 / (4 * VSIZE), 4 * VSIZE); }
+	DEFINE_FWDP(1024);
+	DEFINE_FWDP(2048);
+	DEFINE_FWDP(4096);
 
 	DEFINE_MUL(32);
 	DEFINE_MUL(64);
 	DEFINE_MUL(128);
 	DEFINE_MUL(256);
 	DEFINE_MUL(512);
-	void mul1024() { ek(_mul1024, 1024 / (4 * VSIZE), 4 * VSIZE); }
-	void mul2048() { ek(_mul2048, 2048 / (4 * VSIZE), 4 * VSIZE); }
+	DEFINE_MUL(1024);
+	DEFINE_MUL(2048);
+	DEFINE_MUL(4096);
 
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
@@ -473,11 +483,12 @@ private:
 #if defined(CHECK_FUNC_3)
 		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4(12 - 2); return; }
 		if (_ln == 13) { forward4_0(); forward4(13 - 4); if (isSquare) square512(); else mul512(); backward4(13 - 4); backward4(13 - 2); return; }
+		if (_ln == 14) { forward4_0(); forward1024(14 - 12); if (isSquare) square4(); else mul4(); backward1024(14 - 12); backward4(14 - 2); return; }
 #endif
 #if defined(CHECK_FUNC_4)
 		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4(12 - 2); return; }
 		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4(13 - 2); return; }
-		if (_ln == 14) { forward4_0(); forward1024(14 - 12); if (isSquare) square4(); else mul4(); backward1024(14 - 12); backward4(14 - 2); return; }
+		if (_ln == 14) { forward4_0(); if (isSquare) square4096(); else mul4096(); backward4(14 - 2); return; }
 #endif
 
 		int lm = _ln;
@@ -510,7 +521,8 @@ private:
 		// lm = pSplit->getPart(sIndex, s - 1);
 		if (isSquare)
 		{
-			if (lm == 11) square2048();
+			if (lm == 12) square4096();
+			else if (lm == 11) square2048();
 			else if (lm == 10) square1024();
 			else if (lm == 9) square512();
 			else if (lm == 8) square256();
@@ -520,7 +532,8 @@ private:
 		}
 		else
 		{
-			if (lm == 11) mul2048();
+			if (lm == 12) mul4096();
+			else if (lm == 11) mul2048();
 			else if (lm == 10) mul1024();
 			else if (lm == 9) mul512();
 			else if (lm == 8) mul256();
@@ -578,11 +591,12 @@ public:
 #if defined(CHECK_FUNC_3)
 		if (_ln == 12) { forward4p_0(); forward4p(12 - 4); fwd256p(); return; }
 		if (_ln == 13) { forward4p_0(); forward4p(13 - 4); fwd512p(); return; }
+		if (_ln == 14) { forward4p_0(); forward1024p(14 - 12); fwd4p(); return; }
 #endif
 #if defined(CHECK_FUNC_4)
 		if (_ln == 12) { forward4p_0(); fwd1024p(); return; }
 		if (_ln == 13) { forward4p_0(); fwd2048p(); return; }
-		if (_ln == 14) { forward4p_0(); forward1024p(14 - 12); fwd4p(); return; }
+		if (_ln == 14) { forward4p_0(); fwd4096p(); return; }
 #endif
 
 		const splitter * const pSplit = _pSplit;
@@ -618,7 +632,8 @@ public:
 		}
 
 		// lm = pSplit->getPart(sIndex, s - 1);
-		if (lm == 11) fwd2048p();
+		if (lm == 12) fwd4096p();
+		else if (lm == 11) fwd2048p();
 		else if (lm == 10) fwd1024p();
 		else if (lm == 9) fwd512p();
 		else if (lm == 8) fwd256p();

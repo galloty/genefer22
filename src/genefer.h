@@ -177,14 +177,14 @@ private:
 		if (_isBoinc) boinc_fraction_done((i0 > i_start) ? static_cast<double>(i0 - i_start) / i0 : 0.0);
 	}
 
-	int printProgress(const double displayTime, const int i)
+	int printProgress(const double elapsedTime, const double displayTime, const int i)
 	{
 		if (_print_i == i) return 1;
 #if defined(BOINC)
 		const double prev_percent = static_cast<double>(_print_range - _print_i) / _print_range;
 #endif
-		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const double percent = static_cast<double>(_print_range - i) / _print_range;
+		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const int dcount = std::max(static_cast<int>(1.0 / mulTime), 2);
 		if (_isBoinc)
 		{
@@ -208,9 +208,9 @@ private:
 		}
 		else
 		{
-			const double estimatedTime = mulTime * i;
-			std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(estimatedTime)
-									<< " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
+			const double remainingTime = mulTime * i, expectedTime = elapsedTime / percent;
+			std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(remainingTime)
+									<< "/" << timer::formatTime(expectedTime) << " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
 			pio::display(ss.str());
 		}
 		return dcount;
@@ -539,8 +539,8 @@ private:
 
 			if (i % dcount == 0)
 			{
-				chrono.read(); const double displayTime = chrono.getDisplayTime();
-				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+				const double elapsedTime = chrono.getElapsedTime(), displayTime = chrono.getDisplayTime();
+				if (displayTime >= 10) { dcount = printProgress(elapsedTime, displayTime, i); chrono.resetDisplayTime(); }
 				if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(0, fast_checkpoints, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
@@ -964,8 +964,8 @@ private:
 
 				if (i % dcount == 0)
 				{
-					chrono.read(); const double displayTime = chrono.getDisplayTime();
-					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+					const double elapsedTime = chrono.getElapsedTime(), displayTime = chrono.getDisplayTime();
+					if (displayTime >= 10) { dcount = printProgress(elapsedTime, displayTime, i); chrono.resetDisplayTime(); }
 					if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 				}
 
@@ -1042,8 +1042,8 @@ private:
 
 			if (i % dcount == 0)
 			{
-				chrono.read(); const double displayTime = chrono.getDisplayTime();
-				if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+				const double elapsedTime = chrono.getElapsedTime(), displayTime = chrono.getDisplayTime();
+				if (displayTime >= 10) { dcount = printProgress(elapsedTime, displayTime, i); chrono.resetDisplayTime(); }
 				if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(1, false, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
 			}
 
@@ -1182,8 +1182,8 @@ private:
 
 				if (i % dcount == 0)
 				{
-					chrono.read(); const double displayTime = chrono.getDisplayTime();
-					if (displayTime >= 10) { dcount = printProgress(displayTime, i); chrono.resetDisplayTime(); }
+					const double elapsedTime = chrono.getElapsedTime(), displayTime = chrono.getDisplayTime();
+					if (displayTime >= 10) { dcount = printProgress(elapsedTime, displayTime, i); chrono.resetDisplayTime(); }
 					if (chrono.getRecordTime() > 600) { saveContextPrime(k, i, chrono.getElapsedTime(), totalTime, cond); chrono.resetRecordTime(); }
 				}
 

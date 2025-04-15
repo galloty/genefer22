@@ -19,20 +19,21 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define N_SZ		65536u
 #define LN_SZ		16
 #define RNS_SZ		3
-#define VSIZE		2
-#define LVSIZE		1
+#define VSIZE		4
+#define LVSIZE		2
 #define NORM1		2130641409u
 #define NORM2		2113864705u
 #define NORM3		2013204481u
 #define W_SHFT		65536u
 #define WI_SHFT		32768u
-#define USE_WI		1
+// #define USE_WI		1
 #define BLK32		32
 #define BLK64		16
 #define BLK128		8
 #define BLK256		4
-#define BLK512		2
-#define CHUNK64		16
+#define BLK512		4
+#define BLK1024		2
+#define CHUNK64		4
 #define CHUNK256	4
 #define CHUNK1024	1
 // #define SHORT_VER	1
@@ -1616,8 +1617,6 @@ void square256(__global VTYPE * restrict const zg, __global const uint * restric
 
 #define L512S	(512 / VSIZE)
 
-// if BLK512 != 1 then const sz_t i512 = (i & ~(L512S / 4 - 1)) * 4, i128 = i % (L512S / 4);
-// if BLK512 = 1 then const sz_t i512 = 0, i128 = i;
 #define DECLARE_VAR_512() \
 	__local VTYPE Z[L512S * BLK512]; \
 	\
@@ -1664,28 +1663,32 @@ void square512(__global VTYPE * restrict const zg, __global const uint * restric
 
 #define L1024S	(1024 / VSIZE)
 
+// if BLK1024 != 1 then const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4);
+// if BLK1024 = 1 then const sz_t i1024 = 0, i256 = local_id;
 #define DECLARE_VAR_1024() \
-	__local VTYPE Z[L1024S]; \
+	__local VTYPE Z[L1024S * BLK1024]; \
 	\
 	DECLARE_VAR_REG(); \
-	const sz_t local_id = id % (L1024S / 4), group_id = id / (L1024S / 4); \
+	const sz_t local_id = id % (L1024S / 4 * BLK1024), group_id = id / (L1024S / 4 * BLK1024); \
 	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i256 = local_id, k1024 = group_id * L1024S + i256; \
+	const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4); \
+	const sz_t k1024 = group_id * L1024S * BLK1024 + i1024 + i256; \
 	\
 	__global VTYPE * restrict const zk = &z[k1024]; \
-	__local VTYPE * const Zi256 = &Z[i256]; \
+	__local VTYPE * const Z1024 = &Z[i1024]; \
+	__local VTYPE * const Zi256 = &Z1024[i256]; \
 	const sz_t i64 = ((4 * i256) & ~(4 * (L1024S / 16) - 1)) + (i256 % (L1024S / 16)); \
-	__local VTYPE * const Zi64 = &Z[i64]; \
+	__local VTYPE * const Zi64 = &Z1024[i64]; \
 	const sz_t i16 = ((4 * i256) & ~(4 * (L1024S / 64) - 1)) + (i256 % (L1024S / 64)); \
-	__local VTYPE * const Zi16 = &Z[i16]; \
+	__local VTYPE * const Zi16 = &Z1024[i16]; \
 	const sz_t i4 = ((4 * i256) & ~(4 * (L1024S / 256) - 1)) + (i256 % (L1024S / 256)); \
-	__local VTYPE * const Zi4 = &Z[i4]; \
-	__local VTYPE * const Z4 = &Z[4 * i256];
+	__local VTYPE * const Zi4 = &Z1024[i4]; \
+	__local VTYPE * const Z4 = &Z1024[4 * i256];
 
 __kernel
-#if MAX_WG_SZ >= L1024S / 4
-	__attribute__((reqd_work_group_size(L1024S / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4 * BLK1024
+	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))
 #endif
 void square1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
@@ -1878,8 +1881,8 @@ void fwd512p(__global VTYPE * restrict const zg, __global const uint * restrict 
 }
 
 __kernel
-#if MAX_WG_SZ >= L1024S / 4
-	__attribute__((reqd_work_group_size(L1024S / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4 * BLK1024
+	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))
 #endif
 void fwd1024p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)
 {
@@ -2036,8 +2039,8 @@ void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 }
 
 __kernel
-#if MAX_WG_SZ >= L1024S / 4
-	__attribute__((reqd_work_group_size(L1024S / 4, 1, 1)))
+#if MAX_WG_SZ >= L1024S / 4 * BLK1024
+	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))
 #endif
 void mul1024(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)
 {

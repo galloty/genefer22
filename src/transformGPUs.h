@@ -126,13 +126,13 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define BLK64m		16		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK128m		8		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK256m		4		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK512m		2		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK1024m	1		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK512m		4		// local size =   8KB, workgroup size =  512 / VSIZE
+#define BLK1024m	2		// local size =   8KB, workgroup size =  512 / VSIZE
 #define BLK2048m	1		// local size =   8KB, workgroup size =  512 / VSIZE
 #define BLK4096m	1		// local size =  16KB, workgroup size = 1024 / VSIZE
 
 #define CHUNK64m	4		// local size =  VSIZE * 1KB, workgroup size = 64
-#define CHUNK256m	2		// local size =  VSIZE * 2KB, workgroup size = 128
+#define CHUNK256m	4		// local size =  VSIZE * 4KB, workgroup size = 256
 #define CHUNK1024m	1		// local size =  VSIZE * 4KB, workgroup size = 256
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = createTransformKernel(#name);
@@ -720,7 +720,7 @@ private:
 	}
 
 public:
-	void tune(const uint32_t base)
+	void tune()
 	{
 		const size_t n = _n;
 
@@ -743,15 +743,8 @@ public:
 
 		cl_ulong minT = cl_ulong(-1);
 
-		size_t bMin = 4;
-		while (bMin < log(n * static_cast<double>(base + 2)) / log(static_cast<double>(base))) bMin *= 2;
-
-		const double maxSqr = n * (base * static_cast<double>(base));
-		for (size_t b = bMin; b <= 64; b *= 2)
+		for (size_t b = 4; b <= 4; b *= 2)
 		{
-			// Check convergence
-			if (log(maxSqr) >= base * log(static_cast<double>(b))) continue;
-
 			resetProfiles();
 			baseModTune(count, b, 0, 0, Z);
 			cl_ulong minT_b = getProfileTime();
@@ -912,6 +905,7 @@ public:
 		src << "#define BLK128\t" << BLK128m << std::endl;
 		src << "#define BLK256\t" << BLK256m << std::endl;
 		src << "#define BLK512\t" << BLK512m << std::endl;
+		src << "#define BLK1024\t" << BLK1024m << std::endl;
 
 		src << "#define CHUNK64\t" << CHUNK64m << std::endl;
 		src << "#define CHUNK256\t" << CHUNK256m << std::endl;
@@ -962,7 +956,7 @@ public:
 			delete[] wr3;
 		}
 
-		_pEngine->tune(b);
+		_pEngine->tune();
 	}
 
 	virtual ~transformGPUs()

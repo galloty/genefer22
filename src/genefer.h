@@ -216,7 +216,7 @@ private:
 		return dcount;
 	}
 
-	static void clearline() { pio::display("                                                \r"); }
+	static void clearline() { pio::display("                                                            \r"); }
 
 	int _readContext(const std::string & filename, const int where, const bool fast_checkpoints, int & i, double & elapsedTime)
 	{

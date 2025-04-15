@@ -31,20 +31,21 @@ static const char * const src_ocl_kernels = \
 "#define N_SZ		65536u\n" \
 "#define LN_SZ		16\n" \
 "#define RNS_SZ		3\n" \
-"#define VSIZE		2\n" \
-"#define LVSIZE		1\n" \
+"#define VSIZE		4\n" \
+"#define LVSIZE		2\n" \
 "#define NORM1		2130641409u\n" \
 "#define NORM2		2113864705u\n" \
 "#define NORM3		2013204481u\n" \
 "#define W_SHFT		65536u\n" \
 "#define WI_SHFT		32768u\n" \
-"#define USE_WI		1\n" \
+"// #define USE_WI		1\n" \
 "#define BLK32		32\n" \
 "#define BLK64		16\n" \
 "#define BLK128		8\n" \
 "#define BLK256		4\n" \
-"#define BLK512		2\n" \
-"#define CHUNK64		16\n" \
+"#define BLK512		4\n" \
+"#define BLK1024		2\n" \
+"#define CHUNK64		4\n" \
 "#define CHUNK256	4\n" \
 "#define CHUNK1024	1\n" \
 "// #define SHORT_VER	1\n" \
@@ -1328,7 +1329,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "#if MAX_WG_SZ >= B_64 * CHUNK64\n" \
 "#define ATTR_64() \\\n" \
-"	__attribute__((work_group_size_hint(B_64 * CHUNK64, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(B_64 * CHUNK64, 1, 1)))\n" \
 "#else\n" \
 "#define ATTR_64()\n" \
 "#endif\n" \
@@ -1338,28 +1339,13 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK64, &Zi[CHUNK64 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	FORWARD_I(B_64, CHUNK64);\n" \
-"	FORWARD_64();\n" \
-"}\n" \
-"\n" \
-"INLINE void _backward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	BACKWARD_I(B_64, CHUNK64);\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);\n" \
-"	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);\n" \
-"}\n" \
-"\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
 "void forward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
-"	_forward64(zg, wg, Z, lm, s);\n" \
+"	FORWARD_I(B_64, CHUNK64);\n" \
+"	FORWARD_64();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1377,7 +1363,10 @@ static const char * const src_ocl_kernels = \
 "void backward64(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
-"	_backward64(zg, wg, Z, lm, s);\n" \
+"	BACKWARD_I(B_64, CHUNK64);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);\n" \
+"	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -1386,7 +1375,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "#if MAX_WG_SZ >= B_256 * CHUNK256\n" \
 "#define ATTR_256() \\\n" \
-"	__attribute__((work_group_size_hint(B_256 * CHUNK256, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(B_256 * CHUNK256, 1, 1)))\n" \
 "#else\n" \
 "#define ATTR_256()\n" \
 "#endif\n" \
@@ -1398,30 +1387,13 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK256, &Zi[CHUNK256 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	FORWARD_I(B_256, CHUNK256);\n" \
-"	FORWARD_256();\n" \
-"}\n" \
-"\n" \
-"INLINE void _backward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	BACKWARD_I(B_256, CHUNK256);\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	backward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], wi, sji / 4);\n" \
-"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
-"	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);\n" \
-"	backward_4o(pq, B_256 << lm, zo, B_256 * CHUNK256, &Z[i], wi, sji / B_256);\n" \
-"}\n" \
-"\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
 "void forward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_256 * CHUNK256];\n" \
-"	_forward256(zg, wg, Z, lm, s);\n" \
+"	FORWARD_I(B_256, CHUNK256);\n" \
+"	FORWARD_256();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1439,7 +1411,12 @@ static const char * const src_ocl_kernels = \
 "void backward256(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_256 * CHUNK256];\n" \
-"	_backward256(zg, wg, Z, lm, s);\n" \
+"	BACKWARD_I(B_256, CHUNK256);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	backward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], wi, sji / 4);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);\n" \
+"	backward_4o(pq, B_256 << lm, zo, B_256 * CHUNK256, &Z[i], wi, sji / B_256);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -1448,7 +1425,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "#if MAX_WG_SZ >= B_1024 * CHUNK1024\n" \
 "#define ATTR_1024() \\\n" \
-"	__attribute__((work_group_size_hint(B_1024 * CHUNK1024, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(B_1024 * CHUNK1024, 1, 1)))\n" \
 "#else\n" \
 "#define ATTR_1024()\n" \
 "#endif\n" \
@@ -1462,32 +1439,13 @@ static const char * const src_ocl_kernels = \
 "	forward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK1024, &Zi[CHUNK1024 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
-"INLINE void _forward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	FORWARD_I(B_1024, CHUNK1024);\n" \
-"	FORWARD_1024();\n" \
-"}\n" \
-"\n" \
-"INLINE void _backward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg,\n" \
-"	__local VTYPE * const Z, const int lm, const unsigned int s)\n" \
-"{\n" \
-"	BACKWARD_I(B_1024, CHUNK1024);\n" \
-"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
-"	backward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], wi, sji / 4);\n" \
-"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
-"	backward_4(pq, 16 * CHUNK1024, &Zi[CHUNK1024 * k16], wi, sji / 16);\n" \
-"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);\n" \
-"	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);\n" \
-"	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], wi, sji / B_1024);\n" \
-"}\n" \
-"\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
 "void forward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_1024 * CHUNK1024];\n" \
-"	_forward1024(zg, wg, Z, lm, s);\n" \
+"	FORWARD_I(B_1024, CHUNK1024);\n" \
+"	FORWARD_1024();\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1505,7 +1463,14 @@ static const char * const src_ocl_kernels = \
 "void backward1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
 "	__local VTYPE Z[4 * B_1024 * CHUNK1024];\n" \
-"	_backward1024(zg, wg, Z, lm, s);\n" \
+"	BACKWARD_I(B_1024, CHUNK1024);\n" \
+"	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);\n" \
+"	backward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], wi, sji / 4);\n" \
+"	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);\n" \
+"	backward_4(pq, 16 * CHUNK1024, &Zi[CHUNK1024 * k16], wi, sji / 16);\n" \
+"	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);\n" \
+"	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);\n" \
+"	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], wi, sji / B_1024);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -1531,7 +1496,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
 "void square32(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1569,7 +1534,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
 "void square64(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1605,7 +1570,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
 "void square128(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1647,7 +1612,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
 "void square256(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1664,8 +1629,6 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "#define L512S	(512 / VSIZE)\n" \
 "\n" \
-"// if BLK512 != 1 then const sz_t i512 = (i & ~(L512S / 4 - 1)) * 4, i128 = i % (L512S / 4);\n" \
-"// if BLK512 = 1 then const sz_t i512 = 0, i128 = i;\n" \
 "#define DECLARE_VAR_512() \\\n" \
 "	__local VTYPE Z[L512S * BLK512]; \\\n" \
 "	\\\n" \
@@ -1688,8 +1651,8 @@ static const char * const src_ocl_kernels = \
 "	__local VTYPE * const Z4 = &Z512[4 * i128];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L512S / 4\n" \
-"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4 * BLK512\n" \
+"	__attribute__((reqd_work_group_size(L512S / 4 * BLK512, 1, 1)))\n" \
 "#endif\n" \
 "void square512(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1712,28 +1675,32 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "#define L1024S	(1024 / VSIZE)\n" \
 "\n" \
+"// if BLK1024 != 1 then const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4);\n" \
+"// if BLK1024 = 1 then const sz_t i1024 = 0, i256 = local_id;\n" \
 "#define DECLARE_VAR_1024() \\\n" \
-"	__local VTYPE Z[L1024S]; \\\n" \
+"	__local VTYPE Z[L1024S * BLK1024]; \\\n" \
 "	\\\n" \
 "	DECLARE_VAR_REG(); \\\n" \
-"	const sz_t local_id = id % (L1024S / 4), group_id = id / (L1024S / 4); \\\n" \
+"	const sz_t local_id = id % (L1024S / 4 * BLK1024), group_id = id / (L1024S / 4 * BLK1024); \\\n" \
 "	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i256 = local_id, k1024 = group_id * L1024S + i256; \\\n" \
+"	const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4); \\\n" \
+"	const sz_t k1024 = group_id * L1024S * BLK1024 + i1024 + i256; \\\n" \
 "	\\\n" \
 "	__global VTYPE * restrict const zk = &z[k1024]; \\\n" \
-"	__local VTYPE * const Zi256 = &Z[i256]; \\\n" \
+"	__local VTYPE * const Z1024 = &Z[i1024]; \\\n" \
+"	__local VTYPE * const Zi256 = &Z1024[i256]; \\\n" \
 "	const sz_t i64 = ((4 * i256) & ~(4 * (L1024S / 16) - 1)) + (i256 % (L1024S / 16)); \\\n" \
-"	__local VTYPE * const Zi64 = &Z[i64]; \\\n" \
+"	__local VTYPE * const Zi64 = &Z1024[i64]; \\\n" \
 "	const sz_t i16 = ((4 * i256) & ~(4 * (L1024S / 64) - 1)) + (i256 % (L1024S / 64)); \\\n" \
-"	__local VTYPE * const Zi16 = &Z[i16]; \\\n" \
+"	__local VTYPE * const Zi16 = &Z1024[i16]; \\\n" \
 "	const sz_t i4 = ((4 * i256) & ~(4 * (L1024S / 256) - 1)) + (i256 % (L1024S / 256)); \\\n" \
-"	__local VTYPE * const Zi4 = &Z[i4]; \\\n" \
-"	__local VTYPE * const Z4 = &Z[4 * i256];\n" \
+"	__local VTYPE * const Zi4 = &Z1024[i4]; \\\n" \
+"	__local VTYPE * const Z4 = &Z1024[4 * i256];\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L1024S / 4\n" \
-"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4 * BLK1024\n" \
+"	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))\n" \
 "#endif\n" \
 "void square1024(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1775,7 +1742,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L2048S / 4\n" \
-"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
 "void square2048(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1798,11 +1765,55 @@ static const char * const src_ocl_kernels = \
 "	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));\n" \
 "}\n" \
 "\n" \
+"#define L4096S	(4096 / VSIZE)\n" \
+"\n" \
+"#define DECLARE_VAR_4096() \\\n" \
+"	__local VTYPE Z[L4096S]; \\\n" \
+"	\\\n" \
+"	DECLARE_VAR_REG(); \\\n" \
+"	const sz_t local_id = id % (L4096S / 4), group_id = id / (L4096S / 4); \\\n" \
+"	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
+"	\\\n" \
+"	const sz_t i1024 = local_id, k4096 = group_id * L4096S + i1024; \\\n" \
+"	\\\n" \
+"	__global VTYPE * restrict const zk = &z[k4096]; \\\n" \
+"	__local VTYPE * const Zi1024 = &Z[i1024]; \\\n" \
+"	const sz_t i256 = ((4 * i1024) & ~(4 * (L4096S / 16) - 1)) + (i1024 % (L4096S / 16)); \\\n" \
+"	__local VTYPE * const Zi256 = &Z[i256]; \\\n" \
+"	const sz_t i64 = ((4 * i1024) & ~(4 * (L4096S / 64) - 1)) + (i1024 % (L4096S / 64)); \\\n" \
+"	__local VTYPE * const Zi64 = &Z[i64]; \\\n" \
+"	const sz_t i16 = ((4 * i1024) & ~(4 * (L4096S / 256) - 1)) + (i1024 % (L4096S / 256)); \\\n" \
+"	__local VTYPE * const Zi16 = &Z[i16]; \\\n" \
+"	const sz_t i4 = ((4 * i1024) & ~(4 * (L4096S / 1024) - 1)) + (i1024 % (L4096S / 1024)); \\\n" \
+"	__local VTYPE * const Zi4 = &Z[i4]; \\\n" \
+"	__local VTYPE * const Z4 = &Z[4 * i1024];\n" \
+"\n" \
+"__kernel\n" \
+"#if MAX_WG_SZ >= L4096S / 4\n" \
+"	__attribute__((reqd_work_group_size(L4096S / 4, 1, 1)))\n" \
+"#endif\n" \
+"void square4096(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_4096();\n" \
+"\n" \
+"	forward_4i(pq, L4096S / 4, Zi1024, L4096S / 4, zk, w, sj / (L4096S / 4));\n" \
+"	forward_4(pq, L4096S / 16, Zi256, w, sj / (L4096S / 16));\n" \
+"	forward_4(pq, L4096S / 64, Zi64, w, sj / (L4096S / 64));\n" \
+"	forward_4(pq, L4096S / 256, Zi16, w, sj / (L4096S / 256));\n" \
+"	forward_4(pq, L4096S / 1024, Zi4, w, sj / (L4096S / 1024));\n" \
+"	square_4(pq, Z4, w, wi, sj, sji);\n" \
+"	backward_4(pq, L4096S / 1024, Zi4, wi, sji / (L4096S / 1024));\n" \
+"	backward_4(pq, L4096S / 256, Zi16, wi, sji / (L4096S / 256));\n" \
+"	backward_4(pq, L4096S / 64, Zi64, wi, sji / (L4096S / 64));\n" \
+"	backward_4(pq, L4096S / 16, Zi256, wi, sji / (L4096S / 16));\n" \
+"	backward_4o(pq, L4096S / 4, zk, L4096S / 4, Zi1024, wi, sji / (L4096S / 4));\n" \
+"}\n" \
+"\n" \
 "// -----------------\n" \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
 "void fwd32p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1819,7 +1830,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
 "void fwd64p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1832,7 +1843,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
 "void fwd128p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1850,7 +1861,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
 "void fwd256p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1863,8 +1874,8 @@ static const char * const src_ocl_kernels = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L512S / 4\n" \
-"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4 * BLK512\n" \
+"	__attribute__((reqd_work_group_size(L512S / 4 * BLK512, 1, 1)))\n" \
 "#endif\n" \
 "void fwd512p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1882,8 +1893,8 @@ static const char * const src_ocl_kernels = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L1024S / 4\n" \
-"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4 * BLK1024\n" \
+"	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))\n" \
 "#endif\n" \
 "void fwd1024p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1898,7 +1909,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L2048S / 4\n" \
-"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
 "void fwd2048p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1916,11 +1927,27 @@ static const char * const src_ocl_kernels = \
 "#endif\n" \
 "}\n" \
 "\n" \
+"__kernel\n" \
+"#if MAX_WG_SZ >= L4096S / 4\n" \
+"	__attribute__((reqd_work_group_size(L4096S / 4, 1, 1)))\n" \
+"#endif\n" \
+"void fwd4096p(__global VTYPE * restrict const zg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_4096();\n" \
+"\n" \
+"	forward_4i(pq, L4096S / 4, Zi1024, L4096S / 4, zk, w, sj / (L4096S / 4));\n" \
+"	forward_4(pq, L4096S / 16, Zi256, w, sj / (L4096S / 16));\n" \
+"	forward_4(pq, L4096S / 64, Zi64, w, sj / (L4096S / 64));\n" \
+"	forward_4(pq, L4096S / 256, Zi16, w, sj / (L4096S / 256));\n" \
+"	forward_4(pq, L4096S / 1024, Zi4, w, sj / (L4096S / 1024));\n" \
+"	fwd4_write(pq, L4096S / 4, zk, Z4, w, sj);\n" \
+"}\n" \
+"\n" \
 "// -----------------\n" \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L32S / 4 * BLK32\n" \
-"	__attribute__((work_group_size_hint(L32S / 4 * BLK32, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L32S / 4 * BLK32, 1, 1)))\n" \
 "#endif\n" \
 "void mul32(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1941,7 +1968,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L64S / 4 * BLK64\n" \
-"	__attribute__((work_group_size_hint(L64S / 4 * BLK64, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L64S / 4 * BLK64, 1, 1)))\n" \
 "#endif\n" \
 "void mul64(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1958,7 +1985,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L128S / 4 * BLK128\n" \
-"	__attribute__((work_group_size_hint(L128S / 4 * BLK128, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L128S / 4 * BLK128, 1, 1)))\n" \
 "#endif\n" \
 "void mul128(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1981,7 +2008,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L256S / 4 * BLK256\n" \
-"	__attribute__((work_group_size_hint(L256S / 4 * BLK256, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L256S / 4 * BLK256, 1, 1)))\n" \
 "#endif\n" \
 "void mul256(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -1999,8 +2026,8 @@ static const char * const src_ocl_kernels = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L512S / 4\n" \
-"	__attribute__((work_group_size_hint(L512S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L512S / 4 * BLK512\n" \
+"	__attribute__((reqd_work_group_size(L512S / 4 * BLK512, 1, 1)))\n" \
 "#endif\n" \
 "void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -2024,8 +2051,8 @@ static const char * const src_ocl_kernels = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"#if MAX_WG_SZ >= L1024S / 4\n" \
-"	__attribute__((work_group_size_hint(L1024S / 4, 1, 1)))\n" \
+"#if MAX_WG_SZ >= L1024S / 4 * BLK1024\n" \
+"	__attribute__((reqd_work_group_size(L1024S / 4 * BLK1024, 1, 1)))\n" \
 "#endif\n" \
 "void mul1024(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -2046,7 +2073,7 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "__kernel\n" \
 "#if MAX_WG_SZ >= L2048S / 4\n" \
-"	__attribute__((work_group_size_hint(L2048S / 4, 1, 1)))\n" \
+"	__attribute__((reqd_work_group_size(L2048S / 4, 1, 1)))\n" \
 "#endif\n" \
 "void mul2048(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
 "{\n" \
@@ -2069,6 +2096,29 @@ static const char * const src_ocl_kernels = \
 "	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));\n" \
 "	backward_4(pq, L2048S / 16, Zi128, wi, sji / (L2048S / 16));\n" \
 "	backward_4o(pq, L2048S / 4, zk, L2048S / 4, Zi512, wi, sji / (L2048S / 4));\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"#if MAX_WG_SZ >= L4096S / 4\n" \
+"	__attribute__((reqd_work_group_size(L4096S / 4, 1, 1)))\n" \
+"#endif\n" \
+"void mul4096(__global VTYPE * restrict const zg, __global const VTYPE * restrict const zpg, __global const uint * restrict const wg)\n" \
+"{\n" \
+"	DECLARE_VAR_4096();\n" \
+"	DECLARE_VARP_REG();\n" \
+"	__global const VTYPE * restrict const zpk = &zp[k4096];\n" \
+"\n" \
+"	forward_4i(pq, L4096S / 4, Zi1024, L4096S / 4, zk, w, sj / (L4096S / 4));\n" \
+"	forward_4(pq, L4096S / 16, Zi256, w, sj / (L4096S / 16));\n" \
+"	forward_4(pq, L4096S / 64, Zi64, w, sj / (L4096S / 64));\n" \
+"	forward_4(pq, L4096S / 256, Zi16, w, sj / (L4096S / 256));\n" \
+"	forward_4(pq, L4096S / 1024, Zi4, w, sj / (L4096S / 1024));\n" \
+"	mul_4(pq, Z4, L4096S / 4, zpk, w, wi, sj, sji);\n" \
+"	backward_4(pq, L4096S / 1024, Zi4, wi, sji / (L4096S / 1024));\n" \
+"	backward_4(pq, L4096S / 256, Zi16, wi, sji / (L4096S / 256));\n" \
+"	backward_4(pq, L4096S / 64, Zi64, wi, sji / (L4096S / 64));\n" \
+"	backward_4(pq, L4096S / 16, Zi256, wi, sji / (L4096S / 16));\n" \
+"	backward_4o(pq, L4096S / 4, zk, L4096S / 4, Zi1024, wi, sji / (L4096S / 4));\n" \
 "}\n" \
 "\n" \
 "#endif	// SHORT_VER\n" \
@@ -2097,7 +2147,7 @@ static const char * const src_ocl_kernels = \
 "INLINE int32 reduce64(int64 * f, const uint32 b, const uint32 b_inv, const int b_s)\n" \
 "{\n" \
 "	// 1- t < 2^63 => t_h < 2^34. We must have t_h < 2^29 b => b > 32\n" \
-"	// 2- t < 2^22 b^2 => t_h < b^2 / 2^7. If 2 <= b < 32 then t_h < 32^2 / 2^7 = 2^8 < 2^29 b\n" \
+"	// 2- t < 2^23 b^2 => t_h < b^2 / 2^6. If 2 <= b < 32 then t_h < 32^2 / 2^6 = 16 < 2^29 b\n" \
 "	const uint64 t = abs(*f);\n" \
 "	const uint64 t_h = t >> 29;\n" \
 "	const uint32 t_l = (uint32)(t) & ((1u << 29) - 1);\n" \

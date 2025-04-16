@@ -17,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl/kernels.h"
 
 // #define USE_WI	1
+// #define	TUNE	1
 
 #define VSIZE	4
 
@@ -555,21 +556,48 @@ private:
 public:
 	void square()
 	{
+		if (_first) { info(); _first = false; }
+
+#if defined(TUNE)
+		const size_t splitIndex =
 #if defined(CHECK_ALL_FUNCTIONS)
-		_mul(size_t(rand()) % _pSplit->getSize(), true);
+		size_t(rand()) % _pSplit->getSize();
 #else
-		_mul(_splitIndex, true);
+		_splitIndex;
 #endif
-		if (_first)
-		{
-			info();
-			_first = false;
-		} 
+		_mul(splitIndex, true);
+#else
+		const int ln = _ln;
+		if (ln == 14) { forward64_0(); square256(); backward64(14 - 6); }
+		else if (ln == 15) { forward64_0(); square512(); backward64(15 - 6); }
+		else if (ln == 16) { forward64_0(); square1024(); backward64(16 - 6); }
+		else if (ln == 17) { forward64_0(); square2048(); backward64(17 - 6); }
+		else if (ln == 18) { forward256_0(); square1024(); backward256(18 - 8); }
+		else if (ln == 19) { forward256_0(); square2048(); backward256(19 - 8); }
+		else if (ln == 20) { forward256_0(); square4096(); backward256(20 - 8); }
+		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); square512(); backward64(21 - 2 * 6); backward64(21 - 6); }
+		else if (ln == 22) { forward1024_0(); square4096(); backward1024(22 - 10); }
+		else { forward64_0(); forward64(23 - 2 * 6); square2048(); backward64(23 - 2 * 6); backward64(23 - 6); }
+#endif
 	}
 
 	void mul()
 	{
+#if defined(TUNE)
 		_mul(_splitIndex, false);
+#else
+		const int ln = _ln;
+		if (ln == 14) { forward64_0(); mul256(); backward64(14 - 6); }
+		else if (ln == 15) { forward64_0(); mul512(); backward64(15 - 6); }
+		else if (ln == 16) { forward64_0(); mul1024(); backward64(16 - 6); }
+		else if (ln == 17) { forward64_0(); mul2048(); backward64(17 - 6); }
+		else if (ln == 18) { forward256_0(); mul1024(); backward256(18 - 8); }
+		else if (ln == 19) { forward256_0(); mul2048(); backward256(19 - 8); }
+		else if (ln == 20) { forward256_0(); mul4096(); backward256(20 - 8); }
+		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); mul512(); backward64(21 - 2 * 6); backward64(21 - 6); }
+		else if (ln == 22) { forward1024_0(); mul4096(); backward1024(22 - 10); }
+		else { forward64_0(); forward64(23 - 2 * 6); mul2048(); backward64(23 - 2 * 6); backward64(23 - 6); }
+#endif
 	}
 
 	void initMultiplicand(const size_t src)
@@ -599,9 +627,8 @@ public:
 		if (_ln == 14) { forward4p_0(); fwd4096p(); return; }
 #endif
 
-		const splitter * const pSplit = _pSplit;
 #if defined(CHECK_ALL_FUNCTIONS)
-		_splitIndex = size_t(rand()) % pSplit->getSize();
+		_splitIndex = size_t(rand()) % _pSplit->getSize();
 #endif
 
 		int lm = _ln;
@@ -613,6 +640,8 @@ public:
 		return;
 #endif
 
+#if defined(TUNE)
+		const splitter * const pSplit = _pSplit;
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
 
@@ -640,6 +669,18 @@ public:
 		else if (lm == 7) fwd128p();
 		else if (lm == 6) fwd64p();
 		else if (lm == 5) fwd32p();
+#else
+		if (lm == 14) { forward64p_0(); fwd256p(); }
+		else if (lm == 15) { forward64p_0(); fwd512p(); }
+		else if (lm == 16) { forward64p_0(); fwd1024p(); }
+		else if (lm == 17) { forward64p_0(); fwd2048p(); }
+		else if (lm == 18) { forward256p_0(); fwd1024p(); }
+		else if (lm == 19) { forward256p_0(); fwd2048p(); }
+		else if (lm == 20) { forward256p_0(); fwd4096p(); }
+		else if (lm == 21) { forward64p_0(); forward64p(21 - 2 * 6); fwd512p(); }
+		else if (lm == 22) { forward1024p_0(); fwd4096p(); }
+		else { forward64p_0(); forward64p(23 - 2 * 6); fwd2048p(); }
+#endif
 	}
 
 	void set(const uint32_t a)
@@ -789,6 +830,7 @@ public:
 		}
 #endif
 
+#if defined(TUNE)
 		const splitter * const pSplit = _pSplit;
 		const size_t ns = pSplit->getSize();
 		if (ns > 1)
@@ -825,6 +867,7 @@ public:
 		delete[] Z;
 
 		setProfiling(false);
+#endif
 	}
 
 public:

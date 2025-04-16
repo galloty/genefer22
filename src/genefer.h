@@ -1274,7 +1274,7 @@ private:
 
 		transform * const pTransform = _transform;
 
-		pTransform->info();
+		// pTransform->info();
 
 		_gi = new gint(size_t(1) << n, b);
 		mpz_t exponent; mpz_init(exponent); mpz_ui_pow_ui(exponent, 6, 50);

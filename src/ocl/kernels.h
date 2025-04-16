@@ -1684,7 +1684,7 @@ static const char * const src_ocl_kernels = \
 "	const sz_t local_id = id % (L1024S / 4 * BLK1024), group_id = id / (L1024S / 4 * BLK1024); \\\n" \
 "	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \\\n" \
 "	\\\n" \
-"	const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4); \\\n" \
+"	const sz_t i1024 = 0, i256 = local_id; \\\n" \
 "	const sz_t k1024 = group_id * L1024S * BLK1024 + i1024 + i256; \\\n" \
 "	\\\n" \
 "	__global VTYPE * restrict const zk = &z[k1024]; \\\n" \

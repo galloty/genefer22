@@ -1672,7 +1672,7 @@ void square512(__global VTYPE * restrict const zg, __global const uint * restric
 	const sz_t local_id = id % (L1024S / 4 * BLK1024), group_id = id / (L1024S / 4 * BLK1024); \
 	const sz_t j = id, sj = N_SZ / 4 / VSIZE + j; DECLARE_IVAR(N_SZ / 4 / VSIZE, j); \
 	\
-	const sz_t i1024 = (local_id & ~(L1024S / 4 - 1)) * 4, i256 = local_id % (L1024S / 4); \
+	const sz_t i1024 = 0, i256 = local_id; \
 	const sz_t k1024 = group_id * L1024S * BLK1024 + i1024 + i256; \
 	\
 	__global VTYPE * restrict const zk = &z[k1024]; \

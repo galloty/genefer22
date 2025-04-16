@@ -126,8 +126,8 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define BLK64m		16		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK128m		8		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK256m		4		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK512m		4		// local size =   8KB, workgroup size =  512 / VSIZE
-#define BLK1024m	2		// local size =   8KB, workgroup size =  512 / VSIZE
+#define BLK512m		2		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK1024m	1		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK2048m	1		// local size =   8KB, workgroup size =  512 / VSIZE
 #define BLK4096m	1		// local size =  16KB, workgroup size = 1024 / VSIZE
 

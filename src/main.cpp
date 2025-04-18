@@ -402,11 +402,12 @@ public:
 			// if (g.check(16558530, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
 			// if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
 
-			if (g.check(1000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x43c6cc5326e5c77f
-			if (g.check(1000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x4e43a5b93273c649
-			if (g.check(1000001960, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			if (g.check(1000032014, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			return;
+			// if (g.check(1000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x43c6cc5326e5c77f
+			// if (g.check(1000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x4e43a5b93273c649
+			// if (g.check(999955696, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(67234, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			if (g.check(999944006, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			return;*/
 		
 			// for (size_t i = 0; i < count; ++i)
 			// {

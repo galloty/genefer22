@@ -647,7 +647,7 @@ protected:
 			if (_isSync)
 			{
 				++_syncCount;
-				if (_syncCount == 1024) _sync();
+				if (_syncCount == 16 * 1024) _sync();
 			}
 		}
 		else

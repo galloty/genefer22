@@ -136,7 +136,7 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CHUNK256s	4		// local size =  VSIZE * 4KB, workgroup size = 256
 #define CHUNK1024s	1		// local size =  VSIZE * 4KB, workgroup size = 256
 
-#define NORM_WG_SZ	64
+inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = createTransformKernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = createTransformKernel(#name, false);
@@ -158,7 +158,6 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define DEFINE_FORWARDP0(u) \
 	void forward##u##p_0() { setTransformArgs(_forward##u##_0, false); forward##u##_0(); setTransformArgs(_forward##u##_0);	}
 
-
 template<size_t RNS_SIZE>
 class engines : public device
 {
@@ -167,6 +166,7 @@ private:
 	const int _ln;
 	const bool _isBoinc;
 	const size_t _num_regs;
+	const int _lnormWGsize;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
 	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square8 = nullptr;
@@ -191,12 +191,15 @@ private:
 
 public:
 	engines(const platform & platform, const size_t d, const int ln, const bool isBoinc, const size_t num_regs, const bool verbose)
-		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc), _num_regs(num_regs) {}
+		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc), _num_regs(num_regs),
+		_lnormWGsize(std::min(std::max(5, ln / 2 - 3), ilog2_32(uint32_t(getMaxWorkGroupSize())))) {}
 	virtual ~engines() {}
 
 ///////////////////////////////
 
 public:
+	size_t getNormWGsize() const { return size_t(1 << _lnormWGsize); }
+
 	void allocMemory()
 	{
 #if defined(ocl_debug)
@@ -711,8 +714,8 @@ public:
 		const size_t size = _n / 4;
 
 		_setKernelArg(_normalize1, 5, sizeof(int32), &idup);
-		_executeKernel(_normalize1, size, NORM_WG_SZ);
-		_executeKernel(_normalize2, size / NORM_WG_SZ);
+		_executeKernel(_normalize1, size, 1u << _lnormWGsize);
+		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
 public:
@@ -724,8 +727,8 @@ public:
 		const size_t size = _n / 4;
 
 		_setKernelArg(_mulscalar, 5, sizeof(int32), &ia);
-		_executeKernel(_mulscalar, size, NORM_WG_SZ);
-		_executeKernel(_normalize2, size / NORM_WG_SZ);
+		_executeKernel(_mulscalar, size, 1u << _lnormWGsize);
+		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
 #if defined(TUNE)
@@ -880,7 +883,7 @@ public:
 		src << "#define SHORT_VER\t" << 1 << std::endl;
 #endif
 
-		src << "#define NORM_WG_SZ\t" << NORM_WG_SZ << std::endl;
+		src << "#define NORM_WG_SZ\t" << _pEngine->getNormWGsize() << std::endl;
 
 		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 

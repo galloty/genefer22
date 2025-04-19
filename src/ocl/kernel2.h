@@ -142,45 +142,14 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "// --- transform/macro ---\n" \
 "\n" \
-"#define FWD2(z0, z1, w) \\\n" \
-"{ \\\n" \
-"	const RNS t = mulW(z1, w); \\\n" \
-"	z1 = sub(z0, t); z0 = add(z0, t); \\\n" \
-"}\n" \
+"#define FWD2(z0, z1, w) { const RNS t = mulW(z1, w); z1 = sub(z0, t); z0 = add(z0, t); }\n" \
+"#define BCK2(z0, z1, wi) { const RNS t = sub(z0, z1); z0 = add(z0, z1); z1 = mulW(t, wi); }\n" \
 "\n" \
-"#define BCK2(z0, z1, wi) \\\n" \
-"{ \\\n" \
-"	const RNS t = sub(z0, z1); z0 = add(z0, z1); \\\n" \
-"	z1 = mulW(t, wi); \\\n" \
-"}\n" \
+"#define SQR2(z0, z1, w) { const RNS t = sqr(mulW(z1, w)); z1 = mul(add(z0, z0), z1); z0 = add(sqr(z0), t); }\n" \
+"#define SQR2N(z0, z1, w) { const RNS t = sqr(mulW(z1, w)); z1 = mul(add(z0, z0), z1); z0 = sub(sqr(z0), t); }\n" \
 "\n" \
-"#define SQR2(z0, z1, w) \\\n" \
-"{ \\\n" \
-"	const RNS t = sqr(mulW(z1, w)); \\\n" \
-"	z1 = mul(add(z0, z0), z1); \\\n" \
-"	z0 = add(sqr(z0), t); \\\n" \
-"}\n" \
-"\n" \
-"#define SQR2N(z0, z1, w) \\\n" \
-"{ \\\n" \
-"	const RNS t = sqr(mulW(z1, w)); \\\n" \
-"	z1 = mul(add(z0, z0), z1); \\\n" \
-"	z0 = sub(sqr(z0), t); \\\n" \
-"}\n" \
-"\n" \
-"#define MUL2(z0, z1, zp0, zp1, w) \\\n" \
-"{ \\\n" \
-"	const RNS t = mul(mulW(z1, w), mulW(zp1, w)); \\\n" \
-"	z1 = add(mul(z0, zp1), mul(zp0, z1)); \\\n" \
-"	z0 = add(mul(z0, zp0), t); \\\n" \
-"}\n" \
-"\n" \
-"#define MUL2N(z0, z1, zp0, zp1, w) \\\n" \
-"{ \\\n" \
-"	const RNS t = mul(mulW(z1, w), mulW(zp1, w)); \\\n" \
-"	z1 = add(mul(z0, zp1), mul(zp0, z1)); \\\n" \
-"	z0 = sub(mul(z0, zp0), t); \\\n" \
-"}\n" \
+"#define MUL2(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = add(mul(z0, zp0), t); }\n" \
+"#define MUL2N(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = sub(mul(z0, zp0), t); }\n" \
 "\n" \
 "// --- transform/inline ---\n" \
 "\n" \
@@ -1133,22 +1102,22 @@ static const char * const src_ocl_kernel2 = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global RNS * restrict const z, const unsigned int a)\n" \
+"void set(__global RNS * restrict const z, const uint32 a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
-"	const unsigned int ai = (idx == 0) ? a : 0;\n" \
+"	const uint32 ai = (idx == 0) ? a : 0;\n" \
 "	z[idx] = (RNS)(ai, ai);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void copy(__global RNS * restrict const z, const unsigned int dst, const unsigned int src)\n" \
+"void copy(__global RNS * restrict const z, const sz_t dst, const sz_t src)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	z[dst + idx] = z[src + idx];\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void copyp(__global RNS * restrict const zp, __global const RNS * restrict const z, const unsigned int src)\n" \
+"void copyp(__global RNS * restrict const zp, __global const RNS * restrict const z, const sz_t src)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	zp[idx] = z[src + idx];\n" \

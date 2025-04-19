@@ -130,45 +130,14 @@ INLINE RNS toMonty(const RNS lhs) { return (RNS)(toMonty_P1(lhs.s0), toMonty_P2(
 
 // --- transform/macro ---
 
-#define FWD2(z0, z1, w) \
-{ \
-	const RNS t = mulW(z1, w); \
-	z1 = sub(z0, t); z0 = add(z0, t); \
-}
+#define FWD2(z0, z1, w) { const RNS t = mulW(z1, w); z1 = sub(z0, t); z0 = add(z0, t); }
+#define BCK2(z0, z1, wi) { const RNS t = sub(z0, z1); z0 = add(z0, z1); z1 = mulW(t, wi); }
 
-#define BCK2(z0, z1, wi) \
-{ \
-	const RNS t = sub(z0, z1); z0 = add(z0, z1); \
-	z1 = mulW(t, wi); \
-}
+#define SQR2(z0, z1, w) { const RNS t = sqr(mulW(z1, w)); z1 = mul(add(z0, z0), z1); z0 = add(sqr(z0), t); }
+#define SQR2N(z0, z1, w) { const RNS t = sqr(mulW(z1, w)); z1 = mul(add(z0, z0), z1); z0 = sub(sqr(z0), t); }
 
-#define SQR2(z0, z1, w) \
-{ \
-	const RNS t = sqr(mulW(z1, w)); \
-	z1 = mul(add(z0, z0), z1); \
-	z0 = add(sqr(z0), t); \
-}
-
-#define SQR2N(z0, z1, w) \
-{ \
-	const RNS t = sqr(mulW(z1, w)); \
-	z1 = mul(add(z0, z0), z1); \
-	z0 = sub(sqr(z0), t); \
-}
-
-#define MUL2(z0, z1, zp0, zp1, w) \
-{ \
-	const RNS t = mul(mulW(z1, w), mulW(zp1, w)); \
-	z1 = add(mul(z0, zp1), mul(zp0, z1)); \
-	z0 = add(mul(z0, zp0), t); \
-}
-
-#define MUL2N(z0, z1, zp0, zp1, w) \
-{ \
-	const RNS t = mul(mulW(z1, w), mulW(zp1, w)); \
-	z1 = add(mul(z0, zp1), mul(zp0, z1)); \
-	z0 = sub(mul(z0, zp0), t); \
-}
+#define MUL2(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = add(mul(z0, zp0), t); }
+#define MUL2N(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = sub(mul(z0, zp0), t); }
 
 // --- transform/inline ---
 

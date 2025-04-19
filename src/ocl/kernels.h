@@ -303,20 +303,20 @@ static const char * const src_ocl_kernels = \
 "	z1 = mulmod4(t, win, pq); \\\n" \
 "}\n" \
 "\n" \
-"static void _loadg1(const sz_t n, uint32 * const zl, __global const uint32 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
-"static void _loadl1(const sz_t n, uint32 * const zl, __local const uint32 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
-"static void _storeg1(const sz_t n, __global uint32 * restrict const z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
-"static void _storel1(const sz_t n, __local uint32 * restrict const Z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"INLINE void _loadg1(const sz_t n, uint32 * const zl, __global const uint32 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"INLINE void _loadl1(const sz_t n, uint32 * const zl, __local const uint32 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"INLINE void _storeg1(const sz_t n, __global uint32 * restrict const z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"INLINE void _storel1(const sz_t n, __local uint32 * restrict const Z, const size_t s, const uint32 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
 "\n" \
-"static void _loadg2(const sz_t n, uint32_2 * const zl, __global const uint32_2 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
-"static void _loadl2(const sz_t n, uint32_2 * const zl, __local const uint32_2 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
-"static void _storeg2(const sz_t n, __global uint32_2 * restrict const z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
-"static void _storel2(const sz_t n, __local uint32_2 * restrict const Z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"INLINE void _loadg2(const sz_t n, uint32_2 * const zl, __global const uint32_2 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"INLINE void _loadl2(const sz_t n, uint32_2 * const zl, __local const uint32_2 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"INLINE void _storeg2(const sz_t n, __global uint32_2 * restrict const z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"INLINE void _storel2(const sz_t n, __local uint32_2 * restrict const Z, const size_t s, const uint32_2 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
 "\n" \
-"static void _loadg4(const sz_t n, uint32_4 * const zl, __global const uint32_4 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
-"static void _loadl4(const sz_t n, uint32_4 * const zl, __local const uint32_4 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
-"static void _storeg4(const sz_t n, __global uint32_4 * restrict const z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
-"static void _storel4(const sz_t n, __local uint32_4 * restrict const Z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
+"INLINE void _loadg4(const sz_t n, uint32_4 * const zl, __global const uint32_4 * restrict const z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
+"INLINE void _loadl4(const sz_t n, uint32_4 * const zl, __local const uint32_4 * restrict const Z, const size_t s) { for (size_t l = 0; l < n; ++l) zl[l] = Z[l * s]; }\n" \
+"INLINE void _storeg4(const sz_t n, __global uint32_4 * restrict const z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) z[l * s] = zl[l]; }\n" \
+"INLINE void _storel4(const sz_t n, __local uint32_4 * restrict const Z, const size_t s, const uint32_4 * const zl) { for (size_t l = 0; l < n; ++l) Z[l * s] = zl[l]; }\n" \
 "\n" \
 "// ---\n" \
 "\n" \

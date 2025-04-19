@@ -136,8 +136,6 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CHUNK256s	4		// local size =  VSIZE * 4KB, workgroup size = 256
 #define CHUNK1024s	1		// local size =  VSIZE * 4KB, workgroup size = 256
 
-inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
-
 #define CREATE_TRANSFORM_KERNEL(name) _##name = createTransformKernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = createTransformKernel(#name, false);
 #define CREATE_MUL_KERNEL(name) _##name = createMulKernel(#name);
@@ -188,6 +186,8 @@ private:
 	size_t _splitIndex = 0;
 #endif
 	// bool _first = false;
+
+	static constexpr int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
 public:
 	engines(const platform & platform, const size_t d, const int ln, const bool isBoinc, const size_t num_regs, const bool verbose)
@@ -718,7 +718,6 @@ public:
 		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
-public:
 	void baseModMul(const int a)
 	{
 		baseMod(false);
@@ -800,6 +799,8 @@ public:
 		std::ostringstream ss; ss << "split:";
 		for (size_t sIndex = 0, ns = _pSplit->getSize(); sIndex < ns; ++sIndex)
 		{
+			if (sIndex != 0) ss << ",";
+
 			int lm = _ln;
 			const size_t s = _pSplit->getPartSize(sIndex);
 			for (size_t i = 1; i < s; ++i)
@@ -812,7 +813,6 @@ public:
 			ss << " s" << lm;
 
 			if (sIndex == _splitIndex) ss << " *";
-			ss << ",";
 		}
 
 		ss << "." << std::endl;

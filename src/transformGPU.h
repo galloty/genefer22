@@ -219,28 +219,34 @@ private:
 	const size_t _n;
 	const int _ln;
 	const bool _isBoinc;
+	const int _lnormWGsize;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr;
 	cl_mem _ze = nullptr, _zpe = nullptr, _we = nullptr;
 	cl_mem _c = nullptr;
 	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward256 = nullptr, _backward256 = nullptr, _forward1024 = nullptr, _backward1024 = nullptr;
 	cl_kernel _forward64_0 = nullptr, _forward256_0 = nullptr, _forward1024_0 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr, _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr;
-	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mul1 = nullptr;
+	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr, _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr, _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 	splitter * _pSplit = nullptr;
-	size_t _naLocalWS = 32, _nbLocalWS = 32, _baseModBlk = 16, _splitIndex = 0;
+	size_t _splitIndex = 0;
 	// bool _first = true;
+
+	static constexpr int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
 public:
 	engine(const platform & platform, const size_t d, const int ln, const bool isBoinc, const bool verbose)
-		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc) {}
+		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc),
+		_lnormWGsize(std::min(std::max(5, ln / 2 - 3), ilog2_32(uint32_t(getMaxWorkGroupSize())))) {}
 	virtual ~engine() {}
 
 ///////////////////////////////
 
 public:
+	size_t getNormWGsize() const { return size_t(1 << _lnormWGsize); }
+
 	void allocMemory(const size_t num_regs)
 	{
 #if defined(ocl_debug)
@@ -383,7 +389,7 @@ public:
 		const cl_uint b_inv = static_cast<cl_uint>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
 		_normalize1 = createNormalizeKernel("normalize1", static_cast<cl_uint>(b), b_inv, b_s);
 		_normalize2 = createNormalizeKernel("normalize2", static_cast<cl_uint>(b), b_inv, b_s);
-		_mul1 = createNormalizeKernel("mul1", static_cast<cl_uint>(b), b_inv, b_s);
+		_mulscalar = createNormalizeKernel("mulscalar", static_cast<cl_uint>(b), b_inv, b_s);
 
 		_fwd32p = createTransformKernel("fwd32p", false);
 		_fwd64p = createTransformKernel("fwd64p", false);
@@ -422,7 +428,7 @@ public:
 		_releaseKernel(_forward64_0); _releaseKernel(_forward256_0); _releaseKernel(_forward1024_0);
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048);
-		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mul1);
+		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
 		_releaseKernel(_fwd512p); _releaseKernel(_fwd1024p); _releaseKernel(_fwd2048p);
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
@@ -462,33 +468,33 @@ private:
 	void forward1024(const int lm) { fb(_forward1024, lm, 1024 / 4 * CHUNK1024); }
 	void backward1024(const int lm) { fb(_backward1024, lm, 1024 / 4 * CHUNK1024); }
 
-	void forward64_0() { const size_t n_4 = _n / 4; _executeKernel(_forward64_0, n_4, 64 / 4 * CHUNK64); }
-	void forward256_0() { const size_t n_4 = _n / 4; _executeKernel(_forward256_0, n_4, 256 / 4 * CHUNK256); }
-	void forward1024_0() { const size_t n_4 = _n / 4; _executeKernel(_forward1024_0, n_4, 1024 / 4 * CHUNK1024); }
+	void forward64_0() { _executeKernel(_forward64_0, _n / 4, 64 / 4 * CHUNK64); }
+	void forward256_0() { _executeKernel(_forward256_0, _n / 4, 256 / 4 * CHUNK256); }
+	void forward1024_0() { _executeKernel(_forward1024_0, _n / 4, 1024 / 4 * CHUNK1024); }
 	
-	void square32() { const size_t n_4 = _n / 4; _executeKernel(_square32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void square64() { const size_t n_4 = _n / 4; _executeKernel(_square64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void square128() { const size_t n_4 = _n / 4; _executeKernel(_square128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void square256() { const size_t n_4 = _n / 4; _executeKernel(_square256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void square512() { const size_t n_4 = _n / 4; _executeKernel(_square512, n_4, 512 / 4); }
-	void square1024() { const size_t n_4 = _n / 4; _executeKernel(_square1024, n_4, 1024 / 4); }
-	void square2048() { const size_t n_4 = _n / 4; _executeKernel(_square2048, n_4, 2048 / 4); }
+	void square32() { _executeKernel(_square32, _n / 4, 32 / 4 * BLK32); }
+	void square64() { _executeKernel(_square64, _n / 4, 64 / 4 * BLK64); }
+	void square128() { _executeKernel(_square128, _n / 4, 128 / 4 * BLK128); }
+	void square256() { _executeKernel(_square256, _n / 4, 256 / 4 * BLK256); }
+	void square512() { _executeKernel(_square512, _n / 4, 512 / 4); }
+	void square1024() { _executeKernel(_square1024, _n / 4, 1024 / 4); }
+	void square2048() { _executeKernel(_square2048, _n / 4, 2048 / 4); }
 
-	void fwd32p() { const size_t n_4 = _n / 4; _executeKernel(_fwd32p, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void fwd64p() { const size_t n_4 = _n / 4; _executeKernel(_fwd64p, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void fwd128p() { const size_t n_4 = _n / 4; _executeKernel(_fwd128p, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void fwd256p() { const size_t n_4 = _n / 4; _executeKernel(_fwd256p, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void fwd512p() { const size_t n_4 = _n / 4; _executeKernel(_fwd512p, n_4, 512 / 4); }
-	void fwd1024p() { const size_t n_4 = _n / 4; _executeKernel(_fwd1024p, n_4, 1024 / 4); }
-	void fwd2048p() { const size_t n_4 = _n / 4; _executeKernel(_fwd2048p, n_4, 2048 / 4); }
+	void fwd32p() { _executeKernel(_fwd32p, _n / 4, 32 / 4 * BLK32); }
+	void fwd64p() { _executeKernel(_fwd64p, _n / 4, 64 / 4 * BLK64); }
+	void fwd128p() { _executeKernel(_fwd128p, _n / 4, 128 / 4 * BLK128); }
+	void fwd256p() { _executeKernel(_fwd256p, _n / 4, 256 / 4 * BLK256); }
+	void fwd512p() { _executeKernel(_fwd512p, _n / 4, 512 / 4); }
+	void fwd1024p() { _executeKernel(_fwd1024p, _n / 4, 1024 / 4); }
+	void fwd2048p() { _executeKernel(_fwd2048p, _n / 4, 2048 / 4); }
 
-	void mul32() { const size_t n_4 = _n / 4; _executeKernel(_mul32, n_4, std::min(n_4, size_t(32 / 4 * BLK32))); }
-	void mul64() { const size_t n_4 = _n / 4; _executeKernel(_mul64, n_4, std::min(n_4, size_t(64 / 4 * BLK64))); }
-	void mul128() { const size_t n_4 = _n / 4; _executeKernel(_mul128, n_4, std::min(n_4, size_t(128 / 4 * BLK128))); }
-	void mul256() { const size_t n_4 = _n / 4; _executeKernel(_mul256, n_4, std::min(n_4, size_t(256 / 4 * BLK256))); }
-	void mul512() { const size_t n_4 = _n / 4; _executeKernel(_mul512, n_4, 512 / 4); }
-	void mul1024() { const size_t n_4 = _n / 4; _executeKernel(_mul1024, n_4, 1024 / 4); }
-	void mul2048() { const size_t n_4 = _n / 4; _executeKernel(_mul2048, n_4, 2048 / 4); }
+	void mul32() { _executeKernel(_mul32, _n / 4, 32 / 4 * BLK32); }
+	void mul64() { _executeKernel(_mul64, _n / 4, 64 / 4 * BLK64); }
+	void mul128() { _executeKernel(_mul128, _n / 4, 128 / 4 * BLK128); }
+	void mul256() { _executeKernel(_mul256, _n / 4, 256 / 4 * BLK256); }
+	void mul512() { _executeKernel(_mul512, _n / 4, 512 / 4); }
+	void mul1024() { _executeKernel(_mul1024, _n / 4, 1024 / 4); }
+	void mul2048() { _executeKernel(_mul2048, _n / 4, 2048 / 4); }
 
 	void setTransformArgs(cl_kernel & kernel, const bool isMultiplier = true)
 	{
@@ -795,58 +801,28 @@ public:
 public:
 	void baseMod(const bool dup)
 	{
-		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
-		const cl_int sblk = dup ? -static_cast<cl_int>(blk) : static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
+		const cl_int idup = dup ? 1 : 0;
+		const size_t size = _n / 4;
 
-		_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
-		_executeKernel(_normalize1, size, std::min(size, _naLocalWS));
-
-		_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &blk);
-		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
+		_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &idup);
+		_executeKernel(_normalize1, size, 1u << _lnormWGsize);
+		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
-public:
 	void baseModMul(const int a)
 	{
 		baseMod(false);
 
-		const cl_uint blk = static_cast<cl_uint>(_baseModBlk);
-		const size_t size = _n / blk;
 		const cl_int ia = static_cast<cl_int>(a);
+		const size_t size = _n / 4;
 
-		cl_uint index1 = (RNS_SIZE == 3) ? 6 : 5;
-		_setKernelArg(_mul1, index1++, sizeof(cl_int), &blk);
-		_setKernelArg(_mul1, index1++, sizeof(cl_int), &ia);
-		_executeKernel(_mul1, size, std::min(size, _naLocalWS));
-
-		cl_uint index2 = (RNS_SIZE == 3) ? 6 : 5;
-		_setKernelArg(_normalize2, index2++, sizeof(cl_uint), &blk);
-		_executeKernel(_normalize2, size, std::min(size, _nbLocalWS));
-	}
-
-private:
-	void baseModTune(const size_t count, const size_t blk, const size_t n3aLocalWS, const size_t n3bLocalWS, const RNS * const Z, const RNSe * const Ze)
-	{
-		const cl_uint cblk = static_cast<cl_uint>(blk);
-		const cl_int sblk = static_cast<cl_int>(blk);
-		const size_t size = _n / blk;
-
-		for (size_t i = 0; i != count; ++i)
-		{
-			writeMemory_z(Z);
-			if (RNS_SIZE == 3) writeMemory_ze(Ze);
-
-			_setKernelArg(_normalize1, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &sblk);
-			_executeKernel(_normalize1, size, std::min(size, n3aLocalWS));
-
-			_setKernelArg(_normalize2, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_uint), &cblk);
-			_executeKernel(_normalize2, size, std::min(size, n3bLocalWS));
-		}
+		_setKernelArg(_mulscalar, (RNS_SIZE == 3) ? 6 : 5, sizeof(cl_int), &ia);
+		_executeKernel(_mulscalar, size, 1u << _lnormWGsize);
+		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
 public:
-	void tune(const uint32_t base)
+	void tune()
 	{
 		const size_t n = _n;
 
@@ -860,68 +836,6 @@ public:
 		}
 
 		setProfiling(true);
-
-		resetProfiles();
-		baseModTune(1, 16, 0, 0, Z, Ze);
-		const cl_ulong time = getProfileTime();
-		if (time == 0) { delete[] Z; if (RNS_SIZE == 3) delete[] Ze; setProfiling(false); return; }
-		// 410 tests, 0.1 second = 10^8 ns
-		const size_t count = std::min(std::max(size_t(100000000 / (410 * time)), size_t(2)), size_t(100));
-
-		cl_ulong minT = cl_ulong(-1);
-
-		size_t bMin = 4;
-		while (bMin < log(n * static_cast<double>(base + 2)) / log(static_cast<double>(base))) bMin *= 2;
-
-		const double maxSqr = n * (base * static_cast<double>(base));
-		for (size_t b = bMin; b <= 64; b *= 2)
-		{
-			// Check convergence
-			if (log(maxSqr) >= base * log(static_cast<double>(b))) continue;
-
-			resetProfiles();
-			baseModTune(count, b, 0, 0, Z, Ze);
-			cl_ulong minT_b = getProfileTime();
-#if defined(ocl_debug)
-			// std::ostringstream ss; ss << "b = " << b << ", sa = 0, sb = 0, count = " << count << ", t = " << minT_b << "." << std::endl;
-			// pio::display(ss.str());
-#endif
-			size_t minsa = 0, minsb = 0;
-
-			for (size_t sa = 1; sa <= 256; sa *= 2)
-			{
-				for (size_t sb = 1; sb <= 256; sb *= 2)
-				{
-					resetProfiles();
-					baseModTune(count, b, sa, sb, Z, Ze);
-					const cl_ulong t = getProfileTime();
-#if defined(ocl_debug)
-					// std::ostringstream ss; ss << "b = " << b << ", sa = " << sa << ", sb = " << sb << ", count = " << count << ", t = " << t << "." << std::endl;
-					// pio::display(ss.str());
-#endif
-					if (t < minT_b)
-					{
-						minT_b = t;
-						minsa = sa;
-						minsb = sb;
-					}
-				}
-			}
-
-			if (minT_b < minT)
-			{
-				minT = minT_b;
-				_naLocalWS = minsa;
-				_nbLocalWS = minsb;
-				_baseModBlk = b;
-			}
-		}
-#if defined(ocl_debug)
-		{
-			std::ostringstream ss; ss << "baseModBlk = " << _baseModBlk << ", WorkgroupSize1 = " << _naLocalWS << ", WorkgroupSize2 = " << _nbLocalWS << "." << std::endl;
-			pio::display(ss.str());
-		}
-#endif
 
 		const splitter * const pSplit = _pSplit;
 		const size_t ns = pSplit->getSize();
@@ -968,6 +882,8 @@ public:
 		std::ostringstream ss; ss << "split:";
 		for (size_t sIndex = 0, ns = _pSplit->getSize(); sIndex < ns; ++sIndex)
 		{
+			if (sIndex != 0) ss << ",";
+
 			int lm = _ln;
 			const size_t s = _pSplit->getPartSize(sIndex);
 			for (size_t i = 1; i < s; ++i)
@@ -980,10 +896,9 @@ public:
 			ss << " s" << lm;
 
 			if (sIndex == _splitIndex) ss << " *";
-			ss << ",";
 		}
 
-		ss << " blk = " << _baseModBlk << ", wsize1 = " << _naLocalWS << ", wsize2 = " << _nbLocalWS << "." << std::endl;
+		ss << "." << std::endl;
 		pio::display(ss.str());
 	}
 };
@@ -1021,14 +936,7 @@ public:
 		std::ostringstream src;
 
 		src << "#define\tLNSIZE\t" << n << std::endl;
-		if (_pEngine->isIntel())	// Fix Intel compiler issue
-		{
-			src << "#define\tNSIZE_4\t((sz_t)get_global_size(0))" << std::endl;
-		}
-		else
-		{
-			src << "#define\tNSIZE_4\t" << (1u << (n - 2)) << "u" << std::endl;
-		}
+		src << "#define\tNSIZE_4\t" << (1u << (n - 2)) << "u" << std::endl;
 
 		MForm1 mf1; MForm2 mf2;
 		src << "#define\tP1\t" << P1_32 << "u" << std::endl;
@@ -1070,6 +978,8 @@ public:
 		src << "#define\tCHUNK64\t" << CHUNK64 << std::endl;
 		src << "#define\tCHUNK256\t" << CHUNK256 << std::endl;
 		src << "#define\tCHUNK1024\t" << CHUNK1024 << std::endl << std::endl;
+
+		src << "#define NORM_WG_SZ\t" << _pEngine->getNormWGsize() << std::endl;
 
 		src << "#define\tMAX_WORK_GROUP_SIZE\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
@@ -1141,7 +1051,7 @@ public:
 			delete[] wre;
 		}
 
-		_pEngine->tune(b);
+		_pEngine->tune();
 	}
 
 	virtual ~transformGPU()

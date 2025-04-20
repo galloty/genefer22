@@ -28,6 +28,9 @@ static const char * const src_ocl_kernel2 = \
 "typedef int		int32;\n" \
 "typedef ulong	uint64;\n" \
 "typedef long	int64;\n" \
+"typedef uint2	uint32_2;\n" \
+"typedef uint4	uint32_4;\n" \
+"typedef int4	int32_4;\n" \
 "\n" \
 "#if !defined(LNSIZE)\n" \
 "#define LNSIZE		16\n" \
@@ -125,8 +128,10 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "// --- RNS ---\n" \
 "\n" \
-"typedef uint2	RNS;\n" \
-"typedef RNS		RNS_W;\n" \
+"typedef uint32_2	RNS;\n" \
+"typedef uint32_4	RNS2;\n" \
+"typedef uint32_2	RNS_W;\n" \
+"typedef uint32_4	RNS_W2;\n" \
 "\n" \
 "INLINE RNS toRNS(const int32 i) { return ((RNS)(i, i) + ((i < 0) ? (RNS)(P1, P2) : (RNS)(0, 0))); }\n" \
 "\n" \
@@ -140,6 +145,8 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "INLINE RNS toMonty(const RNS lhs) { return (RNS)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }\n" \
 "\n" \
+"INLINE RNS2 mul2(const RNS2 lhs, const RNS rhs) { return (RNS2)(mul(lhs.s01, rhs), mul(lhs.s23, rhs)); }\n" \
+"\n" \
 "// --- transform/macro ---\n" \
 "\n" \
 "#define FWD2(z0, z1, w) { const RNS t = mulW(z1, w); z1 = sub(z0, t); z0 = add(z0, t); }\n" \
@@ -151,6 +158,29 @@ static const char * const src_ocl_kernel2 = \
 "#define MUL2(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = add(mul(z0, zp0), t); }\n" \
 "#define MUL2N(z0, z1, zp0, zp1, w) { const RNS t = mul(mulW(z1, w), mulW(zp1, w)); z1 = add(mul(z0, zp1), mul(zp0, z1)); z0 = sub(mul(z0, zp0), t); }\n" \
 "\n" \
+"#define DECLARE_W(j)	const RNS_W w1 = w[j]; const RNS_W2 w2 = ((__global const RNS_W2 *)w)[j];\n" \
+"#define DECLARE_WI(j)	const RNS_W wi1 = wi[j]; const RNS_W2 wi2 = ((__global const RNS_W2 *)wi)[j];\n" \
+"\n" \
+"#define FORWARD4() \\\n" \
+"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1); \\\n" \
+"	FWD2(zl[0], zl[1], w2.s01); FWD2(zl[2], zl[3], w2.s23);\n" \
+"\n" \
+"#define BACKWARD4() \\\n" \
+"	BCK2(zl[0], zl[1], wi2.s01); BCK2(zl[2], zl[3], wi2.s23); \\\n" \
+"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"\n" \
+"#define FORWARD22() \\\n" \
+"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
+"\n" \
+"#define BACKWARD22() \\\n" \
+"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"\n" \
+"#define SQUARE22() \\\n" \
+"	SQR2(zl[0], zl[1], w0); SQR2N(zl[2], zl[3], w0);\n" \
+"\n" \
+"#define MUL22() \\\n" \
+"	MUL2(zl[0], zl[1], zpl[0], zpl[1], w0); MUL2N(zl[2], zl[3], zpl[2], zpl[3], w0);\n" \
+"\n" \
 "// --- transform/inline ---\n" \
 "\n" \
 "INLINE void _loadg(RNS zl[4], __global const RNS * restrict const z, const size_t s) { for (size_t l = 0; l < 4; ++l) zl[l] = z[l * s]; }\n" \
@@ -160,74 +190,67 @@ static const char * const src_ocl_kernel2 = \
 "\n" \
 "INLINE void forward_4(const sz_t m, __local RNS * restrict const Z, __global const RNS_W * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	const RNS_W w1 = w[j], w2 = w[2 * j + 0], w3 = w[2 * j + 1];\n" \
+"	DECLARE_W(j);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, m);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	FWD2(zl[0], zl[1], w2); FWD2(zl[2], zl[3], w3);\n" \
+"	FORWARD4();\n" \
 "	_storel(Z, m, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void forward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z,\n" \
 "	__global const RNS_W * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	const RNS_W w1 = w[j], w2 = w[2 * j + 0], w3 = w[2 * j + 1];\n" \
+"	DECLARE_W(j);\n" \
 "	RNS zl[4]; _loadg(zl, z, mg);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	FWD2(zl[0], zl[1], w2); FWD2(zl[2], zl[3], w3);\n" \
+"	FORWARD4();\n" \
 "	_storel(Z, ml, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void forward_4i_0(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z,\n" \
 "	__global const RNS_W * restrict const w)\n" \
 "{\n" \
-"	const RNS_W w1 = w[1], w2 = w[2], w3 = w[3];\n" \
+"	DECLARE_W(1);\n" \
 "	RNS zl[4]; _loadg(zl, z, mg);\n" \
 "	zl[0] = toMonty(zl[0]); zl[1] = toMonty(zl[1]);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	FWD2(zl[0], zl[1], w2); FWD2(zl[2], zl[3], w3);\n" \
+"	FORWARD4();\n" \
 "	_storel(Z, ml, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void forward_4o(const sz_t mg, __global RNS * restrict const z, const sz_t ml, __local const RNS * restrict const Z,\n" \
 "	__global const RNS_W * restrict const w, const sz_t j)\n" \
 "{\n" \
-"	const RNS_W w1 = w[j], w2 = w[2 * j + 0], w3 = w[2 * j + 1];\n" \
+"	DECLARE_W(j);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, ml);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	FWD2(zl[0], zl[1], w2); FWD2(zl[2], zl[3], w3);\n" \
+"	FORWARD4();\n" \
 "	_storeg(z, mg, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void backward_4(const sz_t m, __local RNS * restrict const Z, __global const RNS_W * restrict const wi, const sz_t j)\n" \
 "{\n" \
-"	const RNS_W wi1 = wi[j], wi2 = wi[2 * j + 0], wi3 = wi[2 * j + 1];\n" \
+"	DECLARE_WI(j);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, m);\n" \
-"	BCK2(zl[0], zl[1], wi2); BCK2(zl[2], zl[3], wi3);\n" \
-"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"	BACKWARD4();\n" \
 "	_storel(Z, m, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void backward_4i(const sz_t ml, __local RNS * restrict const Z, const sz_t mg, __global const RNS * restrict const z,\n" \
 "	__global const RNS_W * restrict const wi,const sz_t j)\n" \
 "{\n" \
-"	const RNS_W wi1 = wi[j], wi2 = wi[2 * j + 0], wi3 = wi[2 * j + 1];\n" \
+"	DECLARE_WI(j);\n" \
 "	RNS zl[4]; _loadg(zl, z, mg);\n" \
-"	BCK2(zl[0], zl[1], wi2); BCK2(zl[2], zl[3], wi3);\n" \
-"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"	BACKWARD4();\n" \
 "	_storel(Z, ml, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void backward_4o(const sz_t mg, __global RNS * restrict const z, const sz_t ml, __local const RNS * restrict const Z,\n" \
 "	__global const RNS_W * restrict const wi, const sz_t j)\n" \
 "{\n" \
-"	const RNS_W wi1 = wi[j], wi2 = wi[2 * j + 0], wi3 = wi[2 * j + 1];\n" \
+"	DECLARE_WI(j);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, ml);\n" \
-"	BCK2(zl[0], zl[1], wi2); BCK2(zl[2], zl[3], wi3);\n" \
-"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"	BACKWARD4();\n" \
 "	_storeg(z, mg, zl);\n" \
 "}\n" \
 "\n" \
@@ -241,7 +264,7 @@ static const char * const src_ocl_kernel2 = \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, 1);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
+"	FORWARD22();\n" \
 "	_storeg(z, mg, zl);\n" \
 "}\n" \
 "\n" \
@@ -249,7 +272,7 @@ static const char * const src_ocl_kernel2 = \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, 1);\n" \
-"	SQR2(zl[0], zl[1], w0); SQR2N(zl[2], zl[3], w0);\n" \
+"	SQUARE22();\n" \
 "	_storel(Z, 1, zl);\n" \
 "}\n" \
 "\n" \
@@ -257,9 +280,9 @@ static const char * const src_ocl_kernel2 = \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, 1);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	SQR2(zl[0], zl[1], w0); SQR2N(zl[2], zl[3], w0);\n" \
-"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"	FORWARD22();\n" \
+"	SQUARE22();\n" \
+"	BACKWARD22();\n" \
 "	_storel(Z, 1, zl);\n" \
 "}\n" \
 "\n" \
@@ -268,7 +291,7 @@ static const char * const src_ocl_kernel2 = \
 "	RNS zpl[4]; _loadg(zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, 1);\n" \
-"	MUL2(zl[0], zl[1], zpl[0], zpl[1], w0); MUL2N(zl[2], zl[3], zpl[2], zpl[3], w0);\n" \
+"	MUL22();\n" \
 "	_storel(Z, 1, zl);\n" \
 "}\n" \
 "\n" \
@@ -278,9 +301,9 @@ static const char * const src_ocl_kernel2 = \
 "	RNS zpl[4]; _loadg(zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	RNS zl[4]; _loadl(zl, Z, 1);\n" \
-"	FWD2(zl[0], zl[2], w1); FWD2(zl[1], zl[3], w1);\n" \
-"	MUL2(zl[0], zl[1], zpl[0], zpl[1], w0); MUL2N(zl[2], zl[3], zpl[2], zpl[3], w0);\n" \
-"	BCK2(zl[0], zl[2], wi1); BCK2(zl[1], zl[3], wi1);\n" \
+"	FORWARD22();\n" \
+"	MUL22();\n" \
+"	BACKWARD22();\n" \
 "	_storel(Z, 1, zl);\n" \
 "}\n" \
 "\n" \
@@ -1004,27 +1027,27 @@ static const char * const src_ocl_kernel2 = \
 "}\n" \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
-"void normalize1(__global RNS * restrict const z, __global int64 * restrict const c,\n" \
+"void normalize1(__global RNS2 * restrict const z, __global int64 * restrict const c,\n" \
 "	const uint32 b, const uint32 b_inv, const int b_s, const int32 dup)\n" \
 "{\n" \
 "	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
-"	__global RNS * restrict const zi = &z[4 * gid];\n" \
+"	__global RNS2 * restrict const zi = &z[2 * gid];\n" \
 "	__local int64 cl[NORM_WG_SZ];\n" \
 "\n" \
 "	// Not converted into Montgomery form such that output is converted out of Montgomery form\n" \
 "	const RNS norm = (RNS)(NORM1, NORM2);\n" \
 "\n" \
-"	int64 f = 0;\n" \
-"	int32 r[4];\n" \
+"	const RNS2 u01 = mul2(zi[0], norm), u23 = mul2(zi[1], norm);\n" \
 "\n" \
-"	for (sz_t j = 0; j < 4; ++j)\n" \
-"	{\n" \
-"		const RNS u = mul(zi[j], norm);\n" \
-"		int64 l = garner2(u.s0, u.s1);\n" \
-"		if (dup != 0) l += l;\n" \
-"		f += l;\n" \
-"		r[j] = reduce64(&f, b, b_inv, b_s);\n" \
-"	}\n" \
+"	int32_4 r;\n" \
+"	int64 l0 = garner2(u01.s0, u01.s1); if (dup != 0) l0 += l0;\n" \
+"	int64 f = l0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	int64 l1 = garner2(u01.s2, u01.s3); if (dup != 0) l1 += l1;\n" \
+"	f += l1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	int64 l2 = garner2(u23.s0, u23.s1); if (dup != 0) l2 += l2;\n" \
+"	f += l2; r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	int64 l3 = garner2(u23.s2, u23.s3); if (dup != 0) l3 += l3;\n" \
+"	f += l3; r.s3 = reduce64(&f, b, b_inv, b_s);\n" \
 "\n" \
 "	cl[lid] = f;\n" \
 "\n" \
@@ -1037,12 +1060,12 @@ static const char * const src_ocl_kernel2 = \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
 "	f = (lid == 0) ? 0 : cl[lid - 1];\n" \
-"	f += r[0]; r[0] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[1]; r[1] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[2]; r[2] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[3]; r[3] = (sz_t)(f);\n" \
+"	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s3; r.s3 = (sz_t)(f);\n" \
 "\n" \
-"	for (sz_t j = 0; j < 4; ++j) zi[j] = toRNS(r[j]);\n" \
+"	zi[0] = (RNS2)(toRNS(r.s0), toRNS(r.s1)); zi[1] = (RNS2)(toRNS(r.s2), toRNS(r.s3));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1073,14 +1096,15 @@ static const char * const src_ocl_kernel2 = \
 "	__global RNS * restrict const zi = &z[4 * gid];\n" \
 "	__local int64 cl[NORM_WG_SZ];\n" \
 "\n" \
-"	int64 f = 0;\n" \
-"	int32 r[4];\n" \
-"\n" \
-"	for (sz_t j = 0; j < 4; ++j)\n" \
-"	{\n" \
-"		f += geti_P1(zi[j].s0) * (int64)(a);\n" \
-"		r[j] = reduce64(&f, b, b_inv, b_s);\n" \
-"	}\n" \
+"	int32_4 r;\n" \
+"	int64 f = geti_P1(zi[0].s0) * (int64)(a);\n" \
+"	r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += geti_P1(zi[1].s0) * (int64)(a);\n" \
+"	r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += geti_P1(zi[2].s0) * (int64)(a);\n" \
+"	r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += geti_P1(zi[3].s0) * (int64)(a);\n" \
+"	r.s3 = reduce64(&f, b, b_inv, b_s);\n" \
 "\n" \
 "	cl[lid] = f;\n" \
 "\n" \
@@ -1093,31 +1117,31 @@ static const char * const src_ocl_kernel2 = \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
 "	f = (lid == 0) ? 0 : cl[lid - 1];\n" \
-"	f += r[0]; r[0] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[1]; r[1] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[2]; r[2] = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r[3]; r[3] = (sz_t)(f);\n" \
+"	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s3; r.s3 = (sz_t)(f);\n" \
 "\n" \
-"	for (sz_t j = 0; j < 4; ++j) zi[j] = toRNS(r[j]);\n" \
+"	zi[0] = toRNS(r.s0); zi[1] = toRNS(r.s1); zi[2] = toRNS(r.s2); zi[3] = toRNS(r.s3);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void set(__global RNS * restrict const z, const uint32 a)\n" \
+"void set(__global RNS2 * restrict const z, const uint32 a)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	const uint32 ai = (idx == 0) ? a : 0;\n" \
-"	z[idx] = (RNS)(ai, ai);\n" \
+"	z[idx] = (RNS2)(ai, ai, 0, 0);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void copy(__global RNS * restrict const z, const sz_t dst, const sz_t src)\n" \
+"void copy(__global RNS2 * restrict const z, const sz_t dst, const sz_t src)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	z[dst + idx] = z[src + idx];\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void copyp(__global RNS * restrict const zp, __global const RNS * restrict const z, const sz_t src)\n" \
+"void copyp(__global RNS2 * restrict const zp, __global const RNS2 * restrict const z, const sz_t src)\n" \
 "{\n" \
 "	const sz_t idx = (sz_t)get_global_id(0);\n" \
 "	zp[idx] = z[src + idx];\n" \

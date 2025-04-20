@@ -681,9 +681,9 @@ private:
 public:
 	void initMultiplicand(const size_t src)
 	{
-		const cl_uint isrc = static_cast<cl_uint>(src * _n);
+		const cl_uint isrc = static_cast<cl_uint>(src * _n / 2);
 		_setKernelArg(_copyp, (RNS_SIZE == 3) ? 4 : 2, sizeof(cl_uint), &isrc);
-		_executeKernel(_copyp, _n);
+		_executeKernel(_copyp, _n / 2);
 
 		const splitter * const pSplit = _pSplit;
 
@@ -786,16 +786,16 @@ public:
 		const cl_uint ia = static_cast<cl_uint>(a);
 		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
 		_setKernelArg(_set, index++, sizeof(cl_uint), &ia);
-		_executeKernel(_set, _n);
+		_executeKernel(_set, _n / 2);
 	}
 
 	void copy(const size_t dst, const size_t src)
 	{
-		const cl_uint idst = static_cast<cl_uint>(dst * _n), isrc = static_cast<cl_uint>(src * _n);
+		const cl_uint idst = static_cast<cl_uint>(dst * _n / 2), isrc = static_cast<cl_uint>(src * _n / 2);
 		cl_uint index = (RNS_SIZE == 3) ? 2 : 1;
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &idst);
 		_setKernelArg(_copy, index++, sizeof(cl_uint), &isrc);
-		_executeKernel(_copy, _n);
+		_executeKernel(_copy, _n / 2);
 	}
 
 public:

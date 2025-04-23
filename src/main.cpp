@@ -117,7 +117,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << name << ext << " version 25.04.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 25.04.1 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)

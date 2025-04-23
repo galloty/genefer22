@@ -1383,7 +1383,7 @@ public:
 
 		bool fast_checkpoints =
 #if defined(GPU)
-			(n <= 18);
+			(n <= 17);
 #else
 			false;
 #endif

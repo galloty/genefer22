@@ -7,7 +7,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <stdexcept>
 
-#include "transformGPUs.h"
+#include "transformGPU.h"
 
 // inline uint64_t bt12(const double pp_2N)
 // {

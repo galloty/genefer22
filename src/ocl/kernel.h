@@ -9,7 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
-static const char * const src_ocl_kernels = \
+static const char * const src_ocl_kernel = \
 "/*\n" \
 "Copyright 2022, Yves Gallot\n" \
 "\n" \
@@ -33,6 +33,32 @@ static const char * const src_ocl_kernels = \
 "#define RNS_SZ		3\n" \
 "#define VSIZE		4\n" \
 "#define LVSIZE		2\n" \
+"// #define IS32		1\n" \
+"#define P1			2130706433u\n" \
+"#define Q1			2164260865u\n" \
+"#define RSQ1		402124772u\n" \
+"#define IM1			1930170389u\n" \
+"#define SQRTI1		1626730317u\n" \
+"#define ISQRTI1		856006302u\n" \
+"#define P2			2113929217u\n" \
+"#define Q2			2181038081u\n" \
+"#define RSQ2		2111798781u\n" \
+"#define IM2			1036950657u\n" \
+"#define SQRTI2		338852760u\n" \
+"#define ISQRTI2		1090446030u\n" \
+"#define P3			2013265921u\n" \
+"#define Q3			2281701377u\n" \
+"#define RSQ3		1172168163u\n" \
+"#define IM3			734725699u\n" \
+"#define SQRTI3		1032137103u\n" \
+"#define ISQRTI3		1964242958u\n" \
+"#define INVP2_P1	2130706177u\n" \
+"#define INVP3_P1	608773230u\n" \
+"#define INVP3_P2	1409286102u\n" \
+"#define P1P2P3L		13049742876517335041ul\n" \
+"#define P1P2P3H		491581440\n" \
+"#define P1P2P3_2L	6524871438258667520ul\n" \
+"#define P1P2P3_2H	245790720\n" \
 "#define NORM1		2130641409u\n" \
 "#define NORM2		2113864705u\n" \
 "#define NORM3		2013204481u\n" \
@@ -43,13 +69,13 @@ static const char * const src_ocl_kernels = \
 "#define BLK64		16\n" \
 "#define BLK128		8\n" \
 "#define BLK256		4\n" \
-"#define BLK512		4\n" \
-"#define BLK1024		2\n" \
+"#define BLK512		2\n" \
+"#define BLK1024		1\n" \
 "#define CHUNK64		4\n" \
 "#define CHUNK256	4\n" \
 "#define CHUNK1024	1\n" \
 "// #define SHORT_VER	1\n" \
-"#define NORM_WG_SZ	64\n" \
+"#define NORM_WG_SZ	32\n" \
 "#define MAX_WG_SZ	256\n" \
 "#endif\n" \
 "\n" \
@@ -63,39 +89,6 @@ static const char * const src_ocl_kernels = \
 "typedef int4	int32_4;\n" \
 "typedef long4	int64_4;\n" \
 "\n" \
-"// --- Z/(127*2^24 + 1)Z ---\n" \
-"\n" \
-"#define	P1		2130706433u\n" \
-"#define	Q1		2164260865u		// p * q = 1 (mod 2^32)\n" \
-"// #define	R1		33554430u		// 2^32 mod p\n" \
-"#define	RSQ1	402124772u		// (2^32)^2 mod p\n" \
-"// #define	H1		100663290u		// Montgomery form of the primitive root 3\n" \
-"#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF\n" \
-"#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}\n" \
-"#define	ISQRTI1	856006302u		// MF of i * sqrt(i)\n" \
-"\n" \
-"// --- Z/(63*2^25 + 1)Z ---\n" \
-"\n" \
-"#define	P2		2113929217u\n" \
-"#define	Q2		2181038081u\n" \
-"// #define	R2		67108862u\n" \
-"#define	RSQ2	2111798781u\n" \
-"// #define	H2		335544310u		// MF of the primitive root 5\n" \
-"#define	IM2		1036950657u\n" \
-"#define	SQRTI2	338852760u\n" \
-"#define	ISQRTI2	1090446030u\n" \
-"\n" \
-"// --- Z/(15*2^27 + 1)Z ---\n" \
-"\n" \
-"#define	P3		2013265921u\n" \
-"#define	Q3		2281701377u\n" \
-"// #define	R3		268435454u\n" \
-"#define	RSQ3	1172168163u\n" \
-"// #define	H3		268435390u		// MF of the primitive root 31\n" \
-"#define	IM3		734725699u\n" \
-"#define	SQRTI3	1032137103u\n" \
-"#define	ISQRTI3	1964242958u\n" \
-"\n" \
 "// --- modular arithmetic\n" \
 "\n" \
 "#define	PQ1		(uint32_2)(P1, Q1)\n" \
@@ -107,14 +100,22 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "INLINE uint32 addmod(const uint32 lhs, const uint32 rhs, const uint32 p)\n" \
 "{\n" \
+"#if defined(IS32)\n" \
+"	return lhs + rhs - ((lhs >= p - rhs) ? p : 0);\n" \
+"#else\n" \
 "	const uint32 t = lhs + rhs;\n" \
 "	return t - ((t >= p) ? p : 0);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "INLINE uint32 submod(const uint32 lhs, const uint32 rhs, const uint32 p)\n" \
 "{\n" \
+"#if defined(IS32)\n" \
+"	return lhs - rhs + ((lhs < rhs) ? p : 0);\n" \
+"#else\n" \
 "	const uint32 t = lhs - rhs;\n" \
 "	return t + (((int32)(t) < 0) ? p : 0);\n" \
+"#endif\n" \
 "}\n" \
 "\n" \
 "// 2 mul + 2 mul_hi\n" \
@@ -171,7 +172,7 @@ static const char * const src_ocl_kernels = \
 "typedef struct { uint64 s0; int32 s1; } int96;\n" \
 "\n" \
 "INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
-"INLINE uint96 uint96_set(const uint64 s0, const int32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
+"INLINE uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
 "\n" \
 "INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int32)(x.s1); return r; }\n" \
 "INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint32)(x.s1); return r; }\n" \
@@ -2181,24 +2182,20 @@ static const char * const src_ocl_kernels = \
 "\n" \
 "INLINE int64 garner2(const uint32 r1, const uint32 r2)\n" \
 "{\n" \
-"	const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)\n" \
 "	const uint64 P1P2 = P1 * (uint64)(P2);\n" \
-"	uint32 u12 = mulmod(submod(r1, r2, P1), mfInvP2_P1, PQ1);	// P2 < P1\n" \
+"	uint32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1\n" \
 "	const uint64 n = r2 + u12 * (uint64)(P2);\n" \
 "	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);\n" \
 "}\n" \
 "\n" \
 "INLINE int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)\n" \
 "{\n" \
-"	// Montgomery form of 1 / Pi (mod Pj)\n" \
-"	const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;\n" \
 "	const uint64 P2P3 = P2 * (uint64)(P3);\n" \
-"	const uint96 P1P2P3 = uint96_set(13049742876517335041ul, 491581440u);\n" \
-"	const uint96 P1P2P3_2 = uint96_set(6524871438258667520ul, 245790720u);\n" \
-"\n" \
-"	const uint32 u13 = mulmod(submod(r1, r3, P1), mfInvP3_P1, PQ1);\n" \
-"	const uint32 u23 = mulmod(submod(r2, r3, P2), mfInvP3_P2, PQ2);\n" \
-"	const uint32 u123 = mulmod(submod(u13, u23, P1), mfInvP2_P1, PQ1);\n" \
+"	const uint96 P1P2P3 = uint96_set(P1P2P3L, P1P2P3H);\n" \
+"	const uint96 P1P2P3_2 = uint96_set(P1P2P3_2L, P1P2P3_2H);\n" \
+"	const uint32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);\n" \
+"	const uint32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);\n" \
+"	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);\n" \
 "	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);\n" \
 "	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);\n" \
 "}\n" \

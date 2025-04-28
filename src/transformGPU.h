@@ -14,7 +14,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "ocl.h"
 #include "transform.h"
 
-#include "ocl/kernels.h"
+#include "ocl/kernel.h"
 
 // #define USE_WI	1
 // #define	TUNE	1
@@ -164,7 +164,7 @@ public:
 #define LVSIZE	0
 #endif
 
-// Warning: DECLARE_VAR_xx in kernels.cl must be modified if BLKxx = 1 or != 1.
+// Warning: DECLARE_VAR_xx in kernel.cl must be modified if BLKxx = 1 or != 1.
 
 #define BLK32		32		// local size =   4KB, workgroup size =  256 / VSIZE
 #define BLK64		16		// local size =   4KB, workgroup size =  256 / VSIZE
@@ -980,7 +980,7 @@ public:
 
 		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
-		if (isBoinc || !_pEngine->readOpenCL("ocl/kernels.cl", "src/ocl/kernels.h", "src_ocl_kernels", src)) src << src_ocl_kernels;
+		if (isBoinc || !_pEngine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory();

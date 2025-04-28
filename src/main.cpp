@@ -117,7 +117,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << name << ext << " version 25.04.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << name << ext << " version 25.04.9 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2022, Yves Gallot" << std::endl;
 		ss << name << " is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -153,7 +153,7 @@ private:
 		std::ostringstream ss;
 		ss << "Usage: " << name << ext << " [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                      exponent of the GFN (12 <= n <= 23)" << std::endl;
-		ss << "  -b <b>                      base of the GFN (2 <= b <= 2G)" << std::endl;
+		ss << "  -b <b>                      base of the GFN (1024 <= b <= 2000000000)" << std::endl;
 		ss << "  -q                          quick test" << std::endl;
 		ss << "  -p                          full test: a proof is generated" << std::endl;
 		ss << "  -s                          server job: convert the proof into a certificate and a 64-bit key" << std::endl;
@@ -244,6 +244,7 @@ public:
 #if !defined(CYCLO)
 				if (b % 2 != 0) throw std::runtime_error("b must be even");
 #endif
+				if (b < 1024) throw std::runtime_error("b < 1024 is not supported");
 				if (b > 2000000000) throw std::runtime_error("b > 2000000000 is not supported");
 				if ((b == 0) || ((b & (~b + 1)) == b)) throw std::runtime_error("b must not be a power of two");
 			}
@@ -383,12 +384,6 @@ public:
 		if ((mode == genefer::EMode::None) || (b == 0) || (n == 0))
 		{
 			/*// internal test
-			// static const size_t count = 20 - 12 + 1;
-			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
-			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 1154623840, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
-			// static constexpr uint32_t bp[count] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496, 5710946, 4038248, 2855472 };	// gfn NTT-2 limits
-			// static constexpr uint32_t bp[count] = { 484, 22, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
-			// static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
 
 			// if (g.check(1999992578, 10, genefer::EMode::Quick, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999997802, 11, genefer::EMode::Proof, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
@@ -396,23 +391,50 @@ public:
 			// if (g.check(1999997802, 11, genefer::EMode::Check, device, nthreads, "i32", 5) != genefer::EReturn::Success) return;
 			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, "i32", 6) != genefer::EReturn::Success) return;
 
-			// if (g.check(33422122, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(33160956, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x9e2d51da6c7c3f54
-			// if (g.check(23448336, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x81cff004ace85caa
+			// if (g.check(33141254, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(64602916, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(999995486, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999997802, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(33160956, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 9E2D51DA6C7C3F54
+			// if (g.check(64611980, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 6E2E19E3382BC8E8
+			// if (g.check(1000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 43C6CC5326E5C77F
+			// if (g.check(2000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 1A16EAEE2487902D
+
+			// if (g.check(23445612, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(45686464, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(999999618, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999999266, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(23448336, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 81CFF004ACE85CAA
+			// if (g.check(45687570, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 6C3EA0FBFFEE2C34
+			// if (g.check(1000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 4E43A5B93273C649
+			// if (g.check(2000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// E5F3EA34F6C68EBD
+
 			// if (g.check(16558530, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-
-			if (g.check(1000000000, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x43c6cc5326e5c77f
-			if (g.check(1000000000, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 0x4e43a5b93273c649
+			// if (g.check(32303796, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
 			// if (g.check(999955696, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999941378, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(16580478, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// A9976E31FA1E8211
+			// if (g.check(32305990, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 541D9DF2A13A01BE
+			// if (g.check(1000000000, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// AD5434699AA36C6F
+			// if (g.check(2000000000, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 39E2B6791634579D
+
+			// if (g.check(11709684, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(22833026, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
 			// if (g.check(999944006, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			// if (g.check(1999947588, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
+			if (g.check(11724168, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 063922D606F7ED14
+			if (g.check(22843784, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 45DAA25E59EAC127
+			if (g.check(1000000000, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 47A9DFAD0217519A
+			if (g.check(2000000000, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;	// 434063FE41B764E2
 
-			// if (g.check(101836, 11, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(100540, 12, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(111850, 13, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			// if (g.check(67234, 14, genefer::EMode::Quick, device, nthreads, impl, 5) != genefer::EReturn::Success) return;
-			return;*/
+			return;
 
+			// static const size_t count = 20 - 12 + 1;
+			// static constexpr uint32_t bp[count] = { 1534, 30406, 67234, 70906, 48594, 62722, 24518, 75898, 919444 };	// gfn
+			// static constexpr uint32_t bp[count] = { 1999999266, 1999941378, 1154623840, 326160660, 1010036096, 123910270, 16769618, 4896418, 1963736 };	// gfn
+			// static constexpr uint32_t bp[count] = { 45687570, 32305990, 22843784, 16152994, 11421892, 8076496, 5710946, 4038248, 2855472 };	// gfn NTT-2 limits
+			// static constexpr uint32_t bp[count] = { 484, 22, 5164, 7726, 13325, 96873, 192098, 712012, 123447 };	// cyclo
+			// static constexpr uint32_t bp[count] = { 2005838, 1805064, 1401068, 1276943, 1090383, 984522, 192098, 712012, 123447 };	// cyclo
 			// for (size_t i = 0; i < count; ++i)
 			// {
 				// g.check(bp[i] + 0, 12 + i, genefer::EMode::Quick, device, nthreads, impl, depth);

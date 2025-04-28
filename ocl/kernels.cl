@@ -21,6 +21,32 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define RNS_SZ		3
 #define VSIZE		4
 #define LVSIZE		2
+// #define IS32		1
+#define P1			2130706433u
+#define Q1			2164260865u
+#define RSQ1		402124772u
+#define IM1			1930170389u
+#define SQRTI1		1626730317u
+#define ISQRTI1		856006302u
+#define P2			2113929217u
+#define Q2			2181038081u
+#define RSQ2		2111798781u
+#define IM2			1036950657u
+#define SQRTI2		338852760u
+#define ISQRTI2		1090446030u
+#define P3			2013265921u
+#define Q3			2281701377u
+#define RSQ3		1172168163u
+#define IM3			734725699u
+#define SQRTI3		1032137103u
+#define ISQRTI3		1964242958u
+#define INVP2_P1	2130706177u
+#define INVP3_P1	608773230u
+#define INVP3_P2	1409286102u
+#define P1P2P3L		13049742876517335041ul
+#define P1P2P3H		491581440
+#define P1P2P3_2L	6524871438258667520ul
+#define P1P2P3_2H	245790720
 #define NORM1		2130641409u
 #define NORM2		2113864705u
 #define NORM3		2013204481u
@@ -31,13 +57,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define BLK64		16
 #define BLK128		8
 #define BLK256		4
-#define BLK512		4
-#define BLK1024		2
+#define BLK512		2
+#define BLK1024		1
 #define CHUNK64		4
 #define CHUNK256	4
 #define CHUNK1024	1
 // #define SHORT_VER	1
-#define NORM_WG_SZ	64
+#define NORM_WG_SZ	32
 #define MAX_WG_SZ	256
 #endif
 
@@ -51,39 +77,6 @@ typedef uint4	uint32_4;
 typedef int4	int32_4;
 typedef long4	int64_4;
 
-// --- Z/(127*2^24 + 1)Z ---
-
-#define	P1		2130706433u
-#define	Q1		2164260865u		// p * q = 1 (mod 2^32)
-// #define	R1		33554430u		// 2^32 mod p
-#define	RSQ1	402124772u		// (2^32)^2 mod p
-// #define	H1		100663290u		// Montgomery form of the primitive root 3
-#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
-#define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}
-#define	ISQRTI1	856006302u		// MF of i * sqrt(i)
-
-// --- Z/(63*2^25 + 1)Z ---
-
-#define	P2		2113929217u
-#define	Q2		2181038081u
-// #define	R2		67108862u
-#define	RSQ2	2111798781u
-// #define	H2		335544310u		// MF of the primitive root 5
-#define	IM2		1036950657u
-#define	SQRTI2	338852760u
-#define	ISQRTI2	1090446030u
-
-// --- Z/(15*2^27 + 1)Z ---
-
-#define	P3		2013265921u
-#define	Q3		2281701377u
-// #define	R3		268435454u
-#define	RSQ3	1172168163u
-// #define	H3		268435390u		// MF of the primitive root 31
-#define	IM3		734725699u
-#define	SQRTI3	1032137103u
-#define	ISQRTI3	1964242958u
-
 // --- modular arithmetic
 
 #define	PQ1		(uint32_2)(P1, Q1)
@@ -95,14 +88,22 @@ __constant uint32_4 g_f0[3] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_
 
 INLINE uint32 addmod(const uint32 lhs, const uint32 rhs, const uint32 p)
 {
+#if defined(IS32)
+	return lhs + rhs - ((lhs >= p - rhs) ? p : 0);
+#else
 	const uint32 t = lhs + rhs;
 	return t - ((t >= p) ? p : 0);
+#endif
 }
 
 INLINE uint32 submod(const uint32 lhs, const uint32 rhs, const uint32 p)
 {
+#if defined(IS32)
+	return lhs - rhs + ((lhs < rhs) ? p : 0);
+#else
 	const uint32 t = lhs - rhs;
 	return t + (((int32)(t) < 0) ? p : 0);
+#endif
 }
 
 // 2 mul + 2 mul_hi
@@ -159,7 +160,7 @@ typedef struct { uint64 s0; uint32 s1; } uint96;
 typedef struct { uint64 s0; int32 s1; } int96;
 
 INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }
-INLINE uint96 uint96_set(const uint64 s0, const int32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
+INLINE uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
 
 INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int32)(x.s1); return r; }
 INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint32)(x.s1); return r; }
@@ -2169,24 +2170,20 @@ INLINE int32 reduce96(int96 * f, const uint32 b, const uint32 b_inv, const int b
 
 INLINE int64 garner2(const uint32 r1, const uint32 r2)
 {
-	const uint32 mfInvP2_P1 = 2130706177u;	// Montgomery form of 1 / P2 (mod P1)
 	const uint64 P1P2 = P1 * (uint64)(P2);
-	uint32 u12 = mulmod(submod(r1, r2, P1), mfInvP2_P1, PQ1);	// P2 < P1
+	uint32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1
 	const uint64 n = r2 + u12 * (uint64)(P2);
 	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);
 }
 
 INLINE int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)
 {
-	// Montgomery form of 1 / Pi (mod Pj)
-	const uint32 mfInvP3_P1 = 608773230u, mfInvP2_P1 = 2130706177u, mfInvP3_P2 = 1409286102u;
 	const uint64 P2P3 = P2 * (uint64)(P3);
-	const uint96 P1P2P3 = uint96_set(13049742876517335041ul, 491581440u);
-	const uint96 P1P2P3_2 = uint96_set(6524871438258667520ul, 245790720u);
-
-	const uint32 u13 = mulmod(submod(r1, r3, P1), mfInvP3_P1, PQ1);
-	const uint32 u23 = mulmod(submod(r2, r3, P2), mfInvP3_P2, PQ2);
-	const uint32 u123 = mulmod(submod(u13, u23, P1), mfInvP2_P1, PQ1);
+	const uint96 P1P2P3 = uint96_set(P1P2P3L, P1P2P3H);
+	const uint96 P1P2P3_2 = uint96_set(P1P2P3_2L, P1P2P3_2H);
+	const uint32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);
+	const uint32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);
+	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);
 	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);
 	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
 }

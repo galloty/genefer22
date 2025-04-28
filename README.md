@@ -15,21 +15,20 @@ Yves Gallot implemented a new test based on right-angle convolution in [Proth.ex
 It implements an [Efficient Modular Exponentiation Proof Scheme](https://arxiv.org/abs/2209.15623) discovered by Darren Li.
 The test is validated with [Gerbicz - Li](https://www.mersenneforum.org/showthread.php?t=22510) error checking and a proof is generated with ([Pietrzak - Li](https://eprint.iacr.org/2018/627.pdf)) algorithm. Thanks to the Verifiable Delay Function, distributed projects run at twice the speed of double-checked calculations.  
 
-Any number of the form *b*<sup>2<sup>*n*</sup></sup> + 1 such that 2 &le; *b* < 2,000,000,000 and 12 &le; *n* &le; 23 can be tested on GPU.  
+Any number of the form *b*<sup>2<sup>*n*</sup></sup> + 1 such that 1024 &le; *b* < 2,000,000,000 and 12 &le; *n* &le; 23 can be tested on GPU.  
 On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M (*n* = 12, 13, 14, 15), *b* ~ 1500M (*n* = 16), 1000M (*n* = 17), 95M (*n* = 18), 70M (*n* = 19), 55M (*n* = 20), 45M (*n* = 21), 35M (*n* = 22), 25M (*n* = 23).  
 
 ## Build
 
-Release 22.12.2, 23.01.0 and 23.07.0 are currently PrimeGrid applications.  
-
-Binaries are generated using:  
+Binaries have been validated using:  
  - genefer: Ubuntu 22.04.4 amd64, gcc 11.4  
  - geneferg: Ubuntu 18.04.6 amd64, gcc 7.5  
- - genefer_x86, geneferg_x86: Lubuntu 18.04.6 i386, gcc 7.5  
- - genefer.exe, geneferg.exe, genefer_x86.exe, geneferg_x86.exe: Windows - MSYS2, gcc 13.2  
+ - genefer.exe, geneferg.exe: 64-bit Windows - MSYS2, gcc 14.2  
  - genefer_macIntel, geneferg_macIntel: MacOS 10.13, llvm/clang 15  
  - genefer_macARM, geneferg_macARM: MacOS, llvm/clang 15  
  - genefer_arm64: Ubuntu 22.04 arm64, gcc 11.2  
+
+The 32-bit versions of Windows and Linux are no longer supported.
 
 ## TODO
 

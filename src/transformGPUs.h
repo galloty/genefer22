@@ -21,8 +21,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define VSIZE	4
 
-// #define CHECK_ALL_FUNCTIONS		1
-// #define CHECK_RADIX4_FUNCTIONS	1
+// #define CHECK_ALL_FUNCTIONS		1	// TUNE must be set
+// #define CHECK_RADIX4_FUNCTIONS	1	// TUNE must be set
 // #define CHECK_FUNC_1		1	// GFN-11&12&13: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
 // #define CHECK_FUNC_2		1	// GFN-11&12&13: square64, square128, forward4, forward64_0, forward1024_0
 // #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024
@@ -36,29 +36,76 @@ typedef cl_long		int64;
 #define	P1S			(127 * (uint32(1) << 24) + 1)
 #define	Q1S			2164260865u		// p * q = 1 (mod 2^32)
 #define	R1S			33554430u		// 2^32 mod p
-// #define	RSQ1S		402124772u		// (2^32)^2 mod p
+#define	RSQ1S		402124772u		// (2^32)^2 mod p
 #define	H1S			100663290u		// Montgomery form of the primitive root 3
-// #define	IM1S		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
-// #define	SQRTI1S		1626730317u		// MF of 3^{(p - 1)/8}
-// #define	ISQRTI1S	856006302u		// MF of i * sqrt(i)
+#define	IM1S		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	SQRTI1S		1626730317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1S	856006302u		// MF of i * sqrt(i)
 
 #define	P2S			(63 * (uint32(1) << 25) + 1)
 #define	Q2S			2181038081u
 #define	R2S			67108862u
-// #define	RSQ2S		2111798781u
+#define	RSQ2S		2111798781u
 #define	H2S			335544310u		// MF of the primitive root 5
-// #define	IM2S		1036950657u
-// #define	SQRTI2S		338852760u
-// #define	ISQRTI2S	1090446030u
+#define	IM2S		1036950657u
+#define	SQRTI2S		338852760u
+#define	ISQRTI2S	1090446030u
 
 #define	P3S			(15 * (uint32(1) << 27) + 1)
 #define	Q3S			2281701377u
 #define	R3S			268435454u
-// #define	RSQ3S		1172168163u
+#define	RSQ3S		1172168163u
 #define	H3S			268435390u		// MF of the primitive root 31
-// #define	IM3S		734725699u
-// #define	SQRTI3S		1032137103u
-// #define	ISQRTI3S	1964242958u
+#define	IM3S		734725699u
+#define	SQRTI3S		1032137103u
+#define	ISQRTI3S	1964242958u
+
+#define	INVP2_P1S	2130706177u		// MF of 1 / P2 (mod P1)
+#define	INVP3_P1S	608773230u		// MF of 1 / P3 (mod P1)
+#define	INVP3_P2S	1409286102u		// MF of 1 / P3 (mod P2)
+
+#define	P1P2P3LS	13049742876517335041ull		// (P1 * P2 * P3) mod 2^64
+#define	P1P2P3HS	491581440u					// (P1 * P2 * P3) >> 64
+
+#define	P1P2P3_2LS	6524871438258667520ull		// (P1 * P2 * P3 / 2) mod 2^64
+#define	P1P2P3_2HS	245790720u					// (P1 * P2 * P3 / 2) >> 64
+
+#define P1U			(125 * (uint32(1) << 25) + 1)
+#define	Q1U			100663297u		// p * q = 1 (mod 2^32)
+#define	R1U			100663295u		// 2^32 mod p
+#define	RSQ1U		232465106u		// (2^32)^2 mod p
+#define	H1U			301989885u		// Montgomery form of the primitive root 3
+#define	IM1U		3645424034u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	SQRTI1U		3580437317u		// MF of 3^{(p - 1)/8}
+#define	ISQRTI1U	2017881188u		// MF of i * sqrt(i)
+
+#define P2U			(243 * (uint32(1) << 24) + 1)
+#define	Q2U			218103809u
+#define	R2U			218103807u
+#define	RSQ2U		3444438393u
+#define	H2U			1526726649u		// MF of the primitive root 7
+#define	IM2U		1773796560u
+#define	SQRTI2U		2024944857u
+#define	ISQRTI2U	2119710515u
+
+#define P3U			(235 * (uint32(1) << 24) + 1)
+#define	Q3U			352321537u
+#define	R3U			352321535u
+#define	RSQ3U		3810498414u
+#define	H3U			1056964605u		// MF of the primitive root 3
+#define	IM3U		2454519270u
+#define	SQRTI3U		3448990025u
+#define	ISQRTI3U	3659377330u
+
+#define	INVP2_P1U	1797558821u		// MF of 1 / P2 (mod P1)
+#define	INVP3_P1U	3075822917u		// MF of 1 / P3 (mod P1)
+#define	INVP3_P2U	4076863457u		// MF of 1 / P3 (mod P2)
+
+#define	P1P2P3LU	12816400126780112897ul		// (P1 * P2 * P3) mod 2^64
+#define	P1P2P3HU	3654720002u					// (P1 * P2 * P3) >> 64
+
+#define	P1P2P3_2LU	6408200063390056448ul		// (P1 * P2 * P3 / 2) mod 2^64
+#define	P1P2P3_2HU	1827360001u					// (P1 * P2 * P3 / 2) >> 64
 
 class ZP
 {
@@ -76,8 +123,8 @@ template<uint32 P, uint32 Q, uint32 R, uint32 H>
 class ZPT : public ZP
 {
 private:
-	static uint32 _add(const uint32 a, const uint32 b) { const uint32 t = a + b; return t - ((t >= P) ? P : 0); }
-	static uint32 _sub(const uint32 a, const uint32 b) { const uint32 t = a - b; return t + ((int32(t) < 0) ? P : 0); }
+	static uint32 _add(const uint32 a, const uint32 b) { return a + b - ((a >= P - b) ? P : 0); }
+	static uint32 _sub(const uint32 a, const uint32 b) { return a - b + ((a < b) ? P : 0); }
 
 	static uint32 _mul(const uint32 lhs, const uint32 rhs)
 	{
@@ -109,10 +156,6 @@ public:
 	static ZPT norm(const uint32 n) { return ZPT(P - (P - 1) / n); }
 };
 
-typedef ZPT<P1S, Q1S, R1S, H1S> ZP1;
-typedef ZPT<P2S, Q2S, R2S, H2S> ZP2;
-typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
-
 #if VSIZE == 4
 #define LVSIZE	2
 #elif VSIZE == 2
@@ -123,18 +166,18 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 
 // Warning: DECLARE_VAR_xx in kernels.cl must be modified if BLKxx = 1 or != 1.
 
-#define BLK32s		32		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK64s		16		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK128s		8		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK256s		4		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK512s		2		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK1024s	1		// local size =   4KB, workgroup size =  256 / VSIZE
-#define BLK2048s	1		// local size =   8KB, workgroup size =  512 / VSIZE
-#define BLK4096s	1		// local size =  16KB, workgroup size = 1024 / VSIZE
+#define BLK32		32		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK64		16		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK128		8		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK256		4		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK512		2		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK1024		1		// local size =   4KB, workgroup size =  256 / VSIZE
+#define BLK2048		1		// local size =   8KB, workgroup size =  512 / VSIZE
+#define BLK4096		1		// local size =  16KB, workgroup size = 1024 / VSIZE
 
-#define CHUNK64s	4		// local size =  VSIZE * 1KB, workgroup size = 64
-#define CHUNK256s	4		// local size =  VSIZE * 4KB, workgroup size = 256
-#define CHUNK1024s	1		// local size =  VSIZE * 4KB, workgroup size = 256
+#define CHUNK64		4		// local size =  VSIZE * 1KB, workgroup size = 64
+#define CHUNK256	4		// local size =  VSIZE * 4KB, workgroup size = 256
+#define CHUNK1024	1		// local size =  VSIZE * 4KB, workgroup size = 256
 
 #define CREATE_TRANSFORM_KERNEL(name) _##name = createTransformKernel(#name);
 #define CREATE_TRANSFORM_KERNELP(name) _##name = createTransformKernel(#name, false);
@@ -143,22 +186,26 @@ typedef ZPT<P3S, Q3S, R3S, H3S> ZP3;
 #define CREATE_SETCOPY_KERNEL(name) _##name = createSetCopyKernel(#name);
 #define CREATE_COPYP_KERNEL(name) _##name = createCopypKernel(#name);
 
-#define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm - LVSIZE, u / 4 * CHUNK##u##s, 4 * VSIZE); }
-#define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u##s, 4 * VSIZE); }
-#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u##s, 4 * VSIZE); }
+#define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
+#define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
+#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u, 4 * VSIZE); }
 
-#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, (u * BLK##u##s) / (4 * VSIZE), 4 * VSIZE); }
-#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, (u * BLK##u##s) / (4 * VSIZE), 4 * VSIZE); }
-#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, (u * BLK##u##s) / (4 * VSIZE), 4 * VSIZE); }
+#define DEFINE_SQUARE(u) void square##u() { ek(_square##u, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
+#define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
+#define DEFINE_MUL(u) void mul##u() { ek(_mul##u, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
 
 #define DEFINE_FORWARDP(u) \
 	void forward##u##p(const int lm) { setTransformArgs(_forward##u, false); forward##u(lm); setTransformArgs(_forward##u);	}
 #define DEFINE_FORWARDP0(u) \
 	void forward##u##p_0() { setTransformArgs(_forward##u##_0, false); forward##u##_0(); setTransformArgs(_forward##u##_0);	}
 
-template<size_t RNS_SIZE>
+template<size_t RNS_SIZE, bool is32>
 class engines : public device
 {
+	using ZP1 = ZPT<is32 ? P1U : P1S, is32 ? Q1U : Q1S, is32 ? R1U : R1S, is32 ? H1U : H1S>;
+	using ZP2 = ZPT<is32 ? P2U : P2S, is32 ? Q2U : Q2S, is32 ? R2U : R2S, is32 ? H2U : H2S>;
+	using ZP3 = ZPT<is32 ? P3U : P3S, is32 ? Q3U : Q3S, is32 ? R3U : R3S, is32 ? H3U : H3S>;
+	
 private:
 	const size_t _n;
 	const int _ln;
@@ -185,7 +232,7 @@ private:
 	splitter * _pSplit = nullptr;
 	size_t _splitIndex = 0;
 #endif
-	// bool _first = false;
+	// bool _first = true;
 
 	static constexpr int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 
@@ -347,7 +394,7 @@ public:
 		CREATE_COPYP_KERNEL(copyp);
 
 #if defined(TUNE)
-		_pSplit = new splitter(size_t(_ln), CHUNK256s, CHUNK1024s, sizeof(ZP), VSIZE, 12, getLocalMemSize(), getMaxWorkGroupSize());
+		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(ZP), VSIZE, 12, getLocalMemSize(), getMaxWorkGroupSize());
 #endif
 	}
 
@@ -503,12 +550,12 @@ private:
 		int lm = _ln;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
+		(void)sIndex;
 		lm -= 2; forward4_0();
 		while (lm > 3) { lm -= 2; forward4(lm); }
 		if (isSquare) { if (lm == 3) square8(); else square4(); } else { if (lm == 3) mul8(); else mul4(); }
 		while (lm < _ln) { backward4(lm); lm += 2; }
-		return;
-#endif
+#else
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
 
@@ -559,6 +606,7 @@ private:
 			else backward64(lm);	// k = 6
 			lm += int(k);
 		}
+#endif
 	}
 #endif	// TUNE
 
@@ -577,7 +625,10 @@ public:
 		_mul(splitIndex, true);
 #else
 		const int ln = _ln;
-		if (ln == 14) { forward64_0(); square256(); backward64(14 - 6); }
+		if (ln == 11) { forward64_0(); square32(); backward64(11 - 6); }
+		else if (ln == 12) { forward64_0(); square64(); backward64(12 - 6); }
+		else if (ln == 13) { forward64_0(); square128(); backward64(13 - 6); }
+		else if (ln == 14) { forward64_0(); square256(); backward64(14 - 6); }
 		else if (ln == 15) { forward64_0(); square512(); backward64(15 - 6); }
 		else if (ln == 16) { forward64_0(); square1024(); backward64(16 - 6); }
 		else if (ln == 17) { forward64_0(); square2048(); backward64(17 - 6); }
@@ -596,7 +647,10 @@ public:
 		_mul(_splitIndex, false);
 #else
 		const int ln = _ln;
-		if (ln == 14) { forward64_0(); mul256(); backward64(14 - 6); }
+		if (ln == 11) { forward64_0(); mul32(); backward64(11 - 6); }
+		else if (ln == 12) { forward64_0(); mul64(); backward64(12 - 6); }
+		else if (ln == 13) { forward64_0(); mul128(); backward64(13 - 6); }
+		else if (ln == 14) { forward64_0(); mul256(); backward64(14 - 6); }
 		else if (ln == 15) { forward64_0(); mul512(); backward64(15 - 6); }
 		else if (ln == 16) { forward64_0(); mul1024(); backward64(16 - 6); }
 		else if (ln == 17) { forward64_0(); mul2048(); backward64(17 - 6); }
@@ -647,9 +701,7 @@ public:
 		while (lm > 3) { lm -= 2; forward4p(lm); }
 		if (lm == 3) fwd8p(); else fwd4p();
 		return;
-#endif
-
-#if defined(TUNE)
+#elif defined(TUNE)
 		const splitter * const pSplit = _pSplit;
 		const size_t sIndex = _splitIndex;
 		const size_t s = pSplit->getPartSize(sIndex);
@@ -679,7 +731,10 @@ public:
 		else if (lm == 6) fwd64p();
 		else if (lm == 5) fwd32p();
 #else
-		if (lm == 14) { forward64p_0(); fwd256p(); }
+		if (lm == 11) { forward64p_0(); fwd32p(); }
+		else if (lm == 12) { forward64p_0(); fwd64p(); }
+		else if (lm == 13) { forward64p_0(); fwd128p(); }
+		else if (lm == 14) { forward64p_0(); fwd256p(); }
 		else if (lm == 15) { forward64p_0(); fwd512p(); }
 		else if (lm == 16) { forward64p_0(); fwd1024p(); }
 		else if (lm == 17) { forward64p_0(); fwd2048p(); }
@@ -749,9 +804,9 @@ public:
 		ZP * const Z = new ZP[RNS_SIZE * n];
 		for (size_t i = 0; i != n; ++i)
 		{
-			Z[0 * n + i] = ZP1().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.25)));
-			if (RNS_SIZE >= 2) Z[1 * n + i] = ZP2().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.33)));
-			if (RNS_SIZE >= 3) Z[2 * n + i] = ZP3().set_int(static_cast<int32>((P1S - 1) * cos(i + 0.47)));
+			Z[0 * n + i] = ZP1().set_int(static_cast<int32>(((is32 ? P1U : P1S) - 1) * cos(i + 0.25)));
+			if (RNS_SIZE >= 2) Z[1 * n + i] = ZP2().set_int(static_cast<int32>(((is32 ? P2U : P2S) - 1) * cos(i + 0.33)));
+			if (RNS_SIZE >= 3) Z[2 * n + i] = ZP3().set_int(static_cast<int32>(((is32 ? P3U : P3S) - 1) * cos(i + 0.47)));
 		}
 
 		setProfiling(true);
@@ -822,19 +877,23 @@ public:
 };
 
 
-template<size_t RNS_SIZE>
+template<size_t RNS_SIZE, bool is32>
 class transformGPUs : public transform
 {
+	using ZP1 = ZPT<is32 ? P1U : P1S, is32 ? Q1U : Q1S, is32 ? R1U : R1S, is32 ? H1U : H1S>;
+	using ZP2 = ZPT<is32 ? P2U : P2S, is32 ? Q2U : Q2S, is32 ? R2U : R2S, is32 ? H2U : H2S>;
+	using ZP3 = ZPT<is32 ? P3U : P3S, is32 ? Q3U : Q3S, is32 ? R3U : R3S, is32 ? H3U : H3S>;
+
 private:
 	const size_t _mem_size, _cache_size;
 	const size_t _num_regs;
 	ZP * const _z;
-	engines<RNS_SIZE> * _pEngine = nullptr;
+	engines<RNS_SIZE, is32> * _pEngine = nullptr;
 
 public:
 	transformGPUs(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
-		: transform(size_t(1) << n, n, b, (RNS_SIZE == 2) ? EKind::NTT2s : EKind::NTT3s),
+		: transform(size_t(1) << n, n, b, (RNS_SIZE == 2) ? EKind::NTT2 : EKind::NTT3),
 #if defined(USE_WI)
 		_mem_size(RNS_SIZE * (size_t(1) << n) * (num_regs + 2) * sizeof(ZP) + (size_t(1) << n) / 4 * sizeof(int64)),
 		_cache_size(RNS_SIZE * (size_t(1) << n) * 2 * sizeof(ZP)),
@@ -844,12 +903,14 @@ public:
 #endif
 		_num_regs(num_regs), _z(new ZP[RNS_SIZE * (size_t(1) << n) * num_regs])
 	{
+		// std::cout << "NTT" << RNS_SIZE << (is32 ? "u" : "i") << std::endl;
+
 		const size_t size = getSize();
 
 		const bool is_boinc_platform = isBoinc && (boinc_device_id != 0) && (boinc_platform_id != 0);
 		const platform eng_platform = is_boinc_platform ? platform(boinc_platform_id, boinc_device_id) : platform();
 
-		_pEngine = new engines<RNS_SIZE>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, num_regs, verbose);
+		_pEngine = new engines<RNS_SIZE, is32>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, num_regs, verbose);
 
 		std::ostringstream src;
 
@@ -858,6 +919,38 @@ public:
 		src << "#define RNS_SZ\t" << RNS_SIZE << std::endl;
 		src << "#define VSIZE\t" << VSIZE << std::endl;
 		src << "#define LVSIZE\t" << LVSIZE << std::endl;
+
+		if (is32) src << "#define IS32\t" << 1 << std::endl;
+
+		src << "#define P1\t" << (is32 ? P1U : P1S) << "u" << std::endl;
+		src << "#define Q1\t" << (is32 ? Q1U : Q1S) << "u" << std::endl;
+		src << "#define RSQ1\t" << (is32 ? RSQ1U : RSQ1S) << "u" << std::endl;
+		src << "#define IM1\t" << (is32 ? IM1U : IM1S) << "u" << std::endl;
+		src << "#define SQRTI1\t" << (is32 ? SQRTI1U : SQRTI1S) << "u" << std::endl;
+		src << "#define ISQRTI1\t" << (is32 ? ISQRTI1U : ISQRTI1S) << "u" << std::endl;
+
+		src << "#define P2\t" << (is32 ? P2U : P2S) << "u" << std::endl;
+		src << "#define Q2\t" << (is32 ? Q2U : Q2S) << "u" << std::endl;
+		src << "#define RSQ2\t" << (is32 ? RSQ2U : RSQ2S) << "u" << std::endl;
+		src << "#define IM2\t" << (is32 ? IM2U : IM2S) << "u" << std::endl;
+		src << "#define SQRTI2\t" << (is32 ? SQRTI2U : SQRTI2S) << "u" << std::endl;
+		src << "#define ISQRTI2\t" << (is32 ? ISQRTI2U : ISQRTI2S) << "u" << std::endl;
+
+		src << "#define P3\t" << (is32 ? P3U : P3S) << "u" << std::endl;
+		src << "#define Q3\t" << (is32 ? Q3U : Q3S) << "u" << std::endl;
+		src << "#define RSQ3\t" << (is32 ? RSQ3U : RSQ3S) << "u" << std::endl;
+		src << "#define IM3\t" << (is32 ? IM3U : IM3S) << "u" << std::endl;
+		src << "#define SQRTI3\t" << (is32 ? SQRTI3U : SQRTI3S) << "u" << std::endl;
+		src << "#define ISQRTI3\t" << (is32 ? ISQRTI3U : ISQRTI3S) << "u" << std::endl;
+
+		src << "#define INVP2_P1\t" << (is32 ? INVP2_P1U : INVP2_P1S) << "u" << std::endl;
+		src << "#define INVP3_P1\t" << (is32 ? INVP3_P1U : INVP3_P1S) << "u" << std::endl;
+		src << "#define INVP3_P2\t" << (is32 ? INVP3_P2U : INVP3_P2S) << "u" << std::endl;
+
+		src << "#define P1P2P3L\t" << (is32 ? P1P2P3LU : P1P2P3LS) << "ul" << std::endl;
+		src << "#define P1P2P3H\t" << (is32 ? P1P2P3HU : P1P2P3HS) << std::endl;
+		src << "#define P1P2P3_2L\t" << (is32 ? P1P2P3_2LU : P1P2P3_2LS) << "ul" << std::endl;
+		src << "#define P1P2P3_2H\t" << (is32 ? P1P2P3_2HU : P1P2P3_2HS) << std::endl;
 
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;
@@ -868,16 +961,16 @@ public:
 #if defined(USE_WI)
 		src << "#define USE_WI\t" << 1 << std::endl;
 #endif
-		src << "#define BLK32\t" << BLK32s << std::endl;
-		src << "#define BLK64\t" << BLK64s << std::endl;
-		src << "#define BLK128\t" << BLK128s << std::endl;
-		src << "#define BLK256\t" << BLK256s << std::endl;
-		src << "#define BLK512\t" << BLK512s << std::endl;
-		src << "#define BLK1024\t" << BLK1024s << std::endl;
+		src << "#define BLK32\t" << BLK32 << std::endl;
+		src << "#define BLK64\t" << BLK64 << std::endl;
+		src << "#define BLK128\t" << BLK128 << std::endl;
+		src << "#define BLK256\t" << BLK256 << std::endl;
+		src << "#define BLK512\t" << BLK512 << std::endl;
+		src << "#define BLK1024\t" << BLK1024 << std::endl;
 
-		src << "#define CHUNK64\t" << CHUNK64s << std::endl;
-		src << "#define CHUNK256\t" << CHUNK256s << std::endl;
-		src << "#define CHUNK1024\t" << CHUNK1024s << std::endl;
+		src << "#define CHUNK64\t" << CHUNK64 << std::endl;
+		src << "#define CHUNK256\t" << CHUNK256 << std::endl;
+		src << "#define CHUNK1024\t" << CHUNK1024 << std::endl;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
 		src << "#define SHORT_VER\t" << 1 << std::endl;

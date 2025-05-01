@@ -44,9 +44,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define INVP3_P1	608773230u
 #define INVP3_P2	1409286102u
 #define P1P2P3L		13049742876517335041ul
-#define P1P2P3H		491581440
+#define P1P2P3H		491581440u
 #define P1P2P3_2L	6524871438258667520ul
-#define P1P2P3_2H	245790720
+#define P1P2P3_2H	245790720u
 #define NORM1		2130641409u
 #define NORM2		2113864705u
 #define NORM3		2013204481u
@@ -2173,19 +2173,18 @@ INLINE int64 garner2(const uint32 r1, const uint32 r2)
 	const uint64 P1P2 = P1 * (uint64)(P2);
 	uint32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1
 	const uint64 n = r2 + u12 * (uint64)(P2);
-	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);
+	const bool b = (n > P1P2 / 2);
+	return (int64)(n - (b ? P1P2 : 0));
 }
 
 INLINE int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)
 {
-	const uint64 P2P3 = P2 * (uint64)(P3);
-	const uint96 P1P2P3 = uint96_set(P1P2P3L, P1P2P3H);
-	const uint96 P1P2P3_2 = uint96_set(P1P2P3_2L, P1P2P3_2H);
 	const uint32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);
 	const uint32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);
 	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);
-	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);
-	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
+	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint64)(P3), u123), u23 * (uint64)(P3) + r3);
+	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));
+	return uint96_subi(n, uint96_set(b ? P1P2P3L : 0ul, b ? P1P2P3H : 0u));
 }
 
 INLINE void write_rns(__global uint32_4 * restrict const zi, const int32_4 r)
@@ -2217,21 +2216,17 @@ INLINE void write_rns(__global uint32_4 * restrict const zi, const int32_4 r)
 #endif
 }
 
-__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))
-void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict const c,
-	const uint32 b, const uint32 b_inv, const int b_s, const int32 dup)
+INLINE int32_4 normalize_1(__global uint32_4 * restrict const zi, __global int64 * restrict const c,
+	__local int64 * const cl, const sz_t gid, const sz_t lid,
+	const uint32 b, const uint32 b_inv, const int b_s, const bool dup)
 {
-	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;
-	__global uint32_4 * restrict const zi = &z[gid];
-	__local int64 cl[NORM_WG_SZ];
-
 	const uint32_4 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);
 	int32_4 r;
 
 #if RNS_SZ == 2
 
 	int64_4 l = (int64_4)(garner2(u1.s0, u2.s0), garner2(u1.s1, u2.s1), garner2(u1.s2, u2.s2), garner2(u1.s3, u2.s3));
-	if (dup != 0) l += l;
+	if (dup) l += l;
 
 	int64 f = l.s0; r.s0 = reduce64(&f, b, b_inv, b_s);
 	f += l.s1; r.s1 = reduce64(&f, b, b_inv, b_s);
@@ -2245,7 +2240,7 @@ void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict 
 	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);
 	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);
 
-	if (dup != 0) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1); l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }
+	if (dup) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1); l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }
 
 	int96 f96 = l0; r.s0 = reduce96(&f96, b, b_inv, b_s);
 	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);
@@ -2263,15 +2258,50 @@ void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict 
 		c[i] = (i == 0) ? -f : f;
 	}
 
+	return r;
+}
+
+INLINE void normalize_2(__global uint32_4 * restrict const zi, __local int64 * const cl, const sz_t lid,
+	const int32_4 r, const uint32 b, const uint32 b_inv, const int b_s)
+{
+	int64 f = (lid == 0) ? 0 : cl[lid - 1];
+	int32_4 ro;
+	f += r.s0; ro.s0 = reduce64(&f, b, b_inv, b_s);
+	f += r.s1; ro.s1 = reduce64(&f, b, b_inv, b_s);
+	f += r.s2; ro.s2 = reduce64(&f, b, b_inv, b_s);
+	f += r.s3; ro.s3 = (sz_t)(f);
+
+	write_rns(zi, ro);
+}
+
+__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))
+void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict const c,
+	const uint32 b, const uint32 b_inv, const int b_s)
+{
+	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;
+	__global uint32_4 * restrict const zi = &z[gid];
+	__local int64 cl[NORM_WG_SZ];
+
+	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, false);
+
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	f = (lid == 0) ? 0 : cl[lid - 1];
-	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);
-	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);
-	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);
-	f += r.s3; r.s3 = (sz_t)(f);
+	normalize_2(zi, cl, lid, r, b, b_inv, b_s);
+}
 
-	write_rns(zi, r);
+__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))
+void normalize1dup(__global uint32_4 * restrict const z, __global int64 * restrict const c,
+	const uint32 b, const uint32 b_inv, const int b_s)
+{
+	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;
+	__global uint32_4 * restrict const zi = &z[gid];
+	__local int64 cl[NORM_WG_SZ];
+
+	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, true);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	normalize_2(zi, cl, lid, r, b, b_inv, b_s);
 }
 
 __kernel
@@ -2326,13 +2356,7 @@ void mulscalar(__global uint32_4 * restrict const z, __global int64 * restrict c
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	f = (lid == 0) ? 0 : cl[lid - 1];
-	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);
-	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);
-	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);
-	f += r.s3; r.s3 = (sz_t)(f);
-
-	write_rns(zi, r);
+	normalize_2(zi, cl, lid, r, b, b_inv, b_s);
 }
 
 __kernel

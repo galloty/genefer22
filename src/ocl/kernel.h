@@ -56,9 +56,9 @@ static const char * const src_ocl_kernel = \
 "#define INVP3_P1	608773230u\n" \
 "#define INVP3_P2	1409286102u\n" \
 "#define P1P2P3L		13049742876517335041ul\n" \
-"#define P1P2P3H		491581440\n" \
+"#define P1P2P3H		491581440u\n" \
 "#define P1P2P3_2L	6524871438258667520ul\n" \
-"#define P1P2P3_2H	245790720\n" \
+"#define P1P2P3_2H	245790720u\n" \
 "#define NORM1		2130641409u\n" \
 "#define NORM2		2113864705u\n" \
 "#define NORM3		2013204481u\n" \
@@ -2185,19 +2185,18 @@ static const char * const src_ocl_kernel = \
 "	const uint64 P1P2 = P1 * (uint64)(P2);\n" \
 "	uint32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1\n" \
 "	const uint64 n = r2 + u12 * (uint64)(P2);\n" \
-"	return (n > P1P2 / 2) ? (int64)(n - P1P2) : (int64)(n);\n" \
+"	const bool b = (n > P1P2 / 2);\n" \
+"	return (int64)(n - (b ? P1P2 : 0));\n" \
 "}\n" \
 "\n" \
 "INLINE int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)\n" \
 "{\n" \
-"	const uint64 P2P3 = P2 * (uint64)(P3);\n" \
-"	const uint96 P1P2P3 = uint96_set(P1P2P3L, P1P2P3H);\n" \
-"	const uint96 P1P2P3_2 = uint96_set(P1P2P3_2L, P1P2P3_2H);\n" \
 "	const uint32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);\n" \
 "	const uint32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);\n" \
 "	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);\n" \
-"	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)(P3) + r3);\n" \
-"	return uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);\n" \
+"	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint64)(P3), u123), u23 * (uint64)(P3) + r3);\n" \
+"	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));\n" \
+"	return uint96_subi(n, uint96_set(b ? P1P2P3L : 0ul, b ? P1P2P3H : 0u));\n" \
 "}\n" \
 "\n" \
 "INLINE void write_rns(__global uint32_4 * restrict const zi, const int32_4 r)\n" \
@@ -2229,21 +2228,17 @@ static const char * const src_ocl_kernel = \
 "#endif\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
-"void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict const c,\n" \
-"	const uint32 b, const uint32 b_inv, const int b_s, const int32 dup)\n" \
+"INLINE int32_4 normalize_1(__global uint32_4 * restrict const zi, __global int64 * restrict const c,\n" \
+"	__local int64 * const cl, const sz_t gid, const sz_t lid,\n" \
+"	const uint32 b, const uint32 b_inv, const int b_s, const bool dup)\n" \
 "{\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
-"	__global uint32_4 * restrict const zi = &z[gid];\n" \
-"	__local int64 cl[NORM_WG_SZ];\n" \
-"\n" \
 "	const uint32_4 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);\n" \
 "	int32_4 r;\n" \
 "\n" \
 "#if RNS_SZ == 2\n" \
 "\n" \
 "	int64_4 l = (int64_4)(garner2(u1.s0, u2.s0), garner2(u1.s1, u2.s1), garner2(u1.s2, u2.s2), garner2(u1.s3, u2.s3));\n" \
-"	if (dup != 0) l += l;\n" \
+"	if (dup) l += l;\n" \
 "\n" \
 "	int64 f = l.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
 "	f += l.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
@@ -2257,7 +2252,7 @@ static const char * const src_ocl_kernel = \
 "	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);\n" \
 "	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);\n" \
 "\n" \
-"	if (dup != 0) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1); l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }\n" \
+"	if (dup) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1); l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }\n" \
 "\n" \
 "	int96 f96 = l0; r.s0 = reduce96(&f96, b, b_inv, b_s);\n" \
 "	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);\n" \
@@ -2275,15 +2270,50 @@ static const char * const src_ocl_kernel = \
 "		c[i] = (i == 0) ? -f : f;\n" \
 "	}\n" \
 "\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE void normalize_2(__global uint32_4 * restrict const zi, __local int64 * const cl, const sz_t lid,\n" \
+"	const int32_4 r, const uint32 b, const uint32 b_inv, const int b_s)\n" \
+"{\n" \
+"	int64 f = (lid == 0) ? 0 : cl[lid - 1];\n" \
+"	int32_4 ro;\n" \
+"	f += r.s0; ro.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s1; ro.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s2; ro.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += r.s3; ro.s3 = (sz_t)(f);\n" \
+"\n" \
+"	write_rns(zi, ro);\n" \
+"}\n" \
+"\n" \
+"__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
+"void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict const c,\n" \
+"	const uint32 b, const uint32 b_inv, const int b_s)\n" \
+"{\n" \
+"	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
+"	__global uint32_4 * restrict const zi = &z[gid];\n" \
+"	__local int64 cl[NORM_WG_SZ];\n" \
+"\n" \
+"	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, false);\n" \
+"\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
-"	f = (lid == 0) ? 0 : cl[lid - 1];\n" \
-"	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s3; r.s3 = (sz_t)(f);\n" \
+"	normalize_2(zi, cl, lid, r, b, b_inv, b_s);\n" \
+"}\n" \
 "\n" \
-"	write_rns(zi, r);\n" \
+"__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
+"void normalize1dup(__global uint32_4 * restrict const z, __global int64 * restrict const c,\n" \
+"	const uint32 b, const uint32 b_inv, const int b_s)\n" \
+"{\n" \
+"	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
+"	__global uint32_4 * restrict const zi = &z[gid];\n" \
+"	__local int64 cl[NORM_WG_SZ];\n" \
+"\n" \
+"	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, true);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	normalize_2(zi, cl, lid, r, b, b_inv, b_s);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -2338,13 +2368,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
-"	f = (lid == 0) ? 0 : cl[lid - 1];\n" \
-"	f += r.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s2; r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
-"	f += r.s3; r.s3 = (sz_t)(f);\n" \
-"\n" \
-"	write_rns(zi, r);\n" \
+"	normalize_2(zi, cl, lid, r, b, b_inv, b_s);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \

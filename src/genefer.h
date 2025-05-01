@@ -186,26 +186,7 @@ private:
 		const double percent = static_cast<double>(_print_range - i) / _print_range;
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const int dcount = std::max(static_cast<int>(1.0 / mulTime), 2);
-		if (_isBoinc)
-		{
-			boinc_fraction_done(percent);
-#if defined(BOINC)
-			if ((_n >= 19) && (prev_percent < 0.01) && (percent >= 0.01))
-			{
-				const double progress = boinc_get_fraction_done();
-				double cputime; boinc_wu_cpu_time(cputime);
-				APP_INIT_DATA init_data; boinc_get_init_data(init_data);
-				const double runtime = init_data.starting_elapsed_time + boinc_elapsed_time();
-				std::ostringstream ss; ss << "<trickle_up>" << std::endl << " <progress>" << progress << "</progress>" << std::endl
-				   << " <cputime>" << cputime << "</cputime>" << std::endl << " <runtime>" << runtime << "</runtime>" << std::endl << "</trickle_up>" << std::endl;
-				const std::string var = "genefer_progress", message = ss.str();
-				// boinc_send_trickle_up interface is char * and not const char *: strings must be duplicated to char * buffers :-(
-				char variety[64]; const std::size_t variety_length = var.copy(variety, var.length()); variety[variety_length] = '\0';
-				char text[256]; const std::size_t text_length = message.copy(text, message.length()); text[text_length] = '\0';
-				boinc_send_trickle_up(variety, text);
-			}
-#endif
-		}
+		if (_isBoinc) boinc_fraction_done(percent);
 		else
 		{
 			const double remainingTime = mulTime * i, expectedTime = elapsedTime / percent;

@@ -1,3 +1,17 @@
+genefer 25.04.0 => genefer 25.05.0
+
+Improvements
+ - new unified GPU transform: two or three 31-bit or 32-bit primes
+
+------------------------------------
+
+genefer 24.04.0 => genefer 25.04.0
+
+Improvements
+ - faster GPU transform: vectors of four 32-bit integers for I/O
+
+------------------------------------
+
 genefer 23.07.0 => genefer 24.04.0
 
 Improvements

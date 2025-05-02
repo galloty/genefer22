@@ -226,7 +226,7 @@ private:
 	cl_kernel _fwd512p = nullptr, _fwd1024p = nullptr, _fwd2048p = nullptr, _fwd4096p = nullptr;
 	cl_kernel _mul32 = nullptr, _mul64 = nullptr, _mul128 = nullptr, _mul256 = nullptr;
 	cl_kernel _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr, _mul4096 = nullptr;
-	cl_kernel _normalize1 = nullptr, _normalize1dup = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
+	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
 #if defined(TUNE)
 	splitter * _pSplit = nullptr;
@@ -386,7 +386,6 @@ public:
 		const int32 b_s = static_cast<int32>(31 - __builtin_clz(b) - 1);
 		const uint32 b_inv = static_cast<uint32>((static_cast<uint64_t>(1) << (b_s + 32)) / b);
 		CREATE_NORMALIZE_KERNEL(normalize1, b_ui, b_inv, b_s);
-		CREATE_NORMALIZE_KERNEL(normalize1dup, b_ui, b_inv, b_s);
 		CREATE_NORMALIZE_KERNEL(normalize2, b_ui, b_inv, b_s);
 		CREATE_NORMALIZE_KERNEL(mulscalar, b_ui, b_inv, b_s);
 
@@ -424,7 +423,7 @@ public:
 		_releaseKernel(_mul32); _releaseKernel(_mul64); _releaseKernel(_mul128); _releaseKernel(_mul256);
 		_releaseKernel(_mul512); _releaseKernel(_mul1024); _releaseKernel(_mul2048); _releaseKernel(_mul4096);
 
-		_releaseKernel(_normalize1); _releaseKernel(_normalize1dup); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
+		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 
 		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
 	}
@@ -767,8 +766,11 @@ public:
 public:
 	void baseMod(const bool dup)
 	{
+		const int32 idup = dup ? 1 : 0;
 		const size_t size = _n / 4;
-		_executeKernel(dup ? _normalize1dup : _normalize1, size, 1u << _lnormWGsize);
+
+		_setKernelArg(_normalize1, 5, sizeof(int32), &idup);
+		_executeKernel(_normalize1, size, 1u << _lnormWGsize);
 		_executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 

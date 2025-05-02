@@ -171,6 +171,7 @@ static const char * const src_ocl_kernel = \
 "typedef struct { uint64 s0; uint32 s1; } uint96;\n" \
 "typedef struct { uint64 s0; int32 s1; } int96;\n" \
 "\n" \
+"INLINE int96 int96_zero() { int96 r; r.s0 = 0; r.s1 = 0; return r; }\n" \
 "INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
 "INLINE uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
 "\n" \
@@ -181,16 +182,17 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "INLINE bool uint96_is_greater(const uint96 x, const uint96 y) { return (x.s1 > y.s1) || ((x.s1 == y.s1) && (x.s0 > y.s0)); }\n" \
 "\n" \
-"INLINE int96 int96_neg(const int96 x)\n" \
+"INLINE uint96 uint96_add_64(const uint96 x, const uint64 y)\n" \
 "{\n" \
-"	int96 r; r.s0 = -x.s0; r.s1 = -x.s1 - ((x.s0 != 0) ? 1 : 0);\n" \
+"	uint96 r;\n" \
+"#if defined(PTX_ASM)\n" \
+"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
+"	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
+"#else\n" \
+"	const uint64 s0 = x.s0 + y;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + ((s0 < y) ? 1 : 0);\n" \
+"#endif\n" \
 "	return r;\n" \
-"}\n" \
-"\n" \
-"INLINE uint96 int96_abs(const int96 x)\n" \
-"{\n" \
-"	const int96 t = (int96_is_neg(x)) ? int96_neg(x) : x;\n" \
-"	return int96_u(t);\n" \
 "}\n" \
 "\n" \
 "INLINE int96 int96_add(const int96 x, const int96 y)\n" \
@@ -206,29 +208,24 @@ static const char * const src_ocl_kernel = \
 "	return r;\n" \
 "}\n" \
 "\n" \
-"INLINE uint96 uint96_add_64(const uint96 x, const uint64 y)\n" \
+"INLINE uint96 uint96_sub(const uint96 x, const uint96 y)\n" \
 "{\n" \
 "	uint96 r;\n" \
 "#if defined(PTX_ASM)\n" \
-"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
-"	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
-"#else\n" \
-"	const uint64 s0 = x.s0 + y;\n" \
-"	r.s0 = s0; r.s1 = x.s1 + ((s0 < y) ? 1 : 0);\n" \
-"#endif\n" \
-"	return r;\n" \
-"}\n" \
-"\n" \
-"INLINE int96 uint96_subi(const uint96 x, const uint96 y)\n" \
-"{\n" \
-"	int96 r;\n" \
-"#if defined(PTX_ASM)\n" \
 "	asm volatile (\"sub.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
-"	asm volatile (\"subc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"	asm volatile (\"subc.u32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
 "#else\n" \
 "	r.s0 = x.s0 - y.s0; r.s1 = (int32)(x.s1 - y.s1 - ((x.s0 < y.s0) ? 1 : 0));\n" \
 "#endif\n" \
 "	return r;\n" \
+"}\n" \
+"\n" \
+"INLINE uint96 int96_abs(const int96 x)\n" \
+"{\n" \
+"	const bool is_neg = int96_is_neg(x);\n" \
+"	const uint96 mask = uint96_set(is_neg ? ~0ul : 0ul, is_neg ? ~0u : 0u);\n" \
+"	uint96 t = uint96_set(x.s0 ^ mask.s0, (uint32)(x.s1) ^ mask.s1);\n" \
+"	return uint96_sub(t, mask);\n" \
 "}\n" \
 "\n" \
 "INLINE uint96 uint96_mul_64_32(const uint64 x, const uint32 y)\n" \
@@ -2196,7 +2193,7 @@ static const char * const src_ocl_kernel = \
 "	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);\n" \
 "	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint64)(P3), u123), u23 * (uint64)(P3) + r3);\n" \
 "	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));\n" \
-"	return uint96_subi(n, uint96_set(b ? P1P2P3L : 0ul, b ? P1P2P3H : 0u));\n" \
+"	return uint96_i(uint96_sub(n, uint96_set(b ? P1P2P3L : 0ul, b ? P1P2P3H : 0u)));\n" \
 "}\n" \
 "\n" \
 "INLINE void write_rns(__global uint32_4 * restrict const zi, const int32_4 r)\n" \
@@ -2238,7 +2235,7 @@ static const char * const src_ocl_kernel = \
 "#if RNS_SZ == 2\n" \
 "\n" \
 "	int64_4 l = (int64_4)(garner2(u1.s0, u2.s0), garner2(u1.s1, u2.s1), garner2(u1.s2, u2.s2), garner2(u1.s3, u2.s3));\n" \
-"	if (dup) l += l;\n" \
+"	l += dup ? l : (int64_4)(0, 0, 0, 0);\n" \
 "\n" \
 "	int64 f = l.s0; r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
 "	f += l.s1; r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
@@ -2252,7 +2249,10 @@ static const char * const src_ocl_kernel = \
 "	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);\n" \
 "	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);\n" \
 "\n" \
-"	if (dup) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1); l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }\n" \
+"	l0 = int96_add(l0, dup ? l0 : int96_zero());\n" \
+"	l1 = int96_add(l1, dup ? l1 : int96_zero());\n" \
+"	l2 = int96_add(l2, dup ? l2 : int96_zero());\n" \
+"	l3 = int96_add(l3, dup ? l3 : int96_zero());\n" \
 "\n" \
 "	int96 f96 = l0; r.s0 = reduce96(&f96, b, b_inv, b_s);\n" \
 "	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);\n" \
@@ -2288,28 +2288,13 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
 "void normalize1(__global uint32_4 * restrict const z, __global int64 * restrict const c,\n" \
-"	const uint32 b, const uint32 b_inv, const int b_s)\n" \
+"	const uint32 b, const uint32 b_inv, const int b_s, const int32 dup)\n" \
 "{\n" \
 "	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
 "	__global uint32_4 * restrict const zi = &z[gid];\n" \
 "	__local int64 cl[NORM_WG_SZ];\n" \
 "\n" \
-"	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, false);\n" \
-"\n" \
-"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"\n" \
-"	normalize_2(zi, cl, lid, r, b, b_inv, b_s);\n" \
-"}\n" \
-"\n" \
-"__kernel __attribute__((reqd_work_group_size(NORM_WG_SZ, 1, 1)))\n" \
-"void normalize1dup(__global uint32_4 * restrict const z, __global int64 * restrict const c,\n" \
-"	const uint32 b, const uint32 b_inv, const int b_s)\n" \
-"{\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), lid = gid % NORM_WG_SZ;\n" \
-"	__global uint32_4 * restrict const zi = &z[gid];\n" \
-"	__local int64 cl[NORM_WG_SZ];\n" \
-"\n" \
-"	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, true);\n" \
+"	const int32_4 r = normalize_1(zi, c, cl, gid, lid, b, b_inv, b_s, dup != 0);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \

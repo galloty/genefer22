@@ -13,7 +13,7 @@ OCL_LIB = -framework OpenCL
 
 GMP_INC = -I/usr/local/opt/gmp/include
 GMP_LIB = -L/usr/local/opt/gmp/lib -lgmp
-OMP_INC = -I-L/usr/local/opt/libomp/include
+OMP_INC = -I/usr/local/opt/libomp/include
 OMP_LIB = -L/usr/local/opt/libomp/lib -lomp
 
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.24/7.24.3.zip

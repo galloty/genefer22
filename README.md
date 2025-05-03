@@ -32,4 +32,4 @@ The 32-bit versions of Windows and Linux are no longer supported.
 
 ## TODO
 
- - add FP64 transform on GPU (if FP64 >= 1/4 x INT32 Units).  
+ - add FP64 transform on GPU (if FP64:INT32 >= 1:4).  

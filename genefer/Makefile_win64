@@ -10,7 +10,7 @@ SRC_DIR = $(ROOT_DIR)/src
 OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = C:/Windows/System32/OpenCL.dll
 
-# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/7.24/7.24.3.zip
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.0.zip
 # lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
 BOINC_DIR = $(ROOT_DIR)/../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/win_build

@@ -117,8 +117,8 @@ INLINE uint32 mulmod(const uint32 lhs, const uint32 rhs, const uint32_2 pq)
 
 INLINE uint32 sqrmod(const uint32 lhs, const uint32_2 pq) { return mulmod(lhs, lhs, pq); }
 
-INLINE int32 get_int(const uint32 n, const uint32 p) { return (n >= p / 2) ? (int32)(n - p) : (int32)(n); }	// ? 2n >= p ?
-INLINE uint32 set_int(const int32 i, const uint32 p) { return (i < 0) ? ((uint32)(i) + p) : (uint32)(i); }
+INLINE int32 get_int(const uint32 n, const uint32 p) { return (int32)(n - ((n >= p / 2) ? p : 0)); }
+INLINE uint32 set_int(const int32 i, const uint32 p) { return (uint32)(i + ((i < 0) ? p : 0)); }
 
 // --- v2
 
@@ -159,7 +159,6 @@ INLINE uint32_4 mulmod4(const uint32_4 lhs, const uint32_4 rhs, const uint32_2 p
 typedef struct { uint64 s0; uint32 s1; } uint96;
 typedef struct { uint64 s0; int32 s1; } int96;
 
-INLINE int96 int96_zero() { int96 r; r.s0 = 0; r.s1 = 0; return r; }
 INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }
 INLINE uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
 
@@ -212,7 +211,7 @@ INLINE uint96 int96_abs(const int96 x)
 {
 	const bool is_neg = int96_is_neg(x);
 	const uint96 mask = uint96_set(is_neg ? ~0ul : 0ul, is_neg ? ~0u : 0u);
-	uint96 t = uint96_set(x.s0 ^ mask.s0, (uint32)(x.s1) ^ mask.s1);
+	const uint96 t = uint96_set(x.s0 ^ mask.s0, (uint32)(x.s1) ^ mask.s1);
 	return uint96_sub(t, mask);
 }
 
@@ -2181,7 +2180,7 @@ INLINE int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)
 	const uint32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);
 	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint64)(P3), u123), u23 * (uint64)(P3) + r3);
 	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));
-	return uint96_i(uint96_sub(n, uint96_set(b ? P1P2P3L : 0ul, b ? P1P2P3H : 0u)));
+	return uint96_i(b ? uint96_sub(n, uint96_set(P1P2P3L, P1P2P3H)) : n);
 }
 
 INLINE void write_rns(__global uint32_4 * restrict const zi, const int32_4 r)
@@ -2223,7 +2222,7 @@ INLINE int32_4 normalize_1(__global uint32_4 * restrict const zi, __global int64
 #if RNS_SZ == 2
 
 	int64_4 l = (int64_4)(garner2(u1.s0, u2.s0), garner2(u1.s1, u2.s1), garner2(u1.s2, u2.s2), garner2(u1.s3, u2.s3));
-	l += dup ? l : (int64_4)(0, 0, 0, 0);
+	if (dup) l += l;
 
 	int64 f = l.s0; r.s0 = reduce64(&f, b, b_inv, b_s);
 	f += l.s1; r.s1 = reduce64(&f, b, b_inv, b_s);
@@ -2237,10 +2236,7 @@ INLINE int32_4 normalize_1(__global uint32_4 * restrict const zi, __global int64
 	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);
 	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);
 
-	l0 = int96_add(l0, dup ? l0 : int96_zero());
-	l1 = int96_add(l1, dup ? l1 : int96_zero());
-	l2 = int96_add(l2, dup ? l2 : int96_zero());
-	l3 = int96_add(l3, dup ? l3 : int96_zero());
+	if (dup) { l0 = int96_add(l0, l0); l1 = int96_add(l1, l1);  l2 = int96_add(l2, l2); l3 = int96_add(l3, l3); }
 
 	int96 f96 = l0; r.s0 = reduce96(&f96, b, b_inv, b_s);
 	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);

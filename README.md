@@ -28,7 +28,7 @@ Binaries have been validated using:
  - genefer_macARM, geneferg_macARM: MacOS, llvm/clang 15  
  - genefer_arm64: Ubuntu 22.04 arm64, gcc 11.2  
 
-The 32-bit versions of Windows and Linux are no longer supported.
+The 32-bit versions of Windows and Linux are no longer supported.  
 
 ## TODO
 

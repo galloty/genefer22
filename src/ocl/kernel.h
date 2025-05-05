@@ -55,10 +55,10 @@ static const char * const src_ocl_kernel = \
 "#define INVP2_P1	2130706177u\n" \
 "#define INVP3_P1	608773230u\n" \
 "#define INVP3_P2	1409286102u\n" \
-"#define P1P2P3L		13049742876517335041ul\n" \
-"#define P1P2P3H		491581440u\n" \
-"#define P1P2P3_2L	6524871438258667520ul\n" \
-"#define P1P2P3_2H	245790720u\n" \
+"#define P1P2P3L		1962934273u\n" \
+"#define P1P2P3H		2111326211158966273ul\n" \
+"#define P1P2P3_2L	3128950784u\n" \
+"#define P1P2P3_2H	1055663105579483136ul\n" \
 "#define NORM1		2130641409u\n" \
 "#define NORM2		2113864705u\n" \
 "#define NORM3		2013204481u\n" \
@@ -168,14 +168,16 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- uint96/int96 ---\n" \
 "\n" \
-"typedef struct { uint64 s0; uint32 s1; } uint96;\n" \
-"typedef struct { uint64 s0; int32 s1; } int96;\n" \
+"typedef struct { uint32 s0; uint64 s1; } uint96;\n" \
+"typedef struct { uint32 s0; int64 s1; } int96;\n" \
 "\n" \
-"INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)(n); r.s1 = (n < 0) ? -1 : 0; return r; }\n" \
-"INLINE uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
+"INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int64)(x.s1); return r; }\n" \
+"INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint64)(x.s1); return r; }\n" \
 "\n" \
-"INLINE int96 uint96_i(const uint96 x) { int96 r; r.s0 = x.s0; r.s1 = (int32)(x.s1); return r; }\n" \
-"INLINE uint96 int96_u(const int96 x) { uint96 r; r.s0 = x.s0; r.s1 = (uint32)(x.s1); return r; }\n" \
+"INLINE uint96 uint96_set(const uint32 s0, const uint64 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }\n" \
+"\n" \
+"INLINE int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint32)(n); r.s1 = n >> 32; return r; }\n" \
+"INLINE int64 int96_get_si(const int96 x) { return (int64)(x.s0 | (x.s1 << 32)); }\n" \
 "\n" \
 "INLINE bool int96_is_neg(const int96 x) { return (x.s1 < 0); }\n" \
 "\n" \
@@ -183,13 +185,14 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "INLINE uint96 uint96_add_64(const uint96 x, const uint64 y)\n" \
 "{\n" \
+"	const uint32 yl = (uint32)(y); const uint64 yh = y >> 32;\n" \
 "	uint96 r;\n" \
 "#if defined(PTX_ASM)\n" \
-"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y));\n" \
-"	asm volatile (\"addc.u32 %0, %1, 0;\" : \"=r\" (r.s1) : \"r\" (x.s1));\n" \
+"	asm volatile (\"add.cc.u32 %0, %1, %2;\" : \"=r\" (r.s0) : \"r\" (x.s0), \"r\" (yl));\n" \
+"	asm volatile (\"addc.u64 %0, %1, %2;\" : \"=l\" (r.s1) : \"l\" (x.s1), \"l\" (yh));\n" \
 "#else\n" \
-"	const uint64 s0 = x.s0 + y;\n" \
-"	r.s0 = s0; r.s1 = x.s1 + ((s0 < y) ? 1 : 0);\n" \
+"	const uint32 s0 = x.s0 + yl;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + yh + ((s0 < x.s0) ? 1 : 0);\n" \
 "#endif\n" \
 "	return r;\n" \
 "}\n" \
@@ -198,11 +201,11 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	int96 r;\n" \
 "#if defined(PTX_ASM)\n" \
-"	asm volatile (\"add.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
-"	asm volatile (\"addc.s32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"	asm volatile (\"add.cc.u32 %0, %1, %2;\" : \"=r\" (r.s0) : \"r\" (x.s0), \"r\" (y.s0));\n" \
+"	asm volatile (\"addc.s64 %0, %1, %2;\" : \"=l\" (r.s1) : \"l\" (x.s1), \"l\" (y.s1));\n" \
 "#else\n" \
-"	const uint64 s0 = x.s0 + y.s0;\n" \
-"	r.s0 = s0; r.s1 = x.s1 + y.s1 + ((s0 < y.s0) ? 1 : 0);\n" \
+"	const uint32 s0 = x.s0 + y.s0;\n" \
+"	r.s0 = s0; r.s1 = x.s1 + y.s1 + ((s0 < x.s0) ? 1 : 0);\n" \
 "#endif\n" \
 "	return r;\n" \
 "}\n" \
@@ -211,10 +214,10 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	uint96 r;\n" \
 "#if defined(PTX_ASM)\n" \
-"	asm volatile (\"sub.cc.u64 %0, %1, %2;\" : \"=l\" (r.s0) : \"l\" (x.s0), \"l\" (y.s0));\n" \
-"	asm volatile (\"subc.u32 %0, %1, %2;\" : \"=r\" (r.s1) : \"r\" (x.s1), \"r\" (y.s1));\n" \
+"	asm volatile (\"sub.cc.u32 %0, %1, %2;\" : \"=r\" (r.s0) : \"r\" (x.s0), \"r\" (y.s0));\n" \
+"	asm volatile (\"subc.u64 %0, %1, %2;\" : \"=l\" (r.s1) : \"l\" (x.s1), \"l\" (y.s1));\n" \
 "#else\n" \
-"	r.s0 = x.s0 - y.s0; r.s1 = (int32)(x.s1 - y.s1 - ((x.s0 < y.s0) ? 1 : 0));\n" \
+"	r.s0 = x.s0 - y.s0; r.s1 = (int64)(x.s1 - y.s1 - ((x.s0 < y.s0) ? 1 : 0));\n" \
 "#endif\n" \
 "	return r;\n" \
 "}\n" \
@@ -222,15 +225,15 @@ static const char * const src_ocl_kernel = \
 "INLINE uint96 int96_abs(const int96 x)\n" \
 "{\n" \
 "	const bool is_neg = int96_is_neg(x);\n" \
-"	const uint96 mask = uint96_set(is_neg ? ~0ul : 0ul, is_neg ? ~0u : 0u);\n" \
-"	const uint96 t = uint96_set(x.s0 ^ mask.s0, (uint32)(x.s1) ^ mask.s1);\n" \
+"	const uint96 mask = uint96_set(is_neg ? ~0u : 0u, is_neg ? ~0ul : 0ul);\n" \
+"	const uint96 t = uint96_set(x.s0 ^ mask.s0, (uint64)(x.s1) ^ mask.s1);\n" \
 "	return uint96_sub(t, mask);\n" \
 "}\n" \
 "\n" \
 "INLINE uint96 uint96_mul_64_32(const uint64 x, const uint32 y)\n" \
 "{\n" \
-"	const uint64 l = (uint32)(x) * (uint64)(y), h = (x >> 32) * y + (l >> 32);\n" \
-"	uint96 r; r.s0 = (h << 32) | (uint32)(l); r.s1 = (uint32)(h >> 32);\n" \
+"	const uint64 l = (uint32)(x) * (uint64)(y);\n" \
+"	uint96 r; r.s0 = (uint32)(l); r.s1 = (x >> 32) * y + (l >> 32);\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
@@ -2164,8 +2167,8 @@ static const char * const src_ocl_kernel = \
 "INLINE int32 reduce96(int96 * f, const uint32 b, const uint32 b_inv, const int b_s)\n" \
 "{\n" \
 "	const uint96 t = int96_abs(*f);\n" \
-"	const uint64 t_h = ((uint64)(t.s1) << (64 - 29)) | (t.s0 >> 29);\n" \
-"	const uint32 t_l = (uint32)(t.s0) % (1u << 29);\n" \
+"	const uint64 t_h = (t.s1 << (32 - 29)) | (t.s0 >> 29);\n" \
+"	const uint32 t_l = t.s0 % (1u << 29);\n" \
 "\n" \
 "	uint32 d_h, r_h = barrett(t_h, b, b_inv, b_s, &d_h);\n" \
 "	uint32 d_l, r_l = barrett(((uint64)(r_h) << 29) | t_l, b, b_inv, b_s, &d_l);\n" \
@@ -2254,7 +2257,7 @@ static const char * const src_ocl_kernel = \
 "	f96 = int96_add(f96, l1); r.s1 = reduce96(&f96, b, b_inv, b_s);\n" \
 "	f96 = int96_add(f96, l2); r.s2 = reduce96(&f96, b, b_inv, b_s);\n" \
 "	f96 = int96_add(f96, l3); r.s3 = reduce96(&f96, b, b_inv, b_s);\n" \
-"	int64 f = (int64)(f96.s0);\n" \
+"	int64 f = int96_get_si(f96);\n" \
 "\n" \
 "#endif\n" \
 "\n" \

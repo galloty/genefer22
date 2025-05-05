@@ -64,11 +64,11 @@ typedef cl_long		int64;
 #define	INVP3_P1S	608773230u		// MF of 1 / P3 (mod P1)
 #define	INVP3_P2S	1409286102u		// MF of 1 / P3 (mod P2)
 
-#define	P1P2P3LS	13049742876517335041ull		// (P1 * P2 * P3) mod 2^64
-#define	P1P2P3HS	491581440u					// (P1 * P2 * P3) >> 64
+#define	P1P2P3LS	1962934273u					// (P1 * P2 * P3) mod 2^32
+#define	P1P2P3HS	2111326211158966273ul		// (P1 * P2 * P3) >> 32
 
-#define	P1P2P3_2LS	6524871438258667520ull		// (P1 * P2 * P3 / 2) mod 2^64
-#define	P1P2P3_2HS	245790720u					// (P1 * P2 * P3 / 2) >> 64
+#define	P1P2P3_2LS	3128950784u					// (P1 * P2 * P3 / 2) mod 2^32
+#define	P1P2P3_2HS	1055663105579483136ul		// (P1 * P2 * P3 / 2) >> 32
 
 #define P1U			(125 * (uint32(1) << 25) + 1)
 #define	Q1U			100663297u		// p * q = 1 (mod 2^32)
@@ -101,11 +101,11 @@ typedef cl_long		int64;
 #define	INVP3_P1U	3075822917u		// MF of 1 / P3 (mod P1)
 #define	INVP3_P2U	4076863457u		// MF of 1 / P3 (mod P2)
 
-#define	P1P2P3LU	12816400126780112897ul		// (P1 * P2 * P3) mod 2^64
-#define	P1P2P3HU	3654720002u					// (P1 * P2 * P3) >> 64
+#define	P1P2P3LU	3623878657u					// (P1 * P2 * P3) mod 2^32
+#define	P1P2P3HU	15696902887611105282ul		// (P1 * P2 * P3) >> 32
 
-#define	P1P2P3_2LU	6408200063390056448ul		// (P1 * P2 * P3 / 2) mod 2^64
-#define	P1P2P3_2HU	1827360001u					// (P1 * P2 * P3 / 2) >> 64
+#define	P1P2P3_2LU	1811939328u					// (P1 * P2 * P3 / 2) mod 2^32
+#define	P1P2P3_2HU	7848451443805552641ul		// (P1 * P2 * P3 / 2) >> 32
 
 class ZP
 {
@@ -947,10 +947,10 @@ public:
 		src << "#define INVP3_P1\t" << (is32 ? INVP3_P1U : INVP3_P1S) << "u" << std::endl;
 		src << "#define INVP3_P2\t" << (is32 ? INVP3_P2U : INVP3_P2S) << "u" << std::endl;
 
-		src << "#define P1P2P3L\t" << (is32 ? P1P2P3LU : P1P2P3LS) << "ul" << std::endl;
-		src << "#define P1P2P3H\t" << (is32 ? P1P2P3HU : P1P2P3HS) << "u" << std::endl;
-		src << "#define P1P2P3_2L\t" << (is32 ? P1P2P3_2LU : P1P2P3_2LS) << "ul" << std::endl;
-		src << "#define P1P2P3_2H\t" << (is32 ? P1P2P3_2HU : P1P2P3_2HS) << "u" << std::endl;
+		src << "#define P1P2P3L\t" << (is32 ? P1P2P3LU : P1P2P3LS) << "u" << std::endl;
+		src << "#define P1P2P3H\t" << (is32 ? P1P2P3HU : P1P2P3HS) << "ul" << std::endl;
+		src << "#define P1P2P3_2L\t" << (is32 ? P1P2P3_2LU : P1P2P3_2LS) << "u" << std::endl;
+		src << "#define P1P2P3_2H\t" << (is32 ? P1P2P3_2HU : P1P2P3_2HS) << "ul" << std::endl;
 
 		src << "#define NORM1\t" << ZP1::norm(uint32(size / 2)).get() << "u" << std::endl;
 		src << "#define NORM2\t" << ZP2::norm(uint32(size / 2)).get() << "u" << std::endl;

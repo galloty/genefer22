@@ -35,7 +35,8 @@ inline uint32_4 mul_hi(const uint32_4 lhs, const uint32_4 rhs)
 #define	R1		33554430u		// 2^32 mod p
 #define	RSQ1	402124772u		// (2^32)^2 mod p
 #define	H1		100663290u		// Montgomery form of the primitive root 3
-#define	IM1		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	IM1		2063729671u		// MF of I = 3^{(p - 1)/4}
+#define	MFIM1	1930170389u		// MF of MF of I to convert input into MF
 #define	SQRTI1	1626730317u		// MF of 3^{(p - 1)/8}
 #define	ISQRTI1	856006302u		// MF of i * sqrt(i)
 
@@ -44,7 +45,8 @@ inline uint32_4 mul_hi(const uint32_4 lhs, const uint32_4 rhs)
 #define	R2		67108862u
 #define	RSQ2	2111798781u
 #define	H2		335544310u		// MF of the primitive root 5
-#define	IM2		1036950657u
+#define	IM2		530075385u
+#define	MFIM2	1036950657u
 #define	SQRTI2	338852760u
 #define	ISQRTI2	1090446030u
 
@@ -53,7 +55,8 @@ inline uint32_4 mul_hi(const uint32_4 lhs, const uint32_4 rhs)
 #define	R3		268435454u
 #define	RSQ3	1172168163u
 #define	H3		268435390u		// MF of the primitive root 31
-#define	IM3		734725699u
+#define	IM3		473486609u
+#define	MFIM3	734725699u
 #define	SQRTI3	1032137103u
 #define	ISQRTI3	1964242958u
 
@@ -106,7 +109,7 @@ public:
 	static ZpT norm(const uint32 n) { return ZpT(P - (P - 1) / n); }
 };
 
-template<uint32 P, uint32 Q, uint32 R, uint32 H, uint32 RSQ, uint32 IM, uint32 SQRTI, uint32 ISQRTI>
+template<uint32 P, uint32 Q, uint32 R, uint32 H, uint32 RSQ, uint32 IM, uint32 MFIM, uint32 SQRTI, uint32 ISQRTI>
 class Zp4T
 {
 	using Zp = ZpT<P, Q, R, H>;
@@ -123,7 +126,7 @@ private:
 	static void _forward4_0(Zp4T z[4])
 	{
 		z[0] = z[0].toMonty(); z[1] = z[1].toMonty();
-		FWD2v(z[0], z[2], Zp(IM)); FWD2v(z[1], z[3], Zp(IM));
+		FWD2v(z[0], z[2], Zp(MFIM)); FWD2v(z[1], z[3], Zp(MFIM));
 		FWD2v(z[0], z[1], Zp(SQRTI)); FWD2v(z[2], z[3], Zp(ISQRTI));
 	}
 
@@ -232,6 +235,17 @@ public:
 		}
 	}
 
+	static void backward4_0(Zp4T * const z, const size_t n_16)
+	{
+		for (size_t i = 0; i < n_16; ++i)
+		{
+			const size_t k = i;
+			Zp4T zl[4]; Zp4T::load(4, zl, &z[k], n_16);
+			Zp4T::_backward4(zl, Zp(IM), (const Zp[2]){ Zp(ISQRTI), Zp(SQRTI) });
+			Zp4T::store(4, &z[k], n_16, zl);
+		}
+	}
+
 	static void square4x4(Zp4T * const z, const Zp * const wr, const size_t n_16)
 	{
 		for (size_t j = 0; j < n_16; ++j)
@@ -269,9 +283,9 @@ typedef ZpT<P1, Q1, R1, H1> Zp1;
 typedef ZpT<P2, Q2, R2, H2> Zp2;
 typedef ZpT<P3, Q3, R3, H3> Zp3;
 
-typedef Zp4T<P1, Q1, R1, H1, RSQ1, IM1, SQRTI1, ISQRTI1> Zp1v;
-typedef Zp4T<P2, Q2, R2, H2, RSQ2, IM2, SQRTI2, ISQRTI2> Zp2v;
-typedef Zp4T<P3, Q3, R3, H3, RSQ3, IM3, SQRTI3, ISQRTI3> Zp3v;
+typedef Zp4T<P1, Q1, R1, H1, RSQ1, IM1, MFIM1, SQRTI1, ISQRTI1> Zp1v;
+typedef Zp4T<P2, Q2, R2, H2, RSQ2, IM2, MFIM2, SQRTI2, ISQRTI2> Zp2v;
+typedef Zp4T<P3, Q3, R3, H3, RSQ3, IM3, MFIM3, SQRTI3, ISQRTI3> Zp3v;
 
 class Transform
 {
@@ -471,21 +485,24 @@ public:
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp1v::forward4(z1, wr1, m, s);
 		s /= 4; m = n_16 / s;
 		if (m == 2) Zp1v::square8x2(z1, wr1, n_16); else Zp1v::square4x4(z1, wr1, n_16);
-		for (; m <= n_16; m *= 4, s /= 4) Zp1v::backward4(z1, wr1, m, s);
+		for (; m < n_16; m *= 4, s /= 4) Zp1v::backward4(z1, wr1, m, s);
+		Zp1v::backward4_0(z1, n_16);
 
 		m = n_16, s = 1;
 		Zp2v::forward4_0(z2, n_16);
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp2v::forward4(z2, wr2, m, s);
 		s /= 4; m = n_16 / s;
 		if (m == 2) Zp2v::square8x2(z2, wr2, n_16); else Zp2v::square4x4(z2, wr2, n_16);
-		for (; m <= n_16; m *= 4, s /= 4) Zp2v::backward4(z2, wr2, m, s);
+		for (; m < n_16; m *= 4, s /= 4) Zp2v::backward4(z2, wr2, m, s);
+		Zp2v::backward4_0(z2, n_16);
 
 		m = n_16, s = 1;
 		Zp3v::forward4_0(z3, n_16);
 		for (m /= 4, s *= 4; m > 0; m /= 4, s *= 4) Zp3v::forward4(z3, wr3, m, s);
 		s /= 4; m = n_16 / s;
 		if (m == 2) Zp3v::square8x2(z3, wr3, n_16); else Zp3v::square4x4(z3, wr3, n_16);
-		for (; m <= n_16; m *= 4, s /= 4) Zp3v::backward4(z3, wr3, m, s);
+		for (; m < n_16; m *= 4, s /= 4) Zp3v::backward4(z3, wr3, m, s);
+		Zp3v::backward4_0(z3, n_16);
 
 		carry(mul);
 	}

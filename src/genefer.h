@@ -180,9 +180,6 @@ private:
 	int printProgress(const double elapsedTime, const double displayTime, const int i)
 	{
 		if (_print_i == i) return 1;
-#if defined(BOINC)
-		const double prev_percent = static_cast<double>(_print_range - _print_i) / _print_range;
-#endif
 		const double percent = static_cast<double>(_print_range - i) / _print_range;
 		const double mulTime = displayTime / (_print_i - i); _print_i = i;
 		const int dcount = std::max(static_cast<int>(1.0 / mulTime), 2);

@@ -161,9 +161,9 @@ class GF31
 {
 private:
 	Z31 _s0, _s1;
-	// a primitive root of order 2^31 which is a root of (0, 1).
-	static const uint32_t _h_order = uint32_t(1) << 31;
-	static const uint32_t _h_0 = 105066u, _h_1 = 333718u;
+	// a primitive root of order 2^32 which is a root of (0, 1).
+	static const uint64_t _h_order = uint64_t(1) << 32;
+	static const uint32_t _h_0 = 7735u, _h_1 = 748621u;
 
 public:
 	GF31() {}
@@ -196,7 +196,7 @@ public:
 		return r.mul(y);
 	}
 
-	static const GF31 primroot_n(const uint32_t n) { return GF31(Z31(_h_0), Z31(_h_1)).pow(_h_order / n); }
+	static const GF31 primroot_n(const uint32_t n) { return GF31(Z31(_h_0), Z31(_h_1)).pow(uint32_t(_h_order / n)); }
 };
 
 // GF((2^61 - 1)^2) x GF((2^31 - 1)^2)

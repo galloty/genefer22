@@ -25,19 +25,22 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define P1			2130706433u
 #define Q1			2164260865u
 #define RSQ1		402124772u
-#define IM1			1930170389u
+#define IM1			2063729671u
+#define MFIM1		1930170389u
 #define SQRTI1		1626730317u
 #define ISQRTI1		856006302u
 #define P2			2113929217u
 #define Q2			2181038081u
 #define RSQ2		2111798781u
-#define IM2			1036950657u
+#define IM2			530075385u
+#define MFIM2		1036950657u
 #define SQRTI2		338852760u
 #define ISQRTI2		1090446030u
 #define P3			2013265921u
 #define Q3			2281701377u
 #define RSQ3		1172168163u
-#define IM3			734725699u
+#define IM3			473486609u
+#define MFIM3		734725699u
 #define SQRTI3		1032137103u
 #define ISQRTI3		1964242958u
 #define INVP2_P1	2130706177u
@@ -84,7 +87,8 @@ typedef long4	int64_4;
 #define	PQ3		(uint32_2)(P3, Q3)
 
 __constant uint32_2 g_pq[3] = { PQ1, PQ2, PQ3 };
-__constant uint32_4 g_f0[3] = { (uint32_4)(RSQ1, IM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, IM2, SQRTI2, ISQRTI2), (uint32_4)(RSQ3, IM3, SQRTI3, ISQRTI3) };
+__constant uint32_4 g_f0[3] = { (uint32_4)(RSQ1, MFIM1, SQRTI1, ISQRTI1), (uint32_4)(RSQ2, MFIM2, SQRTI2, ISQRTI2), (uint32_4)(RSQ3, MFIM3, SQRTI3, ISQRTI3) };
+__constant uint32_4 g_b0[3] = { (uint32_4)(ISQRTI1, SQRTI1, IM1, 0), (uint32_4)(ISQRTI2, SQRTI2, IM2, 0), (uint32_4)(ISQRTI3, SQRTI3, IM3, 0) };
 
 INLINE uint32 addmod(const uint32 lhs, const uint32 rhs, const uint32 p)
 {
@@ -322,10 +326,17 @@ INLINE void _backward4x1(const uint32_2 pq, uint32 z[4], const uint32 win1, cons
 
 INLINE void _forward4x1_0(const uint32_2 pq, const uint32_4 f0, uint32 z[4])
 {
-	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
+	const uint32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
 	z[0] = mulmod(z[0], rsq, pq); z[1] = mulmod(z[1], rsq, pq);
-	FWD2(z[0], z[2], im); FWD2(z[1], z[3], im);
+	FWD2(z[0], z[2], mfim); FWD2(z[1], z[3], mfim);
 	FWD2(z[0], z[1], sqrti); FWD2(z[2], z[3], isqrti);
+}
+
+INLINE void _backward4x1_0(const uint32_2 pq, const uint32_4 b0, uint32 z[4])
+{
+	const uint32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	BCK2(z[0], z[1], isqrti); BCK2(z[2], z[3], sqrti);
+	BCK2(z[0], z[2], im); BCK2(z[1], z[3], im);
 }
 
 INLINE void _square2x2(const uint32_2 pq, uint32 z[4], const uint32 w)
@@ -373,10 +384,17 @@ INLINE void _backward4x2(const uint32_2 pq, uint32_2 z[4], const uint32 win1, co
 
 INLINE void _forward4x2_0(const uint32_2 pq, const uint32_4 f0, uint32_2 z[4])
 {
-	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
+	const uint32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
 	z[0] = mulmod2(z[0], rsq, pq); z[1] = mulmod2(z[1], rsq, pq);
-	FWD2v2(z[0], z[2], im); FWD2v2(z[1], z[3], im);
+	FWD2v2(z[0], z[2], mfim); FWD2v2(z[1], z[3], mfim);
 	FWD2v2(z[0], z[1], sqrti); FWD2v2(z[2], z[3], isqrti);
+}
+
+INLINE void _backward4x2_0(const uint32_2 pq, const uint32_4 b0, uint32_2 z[4])
+{
+	const uint32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	BCK2v2(z[0], z[1], isqrti); BCK2v2(z[2], z[3], sqrti);
+	BCK2v2(z[0], z[2], im); BCK2v2(z[1], z[3], im);
 }
 
 INLINE void _square4x2(const uint32_2 pq, uint32_2 z[4], const uint32 w2[2], const uint32 win2[2])
@@ -436,10 +454,17 @@ INLINE void _backward4x4(const uint32_2 pq, uint32_4 z[4], const uint32 win1, co
 
 INLINE void _forward4x4_0(const uint32_2 pq, const uint32_4 f0, uint32_4 z[4])
 {
-	const uint32 rsq = f0.s0, im = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
+	const uint32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
 	z[0] = mulmod4(z[0], rsq, pq); z[1] = mulmod4(z[1], rsq, pq);
-	FWD2v4(z[0], z[2], im); FWD2v4(z[1], z[3], im);
+	FWD2v4(z[0], z[2], mfim); FWD2v4(z[1], z[3], mfim);
 	FWD2v4(z[0], z[1], sqrti); FWD2v4(z[2], z[3], isqrti);
+}
+
+INLINE void _backward4x4_0(const uint32_2 pq, const uint32_4 b0, uint32_4 z[4])
+{
+	const uint32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	BCK2v4(z[0], z[1], isqrti); BCK2v4(z[2], z[3], sqrti);
+	BCK2v4(z[0], z[2], im); BCK2v4(z[1], z[3], im);
 }
 
 INLINE void _square4x2v4(const uint32_2 pq, uint32_4 z[2], const uint32 w2[2], const uint32 win2[2])
@@ -522,6 +547,7 @@ INLINE void _mul8v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], cons
 #define _forward4			_forward4x4
 #define _backward4			_backward4x4
 #define _forward4_0			_forward4x4_0
+#define _backward4_0		_backward4x4_0
 #elif VSIZE == 2
 #define VTYPE				uint32_2
 #define _loadg				_loadg2
@@ -531,6 +557,7 @@ INLINE void _mul8v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], cons
 #define _forward4			_forward4x2
 #define _backward4			_backward4x2
 #define _forward4_0			_forward4x2_0
+#define _backward4_0		_backward4x2_0
 #else
 #define VTYPE				uint32
 #define _loadg				_loadg1
@@ -540,6 +567,7 @@ INLINE void _mul8v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], cons
 #define _forward4			_forward4x1
 #define _backward4			_backward4x1
 #define _forward4_0			_forward4x1_0
+#define _backward4_0		_backward4x1_0
 #endif
 
 // --- transform/inline global mem ---
@@ -565,6 +593,14 @@ INLINE void forward4io_0(const uint32_2 pq, const uint32_4 f0, __global VTYPE * 
 	const sz_t m = N_SZ / 4 / VSIZE;
 	VTYPE zl[4]; _loadg(4, zl, z, m);
 	_forward4_0(pq, f0, zl);
+	_storeg(4, z, m, zl);
+}
+
+INLINE void backwardio_0(const uint32_2 pq, const uint32_4 b0, __global VTYPE * restrict const z)
+{
+	const sz_t m = N_SZ / 4 / VSIZE;
+	VTYPE zl[4]; _loadg(4, zl, z, m);
+	_backward4_0(pq, b0, zl);
 	_storeg(4, z, m, zl);
 }
 
@@ -864,6 +900,15 @@ INLINE void backward_4o(const uint32_2 pq, const sz_t mg, __global VTYPE * restr
 	barrier(CLK_LOCAL_MEM_FENCE);
 	VTYPE zl[4]; _loadl(4, zl, Z, ml);
 	_backward4(pq, zl, win1, win2);
+	_storeg(4, z, mg, zl);
+}
+
+INLINE void backward_4o_0(const uint32_2 pq, const uint32_4 b0, const sz_t mg, __global VTYPE * restrict const z,
+	const sz_t ml, __local const VTYPE * restrict const Z)
+{
+	barrier(CLK_LOCAL_MEM_FENCE);
+	VTYPE zl[4]; _loadl(4, zl, Z, ml);
+	_backward4_0(pq, b0, zl);
 	_storeg(4, z, mg, zl);
 }
 
@@ -1200,6 +1245,14 @@ void forward4_0(__global VTYPE * restrict const zg, __global const uint32 * rest
 }
 
 __kernel
+void backward4_0(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	DECLARE_VAR_REG();
+	const sz_t k = id;
+	backwardio_0(pq, g_b0[lid], &z[k]);
+}
+
+__kernel
 void square2x2(__global uint32 * restrict const zg, __global const uint32 * restrict const wg)
 {
 	DECLARE_VAR_REGv1();
@@ -1349,15 +1402,27 @@ void forward64_0(__global VTYPE * restrict const zg, __global const uint32 * res
 	FORWARD_64();
 }
 
+#define BACKWARD_64() \
+	__local VTYPE Z[4 * B_64 * CHUNK64]; \
+	BACKWARD_I(B_64, CHUNK64); \
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4); \
+	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);
+
 __kernel
 ATTR_64()
 void backward64(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
 {
-	__local VTYPE Z[4 * B_64 * CHUNK64];
-	BACKWARD_I(B_64, CHUNK64);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);
+	BACKWARD_64();
 	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);
+}
+
+__kernel
+ATTR_64()
+void backward64_0(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;
+	BACKWARD_64();
+	backward_4o_0(pq, g_b0[lid], B_64 << lm, zo, B_64 * CHUNK64, &Z[i]);
 }
 
 // -----------------
@@ -1397,17 +1462,29 @@ void forward256_0(__global VTYPE * restrict const zg, __global const uint32 * re
 	FORWARD_256();
 }
 
+#define BACKWARD_256() \
+	__local VTYPE Z[4 * B_256 * CHUNK256]; \
+	BACKWARD_I(B_256, CHUNK256); \
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4); \
+	backward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], wi, sji / 4); \
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16); \
+	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);
+
 __kernel
 ATTR_256()
 void backward256(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
 {
-	__local VTYPE Z[4 * B_256 * CHUNK256];
-	BACKWARD_I(B_256, CHUNK256);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	backward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], wi, sji / 4);
-	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);
+	BACKWARD_256();
 	backward_4o(pq, B_256 << lm, zo, B_256 * CHUNK256, &Z[i], wi, sji / B_256);
+}
+
+__kernel
+ATTR_256()
+void backward256_0(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = LN_SZ - LVSIZE - 8; const unsigned int s = 256 / 4;
+	BACKWARD_256();
+	backward_4o_0(pq, g_b0[lid], B_256 << lm, zo, B_256 * CHUNK256, &Z[i]);
 }
 
 // -----------------
@@ -1449,19 +1526,31 @@ void forward1024_0(__global VTYPE * restrict const zg, __global const uint32 * r
 	FORWARD_1024();
 }
 
+#define BACKWARD_1024() \
+	__local VTYPE Z[4 * B_1024 * CHUNK1024]; \
+	BACKWARD_I(B_1024, CHUNK1024); \
+	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4); \
+	backward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], wi, sji / 4); \
+	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16); \
+	backward_4(pq, 16 * CHUNK1024, &Zi[CHUNK1024 * k16], wi, sji / 16); \
+	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64); \
+	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);
+
 __kernel
 ATTR_1024()
 void backward1024(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
 {
-	__local VTYPE Z[4 * B_1024 * CHUNK1024];
-	BACKWARD_I(B_1024, CHUNK1024);
-	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4);
-	backward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], wi, sji / 4);
-	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16);
-	backward_4(pq, 16 * CHUNK1024, &Zi[CHUNK1024 * k16], wi, sji / 16);
-	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64);
-	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);
+	BACKWARD_1024();
 	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], wi, sji / B_1024);
+}
+
+__kernel
+ATTR_1024()
+void backward1024_0(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = LN_SZ - LVSIZE - 10; const unsigned int s = 1024 / 4;
+	BACKWARD_1024();
+	backward_4o_0(pq, g_b0[lid], B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i]);
 }
 
 // -----------------

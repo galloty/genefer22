@@ -21,10 +21,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define VSIZE	4
 
-// #define CHECK_ALL_FUNCTIONS		1	// TUNE must be set
-// #define CHECK_RADIX4_FUNCTIONS	1	// TUNE must be set
-// #define CHECK_FUNC_1		1	// GFN-11&12&13: square22, square4, square32, forward4_0, forward64, forward256_0, forward256
-// #define CHECK_FUNC_2		1	// GFN-11&12&13: square64, square128, forward4, forward64_0, forward1024_0
+// TUNE must be set if CHECK is set
+// #define CHECK_ALL_FUNCTIONS		1
+// #define CHECK_RADIX4_FUNCTIONS	1
+// #define CHECK_FUNC_1		1	// GFN-12&13&14: square4, square32, square64, forward4_0, forward64, forward256_0, forward256
+// #define CHECK_FUNC_2		1	// GFN-11&12&13: square8, square128, forward4, forward64_0, forward1024_0
 // #define CHECK_FUNC_3		1	// GFN-12&13&14: square256, square512, forward1024
 // #define CHECK_FUNC_4		1	// GFN-12&13&14: square1024, square2048, square4096
 
@@ -38,7 +39,8 @@ typedef cl_long		int64;
 #define	R1S			33554430u		// 2^32 mod p
 #define	RSQ1S		402124772u		// (2^32)^2 mod p
 #define	H1S			100663290u		// Montgomery form of the primitive root 3
-#define	IM1S		1930170389u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	IM1S		2063729671u		// MF of I = 3^{(p - 1)/4}
+#define	MFIM1S		1930170389u		// MF of MF of I to convert input into MF
 #define	SQRTI1S		1626730317u		// MF of 3^{(p - 1)/8}
 #define	ISQRTI1S	856006302u		// MF of i * sqrt(i)
 
@@ -47,7 +49,8 @@ typedef cl_long		int64;
 #define	R2S			67108862u
 #define	RSQ2S		2111798781u
 #define	H2S			335544310u		// MF of the primitive root 5
-#define	IM2S		1036950657u
+#define	IM2S		530075385u
+#define	MFIM2S		1036950657u
 #define	SQRTI2S		338852760u
 #define	ISQRTI2S	1090446030u
 
@@ -56,7 +59,8 @@ typedef cl_long		int64;
 #define	R3S			268435454u
 #define	RSQ3S		1172168163u
 #define	H3S			268435390u		// MF of the primitive root 31
-#define	IM3S		734725699u
+#define	IM3S		473486609u
+#define	MFIM3S		734725699u
 #define	SQRTI3S		1032137103u
 #define	ISQRTI3S	1964242958u
 
@@ -75,7 +79,8 @@ typedef cl_long		int64;
 #define	R1U			100663295u		// 2^32 mod p
 #define	RSQ1U		232465106u		// (2^32)^2 mod p
 #define	H1U			301989885u		// Montgomery form of the primitive root 3
-#define	IM1U		3645424034u		// MF of MF of I = 3^{(p - 1)/4} to convert input into MF
+#define	IM1U		1486287593u		// MF of I = 3^{(p - 1)/4}
+#define	MFIM1U		3645424034u		// MF of MF of I to convert input into MF
 #define	SQRTI1U		3580437317u		// MF of 3^{(p - 1)/8}
 #define	ISQRTI1U	2017881188u		// MF of i * sqrt(i)
 
@@ -84,7 +89,8 @@ typedef cl_long		int64;
 #define	R2U			218103807u
 #define	RSQ2U		3444438393u
 #define	H2U			1526726649u		// MF of the primitive root 7
-#define	IM2U		1773796560u
+#define	IM2U		99906823u
+#define	MFIM2U		1773796560u
 #define	SQRTI2U		2024944857u
 #define	ISQRTI2U	2119710515u
 
@@ -93,7 +99,8 @@ typedef cl_long		int64;
 #define	R3U			352321535u
 #define	RSQ3U		3810498414u
 #define	H3U			1056964605u		// MF of the primitive root 3
-#define	IM3U		2454519270u
+#define	IM3U		2213106415u
+#define	MFIM3U		2454519270u
 #define	SQRTI3U		3448990025u
 #define	ISQRTI3U	3659377330u
 
@@ -189,6 +196,7 @@ public:
 #define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
 #define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
 #define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u, 4 * VSIZE); }
+#define DEFINE_BACKWARD0(u) void backward##u##_0() { ek(_backward##u##_0, u / 4 * CHUNK##u, 4 * VSIZE); }
 
 #define DEFINE_SQUARE(u) void square##u() { ek(_square##u, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
 #define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
@@ -213,13 +221,13 @@ private:
 	const size_t _num_regs;
 	const int _lnormWGsize;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
-	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr;
+	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr, _backward4_0 = nullptr;
 	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square8 = nullptr;
 	cl_kernel _fwd4p = nullptr, _fwd8p = nullptr;
 	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul8 = nullptr;
-	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr;
-	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr;
-	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr;
+	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr, _backward64_0 = nullptr;
+	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr, _backward256_0 = nullptr;
+	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr, _backward1024_0 = nullptr;
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr;
 	cl_kernel _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr, _square4096 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr;
@@ -332,6 +340,7 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward4);
 		CREATE_TRANSFORM_KERNEL(backward4);
 		CREATE_TRANSFORM_KERNEL(forward4_0);
+		CREATE_TRANSFORM_KERNEL(backward4_0);
 
 		CREATE_TRANSFORM_KERNEL(square2x2);
 		CREATE_TRANSFORM_KERNEL(square4);
@@ -348,12 +357,15 @@ public:
 		CREATE_TRANSFORM_KERNEL(forward64);
 		CREATE_TRANSFORM_KERNEL(backward64);
 		CREATE_TRANSFORM_KERNEL(forward64_0);
+		CREATE_TRANSFORM_KERNEL(backward64_0);
 		CREATE_TRANSFORM_KERNEL(forward256);
 		CREATE_TRANSFORM_KERNEL(backward256);
 		CREATE_TRANSFORM_KERNEL(forward256_0);
+		CREATE_TRANSFORM_KERNEL(backward256_0);
 		CREATE_TRANSFORM_KERNEL(forward1024);
 		CREATE_TRANSFORM_KERNEL(backward1024);
 		CREATE_TRANSFORM_KERNEL(forward1024_0);
+		CREATE_TRANSFORM_KERNEL(backward1024_0);
 
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
@@ -407,14 +419,14 @@ public:
 #if defined(TUNE)
 		delete _pSplit;
 #endif
-		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0);
+		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0); _releaseKernel(_backward4_0);
 		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square8);
 		_releaseKernel(_fwd4p); _releaseKernel(_fwd8p);
 		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul8);
 
-		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0);
-		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0);
-		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0);
+		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0); _releaseKernel(_backward64_0);
+		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0); _releaseKernel(_backward256_0);
+		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0); _releaseKernel(_backward1024_0);
 		 
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048); _releaseKernel(_square4096);
@@ -456,6 +468,7 @@ private:
 	void forward4(const int lm) { ek_fb(_forward4, lm - LVSIZE, 0, 4 * VSIZE); }
 	void backward4(const int lm) { ek_fb(_backward4, lm - LVSIZE, 0, 4 * VSIZE); }
 	void forward4_0() { ek(_forward4_0, 0, 4 * VSIZE); }
+	void backward4_0() { ek(_backward4_0, 0, 4 * VSIZE); }
 
 	void square4() { ek(_square4, 0, 4 * VSIZE); }
 	void fwd4p() { ek(_fwd4p, 0, 4 * VSIZE); }
@@ -474,12 +487,15 @@ private:
 	DEFINE_FORWARD(64);
 	DEFINE_BACKWARD(64);
 	DEFINE_FORWARD0(64);
+	DEFINE_BACKWARD0(64);
 	DEFINE_FORWARD(256);
 	DEFINE_BACKWARD(256);
 	DEFINE_FORWARD0(256);
+	DEFINE_BACKWARD0(256);
 	DEFINE_FORWARD(1024);
 	DEFINE_BACKWARD(1024);
 	DEFINE_FORWARD0(1024);
+	DEFINE_BACKWARD0(1024);
 
 	DEFINE_SQUARE(32);
 	DEFINE_SQUARE(64);
@@ -527,24 +543,24 @@ private:
 	void _mul(const size_t sIndex, const bool isSquare)
 	{
 #if defined(CHECK_FUNC_1)
-		if (_ln == 11) { forward256_0(); if (isSquare) square8(); else mul8(); backward256(11 - 8); return; }
-		if (_ln == 12) { forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4(12 - 2); return; }
-		if (_ln == 13) { forward4_0(); forward64(13 - 8); if (isSquare) { square32(); } else mul32(); backward64(13 - 8); backward4(13 - 2); return; }
+		if (_ln == 12) { forward4_0(); forward256(12 - 10); if (isSquare) square4(); else mul4(); backward256(12 - 10); backward4_0(); return; }
+		if (_ln == 13) { forward4_0(); forward64(13 - 8); if (isSquare) { square32(); } else mul32(); backward64(13 - 8); backward4_0(); return; }
+		if (_ln == 14) { forward256_0(); if (isSquare) square64(); else mul64(); backward256_0(); return; }
 #endif
 #if defined(CHECK_FUNC_2)
-		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4(11 - 2); return; }
-		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64(12 - 6); return; }
-		if (_ln == 13) { forward1024_0(); if (isSquare) square8(); else mul8(); backward1024(13 - 10); return; }
+		if (_ln == 11) { forward4_0(); forward4(11 - 4); if (isSquare) square128(); else mul128(); backward4(11 - 4); backward4_0(); return; }
+		if (_ln == 12) { forward64_0(); if (isSquare) square64(); else mul64(); backward64_0(); return; }
+		if (_ln == 13) { forward1024_0(); if (isSquare) square8(); else mul8(); backward1024_0(); return; }
 #endif
 #if defined(CHECK_FUNC_3)
-		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4(12 - 2); return; }
-		if (_ln == 13) { forward4_0(); forward4(13 - 4); if (isSquare) square512(); else mul512(); backward4(13 - 4); backward4(13 - 2); return; }
-		if (_ln == 14) { forward4_0(); forward1024(14 - 12); if (isSquare) square4(); else mul4(); backward1024(14 - 12); backward4(14 - 2); return; }
+		if (_ln == 12) { forward4_0(); forward4(12 - 4); if (isSquare) square256(); else mul256(); backward4(12 - 4); backward4_0(); return; }
+		if (_ln == 13) { forward4_0(); forward4(13 - 4); if (isSquare) square512(); else mul512(); backward4(13 - 4); backward4_0(); return; }
+		if (_ln == 14) { forward4_0(); forward1024(14 - 12); if (isSquare) square4(); else mul4(); backward1024(14 - 12); backward4_0(); return; }
 #endif
 #if defined(CHECK_FUNC_4)
-		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4(12 - 2); return; }
-		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4(13 - 2); return; }
-		if (_ln == 14) { forward4_0(); if (isSquare) square4096(); else mul4096(); backward4(14 - 2); return; }
+		if (_ln == 12) { forward4_0(); if (isSquare) square1024(); else mul1024(); backward4_0(); return; }
+		if (_ln == 13) { forward4_0(); if (isSquare) square2048(); else mul2048(); backward4_0(); return; }
+		if (_ln == 14) { forward4_0(); if (isSquare) square4096(); else mul4096(); backward4_0(); return; }
 #endif
 
 		int lm = _ln;
@@ -554,7 +570,8 @@ private:
 		lm -= 2; forward4_0();
 		while (lm > 3) { lm -= 2; forward4(lm); }
 		if (isSquare) { if (lm == 3) square8(); else square4(); } else { if (lm == 3) mul8(); else mul4(); }
-		while (lm < _ln) { backward4(lm); lm += 2; }
+		while (lm < _ln - 2) { backward4(lm); lm += 2; }
+		backward4_0(); lm += 2;
 #else
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
@@ -598,7 +615,7 @@ private:
 			else if (lm == 5) mul32();
 		}
 
-		for (size_t i = s - 1; i > 0; --i)
+		for (size_t i = s - 1; i >= 2; --i)
 		{
 			const uint32_t k = pSplit->getPart(sIndex, i - 1);
 			if (k == 10) backward1024(lm);
@@ -606,6 +623,11 @@ private:
 			else backward64(lm);	// k = 6
 			lm += int(k);
 		}
+		if (k0 == 10) backward1024_0();
+		else if (k0 == 8) backward256_0();
+		else backward64_0();	// k = 6
+		lm += int(k0);
+
 #endif
 	}
 #endif	// TUNE
@@ -625,19 +647,19 @@ public:
 		_mul(splitIndex, true);
 #else
 		const int ln = _ln;
-		if (ln == 11) { forward64_0(); square32(); backward64(11 - 6); }
-		else if (ln == 12) { forward64_0(); square64(); backward64(12 - 6); }
-		else if (ln == 13) { forward64_0(); square128(); backward64(13 - 6); }
-		else if (ln == 14) { forward64_0(); square256(); backward64(14 - 6); }
-		else if (ln == 15) { forward64_0(); square512(); backward64(15 - 6); }
-		else if (ln == 16) { forward64_0(); square1024(); backward64(16 - 6); }
-		else if (ln == 17) { forward64_0(); square2048(); backward64(17 - 6); }
-		else if (ln == 18) { forward256_0(); square1024(); backward256(18 - 8); }
-		else if (ln == 19) { forward256_0(); square2048(); backward256(19 - 8); }
-		else if (ln == 20) { forward256_0(); square4096(); backward256(20 - 8); }
-		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); square512(); backward64(21 - 2 * 6); backward64(21 - 6); }
-		else if (ln == 22) { forward1024_0(); square4096(); backward1024(22 - 10); }
-		else { forward64_0(); forward64(23 - 2 * 6); square2048(); backward64(23 - 2 * 6); backward64(23 - 6); }
+		if (ln == 11) { forward64_0(); square32(); backward64_0(); }
+		else if (ln == 12) { forward64_0(); square64(); backward64_0(); }
+		else if (ln == 13) { forward64_0(); square128(); backward64_0(); }
+		else if (ln == 14) { forward64_0(); square256(); backward64_0(); }
+		else if (ln == 15) { forward64_0(); square512(); backward64_0(); }
+		else if (ln == 16) { forward64_0(); square1024(); backward64_0(); }
+		else if (ln == 17) { forward64_0(); square2048(); backward64_0(); }
+		else if (ln == 18) { forward256_0(); square1024(); backward256_0(); }
+		else if (ln == 19) { forward256_0(); square2048(); backward256_0(); }
+		else if (ln == 20) { forward256_0(); square4096(); backward256_0(); }
+		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); square512(); backward64(21 - 2 * 6); backward64_0(); }
+		else if (ln == 22) { forward1024_0(); square4096(); backward1024_0(); }
+		else { forward64_0(); forward64(23 - 2 * 6); square2048(); backward64(23 - 2 * 6); backward64_0(); }
 #endif
 	}
 
@@ -670,9 +692,9 @@ public:
 		_executeKernel(_copyp, RNS_SIZE * _n / 4);
 
 #if defined(CHECK_FUNC_1)
-		if (_ln == 11) { forward256p_0(); fwd8p(); return; }
 		if (_ln == 12) { forward4p_0(); forward256p(12 - 10); fwd4p(); return; }
 		if (_ln == 13) { forward4p_0(); forward64p(13 - 8); fwd32p(); return; }
+		if (_ln == 14) { forward256p_0(); fwd64p(); return; }
 #endif
 #if defined(CHECK_FUNC_2)
 		if (_ln == 11) { forward4p_0(); forward4p(11 - 4); fwd128p(); return; }
@@ -926,6 +948,7 @@ public:
 		src << "#define Q1\t" << (is32 ? Q1U : Q1S) << "u" << std::endl;
 		src << "#define RSQ1\t" << (is32 ? RSQ1U : RSQ1S) << "u" << std::endl;
 		src << "#define IM1\t" << (is32 ? IM1U : IM1S) << "u" << std::endl;
+		src << "#define MFIM1\t" << (is32 ? MFIM1U : MFIM1S) << "u" << std::endl;
 		src << "#define SQRTI1\t" << (is32 ? SQRTI1U : SQRTI1S) << "u" << std::endl;
 		src << "#define ISQRTI1\t" << (is32 ? ISQRTI1U : ISQRTI1S) << "u" << std::endl;
 
@@ -933,6 +956,7 @@ public:
 		src << "#define Q2\t" << (is32 ? Q2U : Q2S) << "u" << std::endl;
 		src << "#define RSQ2\t" << (is32 ? RSQ2U : RSQ2S) << "u" << std::endl;
 		src << "#define IM2\t" << (is32 ? IM2U : IM2S) << "u" << std::endl;
+		src << "#define MFIM2\t" << (is32 ? MFIM2U : MFIM2S) << "u" << std::endl;
 		src << "#define SQRTI2\t" << (is32 ? SQRTI2U : SQRTI2S) << "u" << std::endl;
 		src << "#define ISQRTI2\t" << (is32 ? ISQRTI2U : ISQRTI2S) << "u" << std::endl;
 
@@ -940,6 +964,7 @@ public:
 		src << "#define Q3\t" << (is32 ? Q3U : Q3S) << "u" << std::endl;
 		src << "#define RSQ3\t" << (is32 ? RSQ3U : RSQ3S) << "u" << std::endl;
 		src << "#define IM3\t" << (is32 ? IM3U : IM3S) << "u" << std::endl;
+		src << "#define MFIM3\t" << (is32 ? MFIM3U : MFIM3S) << "u" << std::endl;
 		src << "#define SQRTI3\t" << (is32 ? SQRTI3U : SQRTI3S) << "u" << std::endl;
 		src << "#define ISQRTI3\t" << (is32 ? ISQRTI3U : ISQRTI3S) << "u" << std::endl;
 

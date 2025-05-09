@@ -536,7 +536,7 @@ public:
 		std::ofstream fileOut((_vendor == EVendor::NVIDIA) ? "pgm.ptx" : "pgm.bin", std::ios::binary);
 		fileOut.write(binary.data(), std::streamsize(binSize));
 		fileOut.close();
-#endif	
+#endif
 	}
 
 public:

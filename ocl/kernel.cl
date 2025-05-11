@@ -65,7 +65,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define CHUNK64		4
 #define CHUNK256	4
 #define CHUNK1024	1
-// #define SHORT_VER	1
+// #define SHORT_FUNC	1
+#define ALL_FUNC	1
 #define NORM_WG_SZ	32
 #define MAX_WG_SZ	256
 #endif
@@ -572,6 +573,8 @@ INLINE void _mul8v4(const uint32_2 pq, uint32_4 z[2], const uint32_4 zp[2], cons
 
 // --- transform/inline global mem ---
 
+#if defined(ALL_FUNC)
+
 INLINE void forward4io(const uint32_2 pq, const sz_t m, __global VTYPE * restrict const z, __global const uint32 * restrict const w, const sz_t sj)
 {
 	DECLARE_W12(sj);
@@ -836,6 +839,8 @@ INLINE void mul8io(const uint32_2 pq, __global VTYPE * restrict const z, const _
 	mul8x1io(pq, z, zp, w, wi, sj, sji);
 #endif
 }
+
+#endif // ALL_FUNC
 
 // --- transform/inline local & global mem ---
 
@@ -1220,6 +1225,8 @@ INLINE void mul_8(const uint32_2 pq, __local VTYPE * restrict const Z, const sz_
 
 // --- transform without local mem ---
 
+#if defined(ALL_FUNC)
+
 __kernel
 void forward4(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
 {
@@ -1323,9 +1330,11 @@ void mul8(__global VTYPE * restrict const zg, __global const VTYPE * restrict co
 	mul8io(pq, &z[k], &zp[k], w, wi, sj, sji);
 }
 
+#endif // ALL_FUNC
+
 // --- transform ---
 
-#if !defined(SHORT_VER)
+#if !defined(SHORT_FUNC)
 
 #define DECLARE_VAR(B_N, CHUNK_N) \
 	/* threadIdx < B_N */ \
@@ -1383,6 +1392,7 @@ void mul8(__global VTYPE * restrict const zg, __global const VTYPE * restrict co
 	forward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4); \
 	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK64, &Zi[CHUNK64 * 4 * threadIdx], w, sj / 1);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_64()
 void forward64(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1391,6 +1401,7 @@ void forward64(__global VTYPE * restrict const zg, __global const uint32 * restr
 	FORWARD_I(B_64, CHUNK64);
 	FORWARD_64();
 }
+#endif
 
 __kernel
 ATTR_64()
@@ -1402,12 +1413,33 @@ void forward64_0(__global VTYPE * restrict const zg, __global const uint32 * res
 	FORWARD_64();
 }
 
+__kernel
+ATTR_64()
+void forward64_9(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = 9 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;
+	__local VTYPE Z[4 * B_64 * CHUNK64];
+	FORWARD_I(B_64, CHUNK64);
+	FORWARD_64();
+}
+
+__kernel
+ATTR_64()
+void forward64_11(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = 11 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;
+	__local VTYPE Z[4 * B_64 * CHUNK64];
+	FORWARD_I(B_64, CHUNK64);
+	FORWARD_64();
+}
+
 #define BACKWARD_64() \
 	__local VTYPE Z[4 * B_64 * CHUNK64]; \
 	BACKWARD_I(B_64, CHUNK64); \
 	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4); \
 	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_64()
 void backward64(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1415,6 +1447,7 @@ void backward64(__global VTYPE * restrict const zg, __global const uint32 * rest
 	BACKWARD_64();
 	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);
 }
+#endif
 
 __kernel
 ATTR_64()
@@ -1423,6 +1456,24 @@ void backward64_0(__global VTYPE * restrict const zg, __global const uint32 * re
 	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;
 	BACKWARD_64();
 	backward_4o_0(pq, g_b0[lid], B_64 << lm, zo, B_64 * CHUNK64, &Z[i]);
+}
+
+__kernel
+ATTR_64()
+void backward64_9(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = 9 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;
+	BACKWARD_64();
+	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);
+}
+
+__kernel
+ATTR_64()
+void backward64_11(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)
+{
+	const int lm = 11 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;
+	BACKWARD_64();
+	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);
 }
 
 // -----------------
@@ -1443,6 +1494,7 @@ void backward64_0(__global VTYPE * restrict const zg, __global const uint32 * re
 	forward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4); \
 	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK256, &Zi[CHUNK256 * 4 * threadIdx], w, sj / 1);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_256()
 void forward256(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1451,6 +1503,7 @@ void forward256(__global VTYPE * restrict const zg, __global const uint32 * rest
 	FORWARD_I(B_256, CHUNK256);
 	FORWARD_256();
 }
+#endif
 
 __kernel
 ATTR_256()
@@ -1470,6 +1523,7 @@ void forward256_0(__global VTYPE * restrict const zg, __global const uint32 * re
 	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16); \
 	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_256()
 void backward256(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1477,6 +1531,7 @@ void backward256(__global VTYPE * restrict const zg, __global const uint32 * res
 	BACKWARD_256();
 	backward_4o(pq, B_256 << lm, zo, B_256 * CHUNK256, &Z[i], wi, sji / B_256);
 }
+#endif
 
 __kernel
 ATTR_256()
@@ -1507,6 +1562,7 @@ void backward256_0(__global VTYPE * restrict const zg, __global const uint32 * r
 	forward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4); \
 	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK1024, &Zi[CHUNK1024 * 4 * threadIdx], w, sj / 1);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_1024()
 void forward1024(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1515,6 +1571,7 @@ void forward1024(__global VTYPE * restrict const zg, __global const uint32 * res
 	FORWARD_I(B_1024, CHUNK1024);
 	FORWARD_1024();
 }
+#endif
 
 __kernel
 ATTR_1024()
@@ -1536,6 +1593,7 @@ void forward1024_0(__global VTYPE * restrict const zg, __global const uint32 * r
 	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64); \
 	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);
 
+#if defined(ALL_FUNC)
 __kernel
 ATTR_1024()
 void backward1024(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)
@@ -1543,6 +1601,7 @@ void backward1024(__global VTYPE * restrict const zg, __global const uint32 * re
 	BACKWARD_1024();
 	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], wi, sji / B_1024);
 }
+#endif
 
 __kernel
 ATTR_1024()
@@ -2201,7 +2260,7 @@ void mul4096(__global VTYPE * restrict const zg, __global const VTYPE * restrict
 	backward_4o(pq, L4096S / 4, zk, L4096S / 4, Zi1024, wi, sji / (L4096S / 4));
 }
 
-#endif	// SHORT_VER
+#endif	// SHORT_FUNC
 
 // -----------------
 

@@ -195,8 +195,8 @@ public:
 
 #define DEFINE_FORWARD(u) void forward##u(const int lm) { ek_fb(_forward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
 #define DEFINE_BACKWARD(u) void backward##u(const int lm) { ek_fb(_backward##u, lm - LVSIZE, u / 4 * CHUNK##u, 4 * VSIZE); }
-#define DEFINE_FORWARD0(u) void forward##u##_0() { ek(_forward##u##_0, u / 4 * CHUNK##u, 4 * VSIZE); }
-#define DEFINE_BACKWARD0(u) void backward##u##_0() { ek(_backward##u##_0, u / 4 * CHUNK##u, 4 * VSIZE); }
+#define DEFINE_FORWARDn(u, v) void forward##u##_##v() { ek(_forward##u##_##v, u / 4 * CHUNK##u, 4 * VSIZE); }
+#define DEFINE_BACKWARDn(u, v) void backward##u##_##v() { ek(_backward##u##_##v, u / 4 * CHUNK##u, 4 * VSIZE); }
 
 #define DEFINE_SQUARE(u) void square##u() { ek(_square##u, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
 #define DEFINE_FWDP(u) void fwd##u##p() { ek(_fwd##u##p, (u * BLK##u) / (4 * VSIZE), 4 * VSIZE); }
@@ -204,8 +204,8 @@ public:
 
 #define DEFINE_FORWARDP(u) \
 	void forward##u##p(const int lm) { setTransformArgs(_forward##u, false); forward##u(lm); setTransformArgs(_forward##u);	}
-#define DEFINE_FORWARDP0(u) \
-	void forward##u##p_0() { setTransformArgs(_forward##u##_0, false); forward##u##_0(); setTransformArgs(_forward##u##_0);	}
+#define DEFINE_FORWARDPn(u, v) \
+	void forward##u##p_##v() { setTransformArgs(_forward##u##_##v, false); forward##u##_##v(); setTransformArgs(_forward##u##_##v);	}
 
 template<size_t RNS_SIZE, bool is32>
 class engines : public device
@@ -221,13 +221,19 @@ private:
 	const size_t _num_regs;
 	const int _lnormWGsize;
 	cl_mem _z = nullptr, _zp = nullptr, _w = nullptr, _c = nullptr;
+#if defined(TUNE)
 	cl_kernel _forward4 = nullptr, _backward4 = nullptr, _forward4_0 = nullptr, _backward4_0 = nullptr;
 	cl_kernel _square2x2 = nullptr, _square4 = nullptr, _square8 = nullptr;
 	cl_kernel _fwd4p = nullptr, _fwd8p = nullptr;
 	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul8 = nullptr;
-	cl_kernel _forward64 = nullptr, _backward64 = nullptr, _forward64_0 = nullptr, _backward64_0 = nullptr;
-	cl_kernel _forward256 = nullptr, _backward256 = nullptr, _forward256_0 = nullptr, _backward256_0 = nullptr;
-	cl_kernel _forward1024 = nullptr, _backward1024 = nullptr, _forward1024_0 = nullptr, _backward1024_0 = nullptr;
+#endif
+	cl_kernel _forward64_0 = nullptr, _forward64_9 = nullptr, _forward64_11 = nullptr;
+	cl_kernel _backward64_0 = nullptr, _backward64_9 = nullptr, _backward64_11 = nullptr;
+	cl_kernel _forward256_0 = nullptr, _backward256_0 = nullptr, _forward1024_0 = nullptr, _backward1024_0 = nullptr;
+#if defined(TUNE)
+	cl_kernel _forward64 = nullptr, _forward256 = nullptr, _forward1024 = nullptr;
+	cl_kernel _backward64 = nullptr, _backward256 = nullptr, _backward1024 = nullptr;
+#endif
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr;
 	cl_kernel _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr, _square4096 = nullptr;
 	cl_kernel _fwd32p = nullptr, _fwd64p = nullptr, _fwd128p = nullptr, _fwd256p = nullptr;
@@ -337,6 +343,8 @@ public:
 		std::ostringstream ss; ss << "Create ocl kernels." << std::endl;
 		pio::display(ss.str());
 #endif
+
+#if defined(TUNE)
 		CREATE_TRANSFORM_KERNEL(forward4);
 		CREATE_TRANSFORM_KERNEL(backward4);
 		CREATE_TRANSFORM_KERNEL(forward4_0);
@@ -352,21 +360,27 @@ public:
 		CREATE_MUL_KERNEL(mul2x2);
 		CREATE_MUL_KERNEL(mul4);
 		CREATE_MUL_KERNEL(mul8);
+#endif
 
 #if !defined(CHECK_RADIX4_FUNCTIONS)
-		CREATE_TRANSFORM_KERNEL(forward64);
-		CREATE_TRANSFORM_KERNEL(backward64);
 		CREATE_TRANSFORM_KERNEL(forward64_0);
+		CREATE_TRANSFORM_KERNEL(forward64_9);
+		CREATE_TRANSFORM_KERNEL(forward64_11);
 		CREATE_TRANSFORM_KERNEL(backward64_0);
-		CREATE_TRANSFORM_KERNEL(forward256);
-		CREATE_TRANSFORM_KERNEL(backward256);
+		CREATE_TRANSFORM_KERNEL(backward64_9);
+		CREATE_TRANSFORM_KERNEL(backward64_11);
 		CREATE_TRANSFORM_KERNEL(forward256_0);
 		CREATE_TRANSFORM_KERNEL(backward256_0);
-		CREATE_TRANSFORM_KERNEL(forward1024);
-		CREATE_TRANSFORM_KERNEL(backward1024);
 		CREATE_TRANSFORM_KERNEL(forward1024_0);
 		CREATE_TRANSFORM_KERNEL(backward1024_0);
-
+#if defined(TUNE)
+		CREATE_TRANSFORM_KERNEL(forward64);
+		CREATE_TRANSFORM_KERNEL(backward64);
+		CREATE_TRANSFORM_KERNEL(forward256);
+		CREATE_TRANSFORM_KERNEL(backward256);
+		CREATE_TRANSFORM_KERNEL(forward1024);
+		CREATE_TRANSFORM_KERNEL(backward1024);
+#endif
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
 		CREATE_TRANSFORM_KERNEL(square128);
@@ -418,16 +432,19 @@ public:
 #endif
 #if defined(TUNE)
 		delete _pSplit;
-#endif
+
 		_releaseKernel(_forward4); _releaseKernel(_backward4); _releaseKernel(_forward4_0); _releaseKernel(_backward4_0);
 		_releaseKernel(_square2x2); _releaseKernel(_square4); _releaseKernel(_square8);
 		_releaseKernel(_fwd4p); _releaseKernel(_fwd8p);
 		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul8);
-
-		_releaseKernel(_forward64); _releaseKernel(_backward64); _releaseKernel(_forward64_0); _releaseKernel(_backward64_0);
-		_releaseKernel(_forward256); _releaseKernel(_backward256); _releaseKernel(_forward256_0); _releaseKernel(_backward256_0);
-		_releaseKernel(_forward1024); _releaseKernel(_backward1024); _releaseKernel(_forward1024_0); _releaseKernel(_backward1024_0);
-		 
+#endif
+		_releaseKernel(_forward64_0); _releaseKernel(_forward64_9); _releaseKernel(_forward64_11);
+		_releaseKernel(_backward64_0); _releaseKernel(_backward64_9); _releaseKernel(_backward64_11);
+		_releaseKernel(_forward256_0); _releaseKernel(_backward256_0); _releaseKernel(_forward1024_0); _releaseKernel(_backward1024_0);
+#if defined(TUNE)
+		_releaseKernel(_forward64); _releaseKernel(_forward256); _releaseKernel(_forward1024);
+		_releaseKernel(_backward64); _releaseKernel(_backward256); _releaseKernel(_backward1024);
+#endif
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048); _releaseKernel(_square4096);
 		_releaseKernel(_fwd32p); _releaseKernel(_fwd64p); _releaseKernel(_fwd128p); _releaseKernel(_fwd256p);
@@ -465,6 +482,7 @@ private:
 		_executeKernel(kernel, RNS_SIZE * n_s, localWorkSize);
 	}
 
+#if defined(TUNE)
 	void forward4(const int lm) { ek_fb(_forward4, lm - LVSIZE, 0, 4 * VSIZE); }
 	void backward4(const int lm) { ek_fb(_backward4, lm - LVSIZE, 0, 4 * VSIZE); }
 	void forward4_0() { ek(_forward4_0, 0, 4 * VSIZE); }
@@ -483,20 +501,26 @@ private:
 	void fwd8p() { ek(_fwd8p, 0, 4 * VSIZE); }
 	void mul8() { ek(_mul8, 0, 4 * VSIZE); }
 #endif
+#endif
 
+	DEFINE_FORWARDn(64, 0);
+	DEFINE_BACKWARDn(64, 0);
+	DEFINE_FORWARDn(64, 9);
+	DEFINE_BACKWARDn(64, 9);
+	DEFINE_FORWARDn(64, 11);
+	DEFINE_BACKWARDn(64, 11);
+	DEFINE_FORWARDn(256, 0);
+	DEFINE_BACKWARDn(256, 0);
+	DEFINE_FORWARDn(1024, 0);
+	DEFINE_BACKWARDn(1024, 0);
+#if defined(TUNE)
 	DEFINE_FORWARD(64);
 	DEFINE_BACKWARD(64);
-	DEFINE_FORWARD0(64);
-	DEFINE_BACKWARD0(64);
 	DEFINE_FORWARD(256);
 	DEFINE_BACKWARD(256);
-	DEFINE_FORWARD0(256);
-	DEFINE_BACKWARD0(256);
 	DEFINE_FORWARD(1024);
 	DEFINE_BACKWARD(1024);
-	DEFINE_FORWARD0(1024);
-	DEFINE_BACKWARD0(1024);
-
+#endif
 	DEFINE_SQUARE(32);
 	DEFINE_SQUARE(64);
 	DEFINE_SQUARE(128);
@@ -529,15 +553,20 @@ private:
 		_setKernelArg(kernel, 0, sizeof(cl_mem), isMultiplier ? &_z : &_zp);
 	}
 
+#if defined(TUNE)
 	DEFINE_FORWARDP(4);
+	DEFINE_FORWARDP0(4);
+#endif
+	DEFINE_FORWARDPn(64, 0);
+	DEFINE_FORWARDPn(64, 9);
+	DEFINE_FORWARDPn(64, 11);
+	DEFINE_FORWARDPn(256, 0);
+	DEFINE_FORWARDPn(1024, 0);
+#if defined(TUNE)
 	DEFINE_FORWARDP(64);
 	DEFINE_FORWARDP(256);
 	DEFINE_FORWARDP(1024);
-
-	DEFINE_FORWARDP0(4);
-	DEFINE_FORWARDP0(64);
-	DEFINE_FORWARDP0(256);
-	DEFINE_FORWARDP0(1024);
+#endif
 
 #if defined(TUNE)
 	void _mul(const size_t sIndex, const bool isSquare)
@@ -657,9 +686,9 @@ public:
 		else if (ln == 18) { forward256_0(); square1024(); backward256_0(); }
 		else if (ln == 19) { forward256_0(); square2048(); backward256_0(); }
 		else if (ln == 20) { forward256_0(); square4096(); backward256_0(); }
-		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); square512(); backward64(21 - 2 * 6); backward64_0(); }
+		else if (ln == 21) { forward64_0(); forward64_9(); square512(); backward64_9(); backward64_0(); }
 		else if (ln == 22) { forward1024_0(); square4096(); backward1024_0(); }
-		else { forward64_0(); forward64(23 - 2 * 6); square2048(); backward64(23 - 2 * 6); backward64_0(); }
+		else { forward64_0(); forward64_11(); square2048(); backward64_11(); backward64_0(); }
 #endif
 	}
 
@@ -669,19 +698,19 @@ public:
 		_mul(_splitIndex, false);
 #else
 		const int ln = _ln;
-		if (ln == 11) { forward64_0(); mul32(); backward64(11 - 6); }
-		else if (ln == 12) { forward64_0(); mul64(); backward64(12 - 6); }
-		else if (ln == 13) { forward64_0(); mul128(); backward64(13 - 6); }
-		else if (ln == 14) { forward64_0(); mul256(); backward64(14 - 6); }
-		else if (ln == 15) { forward64_0(); mul512(); backward64(15 - 6); }
-		else if (ln == 16) { forward64_0(); mul1024(); backward64(16 - 6); }
-		else if (ln == 17) { forward64_0(); mul2048(); backward64(17 - 6); }
-		else if (ln == 18) { forward256_0(); mul1024(); backward256(18 - 8); }
-		else if (ln == 19) { forward256_0(); mul2048(); backward256(19 - 8); }
-		else if (ln == 20) { forward256_0(); mul4096(); backward256(20 - 8); }
-		else if (ln == 21) { forward64_0(); forward64(21 - 2 * 6); mul512(); backward64(21 - 2 * 6); backward64(21 - 6); }
-		else if (ln == 22) { forward1024_0(); mul4096(); backward1024(22 - 10); }
-		else { forward64_0(); forward64(23 - 2 * 6); mul2048(); backward64(23 - 2 * 6); backward64(23 - 6); }
+		if (ln == 11) { forward64_0(); mul32(); backward64_0(); }
+		else if (ln == 12) { forward64_0(); mul64(); backward64_0(); }
+		else if (ln == 13) { forward64_0(); mul128(); backward64_0(); }
+		else if (ln == 14) { forward64_0(); mul256(); backward64_0(); }
+		else if (ln == 15) { forward64_0(); mul512(); backward64_0(); }
+		else if (ln == 16) { forward64_0(); mul1024(); backward64_0(); }
+		else if (ln == 17) { forward64_0(); mul2048(); backward64_0(); }
+		else if (ln == 18) { forward256_0(); mul1024(); backward256_0(); }
+		else if (ln == 19) { forward256_0(); mul2048(); backward256_0(); }
+		else if (ln == 20) { forward256_0(); mul4096(); backward256_0(); }
+		else if (ln == 21) { forward64_0(); forward64_9(); mul512(); backward64_9(); backward64_0(); }
+		else if (ln == 22) { forward1024_0(); mul4096(); backward1024_0(); }
+		else { forward64_0(); forward64_11(); mul2048(); backward64_11(); backward64_0(); }
 #endif
 	}
 
@@ -763,9 +792,9 @@ public:
 		else if (lm == 18) { forward256p_0(); fwd1024p(); }
 		else if (lm == 19) { forward256p_0(); fwd2048p(); }
 		else if (lm == 20) { forward256p_0(); fwd4096p(); }
-		else if (lm == 21) { forward64p_0(); forward64p(21 - 2 * 6); fwd512p(); }
+		else if (lm == 21) { forward64p_0(); forward64p_9(); fwd512p(); }
 		else if (lm == 22) { forward1024p_0(); fwd4096p(); }
-		else { forward64p_0(); forward64p(23 - 2 * 6); fwd2048p(); }
+		else { forward64p_0(); forward64p_11(); fwd2048p(); }
 #endif
 	}
 
@@ -998,7 +1027,10 @@ public:
 		src << "#define CHUNK1024\t" << CHUNK1024 << std::endl;
 
 #if defined(CHECK_RADIX4_FUNCTIONS)
-		src << "#define SHORT_VER\t" << 1 << std::endl;
+		src << "#define SHORT_FUNC\t" << 1 << std::endl;
+#endif
+#if defined(TUNE)
+		src << "#define ALL_FUNC\t" << 1 << std::endl;
 #endif
 
 		src << "#define NORM_WG_SZ\t" << _pEngine->getNormWGsize() << std::endl;

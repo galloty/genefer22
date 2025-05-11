@@ -77,7 +77,8 @@ static const char * const src_ocl_kernel = \
 "#define CHUNK64		4\n" \
 "#define CHUNK256	4\n" \
 "#define CHUNK1024	1\n" \
-"// #define SHORT_VER	1\n" \
+"// #define SHORT_FUNC	1\n" \
+"#define ALL_FUNC	1\n" \
 "#define NORM_WG_SZ	32\n" \
 "#define MAX_WG_SZ	256\n" \
 "#endif\n" \
@@ -584,6 +585,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- transform/inline global mem ---\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
+"\n" \
 "INLINE void forward4io(const uint32_2 pq, const sz_t m, __global VTYPE * restrict const z, __global const uint32 * restrict const w, const sz_t sj)\n" \
 "{\n" \
 "	DECLARE_W12(sj);\n" \
@@ -848,6 +851,8 @@ static const char * const src_ocl_kernel = \
 "	mul8x1io(pq, z, zp, w, wi, sj, sji);\n" \
 "#endif\n" \
 "}\n" \
+"\n" \
+"#endif // ALL_FUNC\n" \
 "\n" \
 "// --- transform/inline local & global mem ---\n" \
 "\n" \
@@ -1232,6 +1237,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- transform without local mem ---\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
+"\n" \
 "__kernel\n" \
 "void forward4(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
 "{\n" \
@@ -1335,9 +1342,11 @@ static const char * const src_ocl_kernel = \
 "	mul8io(pq, &z[k], &zp[k], w, wi, sj, sji);\n" \
 "}\n" \
 "\n" \
+"#endif // ALL_FUNC\n" \
+"\n" \
 "// --- transform ---\n" \
 "\n" \
-"#if !defined(SHORT_VER)\n" \
+"#if !defined(SHORT_FUNC)\n" \
 "\n" \
 "#define DECLARE_VAR(B_N, CHUNK_N) \\\n" \
 "	/* threadIdx < B_N */ \\\n" \
@@ -1395,6 +1404,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK64, &Zi[CHUNK64 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
 "void forward64(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1403,6 +1413,7 @@ static const char * const src_ocl_kernel = \
 "	FORWARD_I(B_64, CHUNK64);\n" \
 "	FORWARD_64();\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
@@ -1414,12 +1425,33 @@ static const char * const src_ocl_kernel = \
 "	FORWARD_64();\n" \
 "}\n" \
 "\n" \
+"__kernel\n" \
+"ATTR_64()\n" \
+"void forward64_9(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)\n" \
+"{\n" \
+"	const int lm = 9 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
+"	FORWARD_I(B_64, CHUNK64);\n" \
+"	FORWARD_64();\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"ATTR_64()\n" \
+"void forward64_11(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)\n" \
+"{\n" \
+"	const int lm = 11 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
+"	FORWARD_I(B_64, CHUNK64);\n" \
+"	FORWARD_64();\n" \
+"}\n" \
+"\n" \
 "#define BACKWARD_64() \\\n" \
 "	__local VTYPE Z[4 * B_64 * CHUNK64]; \\\n" \
 "	BACKWARD_I(B_64, CHUNK64); \\\n" \
 "	const sz_t k4 = ((4 * threadIdx) & ~(4 * 4 - 1)) + (threadIdx % 4); \\\n" \
 "	backward_4(pq, 4 * CHUNK64, &Zi[CHUNK64 * k4], wi, sji / 4);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
 "void backward64(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1427,6 +1459,7 @@ static const char * const src_ocl_kernel = \
 "	BACKWARD_64();\n" \
 "	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_64()\n" \
@@ -1435,6 +1468,24 @@ static const char * const src_ocl_kernel = \
 "	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;\n" \
 "	BACKWARD_64();\n" \
 "	backward_4o_0(pq, g_b0[lid], B_64 << lm, zo, B_64 * CHUNK64, &Z[i]);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"ATTR_64()\n" \
+"void backward64_9(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)\n" \
+"{\n" \
+"	const int lm = 9 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;\n" \
+"	BACKWARD_64();\n" \
+"	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"ATTR_64()\n" \
+"void backward64_11(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg)\n" \
+"{\n" \
+"	const int lm = 11 - LVSIZE; const unsigned int s = N_SZ / (4 * VSIZE) >> lm;\n" \
+"	BACKWARD_64();\n" \
+"	backward_4o(pq, B_64 << lm, zo, B_64 * CHUNK64, &Z[i], wi, sji / B_64);\n" \
 "}\n" \
 "\n" \
 "// -----------------\n" \
@@ -1455,6 +1506,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, 4 * CHUNK256, &Zi[CHUNK256 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK256, &Zi[CHUNK256 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
 "void forward256(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1463,6 +1515,7 @@ static const char * const src_ocl_kernel = \
 "	FORWARD_I(B_256, CHUNK256);\n" \
 "	FORWARD_256();\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
@@ -1482,6 +1535,7 @@ static const char * const src_ocl_kernel = \
 "	const sz_t k16 = ((4 * threadIdx) & ~(4 * 16 - 1)) + (threadIdx % 16); \\\n" \
 "	backward_4(pq, 16 * CHUNK256, &Zi[CHUNK256 * k16], wi, sji / 16);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
 "void backward256(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1489,6 +1543,7 @@ static const char * const src_ocl_kernel = \
 "	BACKWARD_256();\n" \
 "	backward_4o(pq, B_256 << lm, zo, B_256 * CHUNK256, &Z[i], wi, sji / B_256);\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_256()\n" \
@@ -1519,6 +1574,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, 4 * CHUNK1024, &Zi[CHUNK1024 * k4], w, sj / 4); \\\n" \
 "	forward_4o(pq, (sz_t)1 << lm, zo, 1 * CHUNK1024, &Zi[CHUNK1024 * 4 * threadIdx], w, sj / 1);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
 "void forward1024(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1527,6 +1583,7 @@ static const char * const src_ocl_kernel = \
 "	FORWARD_I(B_1024, CHUNK1024);\n" \
 "	FORWARD_1024();\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
@@ -1548,6 +1605,7 @@ static const char * const src_ocl_kernel = \
 "	const sz_t k64 = ((4 * threadIdx) & ~(4 * 64 - 1)) + (threadIdx % 64); \\\n" \
 "	backward_4(pq, 64 * CHUNK1024, &Zi[CHUNK1024 * k64], wi, sji / 64);\n" \
 "\n" \
+"#if defined(ALL_FUNC)\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
 "void backward1024(__global VTYPE * restrict const zg, __global const uint32 * restrict const wg, const int lm, const unsigned int s)\n" \
@@ -1555,6 +1613,7 @@ static const char * const src_ocl_kernel = \
 "	BACKWARD_1024();\n" \
 "	backward_4o(pq, B_1024 << lm, zo, B_1024 * CHUNK1024, &Z[i], wi, sji / B_1024);\n" \
 "}\n" \
+"#endif\n" \
 "\n" \
 "__kernel\n" \
 "ATTR_1024()\n" \
@@ -2213,7 +2272,7 @@ static const char * const src_ocl_kernel = \
 "	backward_4o(pq, L4096S / 4, zk, L4096S / 4, Zi1024, wi, sji / (L4096S / 4));\n" \
 "}\n" \
 "\n" \
-"#endif	// SHORT_VER\n" \
+"#endif	// SHORT_FUNC\n" \
 "\n" \
 "// -----------------\n" \
 "\n" \

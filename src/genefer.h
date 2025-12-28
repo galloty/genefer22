@@ -1234,10 +1234,11 @@ private:
 		static constexpr uint32_t bm[12] = { 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000,
 		 									 2000000000, 2000000000, 2000000000, 2000000000, 2000000000, 2000000000 };
 #else
-		static constexpr uint32_t bm[12] = { 1000000000, 1000000000, 1000000000, 460000000, 460000000, 350000000,
-											 60000000, 15000000, 4000000, 2500000, 400000, 100000 };
+		static constexpr uint32_t bm[12] = { 1000000000, 1000000000, 1000000000, 460000000, 550000000, 400000000,
+											 80000000, 20000000, 6000000, 3000000, 550000, 150000 };
+		// static constexpr uint32_t bm[12] = { 2000000000, 2000000000, 2000000000, 2000000000, 1500000000, 1000000000,
+		// 									 80000000, 65000000, 50000000, 40000000, 500000, 400000 };
 #endif
-
 		const size_t num_regs = 3;
 
 		const uint32_t b = bm[m - 12], n = m;
@@ -1247,7 +1248,7 @@ private:
 		createTransformGPU(b, n, device, num_regs, m == 16, false);
 #else
 		(void)device;
-		createTransformCPU(b, n, nthreads, impl, num_regs, false, m == 16, false);
+		createTransformCPU(b, n, nthreads, impl, num_regs, true, m == 16, false);
 #endif
 
 		transform * const pTransform = _transform;
@@ -1290,7 +1291,7 @@ private:
 			const double error = _transform->getError();
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (size_t(1) << n);
 			ss << ": " << timer::formatTime(estimatedTime) << std::setprecision(3) << ", " << mulTime * 1e3 << " ms/bit, ";
-			if (error != 0) ss << " error = " << std::setprecision(4) << error << ", ";
+			if (error != 0) ss << "error = " << std::setprecision(4) << error << ", ";
 			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());
@@ -1383,7 +1384,7 @@ public:
 #else
 			false;
 
-		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 94, 71, 54, 41, 31, 24 };
+		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 80, 65, 50, 40, 30, 20 };
 		if (impl != "i32")
 		{
 			if (b > bm[n - 12] * 1000000) checkError = true;

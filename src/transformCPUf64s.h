@@ -880,7 +880,7 @@ public:
 	void squareMul(const int32_t a) override
 	{
 		const size_t num_threads = _num_threads;
-		double e[num_threads];
+		double e[64];
 		const double g = static_cast<double>(a);
 
 		if (num_threads > 1)
@@ -934,7 +934,7 @@ public:
 	void mul() override
 	{
 		const size_t num_threads = _num_threads;
-		double e[num_threads];
+		double e[64];
 
 		if (num_threads > 1)
 		{

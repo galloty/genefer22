@@ -224,7 +224,7 @@ public:
 	finline void set(const size_t i, const double & f) { if (i <= 1) rl[i] = f; else rh[i - 2] = f; }
 #pragma GCC diagnostic pop
 
-	finline bool isZero() const { const bool r = is_zero_pd(rl) & is_zero_pd(rh); return r; }
+	finline bool isZero() const { const bool r = is_zero_pd(rl) && is_zero_pd(rh); return r; }
 
 	finline Vd & operator+=(const Vd & rhs) { rl += rhs.rl; rh += rhs.rh; return *this; }
 	finline Vd & operator-=(const Vd & rhs) { rl -= rhs.rl; rh -= rhs.rh; return *this; }
@@ -357,7 +357,7 @@ public:
 	finline Vd<N> real() const { return re; }
 	finline Vd<N> imag() const { return im; }
 
-	finline bool isZero() const { return (re.isZero() & im.isZero()); }
+	finline bool isZero() const { const bool r = re.isZero() && im.isZero(); return r; }
 
 	finline Vcx & operator+=(const Vcx & rhs) { re += rhs.re; im += rhs.im; return *this; }
 	finline Vcx & operator-=(const Vcx & rhs) { re -= rhs.re; im -= rhs.im; return *this; }

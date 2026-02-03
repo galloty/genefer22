@@ -1,0 +1,53 @@
+# Under Termux 3.0.9, compiler: clang 21.1.8
+CC = g++ -std=c++17
+RM = rm
+
+ROOT_DIR = ..
+
+BIN_DIR = $(ROOT_DIR)/bin
+SRC_DIR = $(ROOT_DIR)/src
+
+OCL_INC = -I$(ROOT_DIR)/Khronos
+OCL_LIB = -L/usr/lib/aarch64-linux-gnu/ -lOpenCL
+
+CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only
+FLAGS_CPU = -O3 -fopenmp
+FLAGS_GPU = -O3 -DGPU
+
+OBJS_CPU = main.o transform_neon.o
+OBJS_GPU = maing.o transform_ocl.o
+DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
+DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s.h $(SRC_DIR)/f64vector.h $(SRC_DIR)/simd128d.h $(DEPS_COMMON)
+DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
+
+EXEC_CPU = $(BIN_DIR)/genefer_arm64
+EXEC_GPU = $(BIN_DIR)/geneferg_arm64
+
+.PHONY: all clean_obj rebuild
+
+all: $(EXEC_CPU)
+
+clean_obj:
+	$(RM) $(OBJS_CPU) $(OBJS_GPU)
+
+rebuild: clean_obj all
+
+main.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
+
+maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+
+transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c -S $< -o neon.asm
+
+transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
+	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
+
+$(EXEC_CPU): $(OBJS_CPU)
+	$(CC) $(FLAGS_CPU) $^ -lgmp -o $@
+
+$(EXEC_GPU): $(OBJS_GPU)
+	$(CC) $(FLAGS_GPU) $^ -lgmp $(OCL_LIB) -o $@

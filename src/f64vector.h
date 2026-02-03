@@ -218,11 +218,13 @@ public:
 	finline double operator[](const size_t i) const { return (i <= 1) ? rl[i] : rh[i - 2]; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
+#if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 	finline void set(const size_t i, const double & f) { if (i <= 1) rl[i] = f; else rh[i - 2] = f; }
 #pragma GCC diagnostic pop
 
-	finline bool isZero() const { return (is_zero_pd(rl) & is_zero_pd(rh)); }
+	finline bool isZero() const { const bool r = is_zero_pd(rl) & is_zero_pd(rh); return r; }
 
 	finline Vd & operator+=(const Vd & rhs) { rl += rhs.rl; rh += rhs.rh; return *this; }
 	finline Vd & operator-=(const Vd & rhs) { rl -= rhs.rl; rh -= rhs.rh; return *this; }

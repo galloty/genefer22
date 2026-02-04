@@ -162,7 +162,9 @@ public:
 	finline double operator[](const size_t i) const { return r[i]; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
+#if !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 #pragma GCC diagnostic pop
 
@@ -218,7 +220,7 @@ public:
 	finline double operator[](const size_t i) const { return (i <= 1) ? rl[i] : rh[i - 2]; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
-#if defined(__GNUC__)
+#if !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 	finline void set(const size_t i, const double & f) { if (i <= 1) rl[i] = f; else rh[i - 2] = f; }
@@ -280,7 +282,9 @@ public:
 	finline double operator[](const size_t i) const { return r[i]; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
+#if !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 #pragma GCC diagnostic pop
 
@@ -298,7 +302,9 @@ public:
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
+#if !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 
 	finline Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
 

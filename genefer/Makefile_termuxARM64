@@ -1,5 +1,5 @@
 # Under Termux 3.0.9, compiler: clang 21.1.8
-CC = g++ -std=c++17
+CC = clang++ -std=c++17
 RM = rm
 
 ROOT_DIR = ..

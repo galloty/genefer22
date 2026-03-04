@@ -1,9 +1,10 @@
-# Generated using Android NDK LTS Version (r27d, clang 18.0.4).
-# The API level 21 is Android 5 Lollipop.
+# Generated using Android NDK (r29, clang 21.0.0).
 # The GNU GMP library is Termux libgmp-static package (gmp.h, libgmp.a); OpenCL is Termux ocl-icd package (libOpenCL.a).
 # Tested under Termux 0.118.3.
 # Thanks to Pavel Rosický https://github.com/ahorek for his support.
-CC = aarch64-linux-android35-clang++ -std=c++17
+
+# The API level 35 is Android 15.
+CC = clang++ --target=aarch64-linux-android35 -std=c++17
 RM = rm
 
 ROOT_DIR = ..
@@ -49,8 +50,8 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -c $< -o $@
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -c -S $< -o neon.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -ffp-contract=fast -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -ffp-contract=fast -S $< -o neon.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

@@ -62,60 +62,65 @@ public:
 	finline void transpose_in() { Vc::transpose_in(z); }
 	finline void transpose_out() { Vc::transpose_out(z); }
 
+	finline void fwde(const Vc & w) { Vc::fwd2(z[0], z[2], w); Vc::fwd2(z[1], z[3], w); }
+	finline void fwdo(const Vc & w) { Vc::fwd2i(z[4], z[6], w); Vc::fwd2a(z[5], z[7], w); }
+
+	finline void bwde(const Vc & w) { Vc::bck2(z[0], z[2], w); Vc::bck2(z[1], z[3], w); }
+	finline void bwdo(const Vc & w) { Vc::bck2a(z[4], z[6], w); Vc::bck2b(z[5], z[7], w); }
+	
 	finline void square4e(const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
-		const Vc s0 = v0.sqr() + v1.sqr().mulW(w), s1 = (v0 + v0) * v1, s2 = v2.sqr() - v3.sqr().mulW(w), s3 = (v2 + v2) * v3;
-		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
+		fwde(w);
+		const Vc z0 = z[0], z1 = z[1], z2 = z[2], z3 = z[3];
+		z[0] = z0.sqr() + z1.sqr().mulW(w); z[1] = (z0 + z0) * z1; z[2] = z2.sqr() - z3.sqr().mulW(w); z[3] = (z2 + z2) * z3;
+		bwde(w);
 	}
 
 	finline void square4o(const Vc & w)
 	{
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		const Vc v4 = u4.addi(u6), v6 = u4.subi(u6), v5 = u5.addi(u7), v7 = u7.addi(u5);
-		const Vc s4 = v5.sqr().mulW(w).subi(v4.sqr()), s5 = (v4 + v4) * v5, s6 = v6.sqr().addi(v7.sqr().mulW(w)), s7 = (v6 + v6) * v7;
-		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
+		fwdo(w);
+		const Vc z4 = z[4], z5 = z[5], z6 = z[6], z7 = z[7];
+		z[4] = z5.sqr().mulW(w).subi(z4.sqr()); z[5] = (z4 + z4) * z5; z[6] = z6.sqr().addi(z7.sqr().mulW(w)); z[7] = (z6 + z6) * z7;
+		bwdo(w);
 	}
 
 	finline void mul4_forward(const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		z[0] = u0 + u2; z[2] = u0 - u2; z[1] = u1 + u3; z[3] = u1 - u3;
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		z[4] = u4.addi(u6); z[6] = u4.subi(u6); z[5] = u5.addi(u7); z[7] = u7.addi(u5);
+		fwde(w);
+		fwdo(w);
 	}
 
 	finline void mul4(const Vcx8 & rhs, const Vc & w)
 	{
-		const Vc u0 = z[0], u2 = z[2].mulW(w), u1 = z[1], u3 = z[3].mulW(w);
-		const Vc v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
-		const Vc vp0 = rhs.z[0], vp2 = rhs.z[2], vp1 = rhs.z[1], vp3 = rhs.z[3];
-		const Vc s0 = v0 * vp0 + Vc(v1 * vp1).mulW(w), s1 = v0 * vp1 + vp0 * v1;
-		const Vc s2 = v2 * vp2 - Vc(v3 * vp3).mulW(w), s3 = v2 * vp3 + vp2 * v3;
-		z[0] = s0 + s2; z[2] = Vc(s0 - s2).mulWconj(w); z[1] = s1 + s3; z[3] = Vc(s1 - s3).mulWconj(w);
+		fwde(w);
+		const Vc z0 = z[0], z1 = z[1], z2 = z[2], z3 = z[3];
+		const Vc zp0 = rhs.z[0], zp2 = rhs.z[2], zp1 = rhs.z[1], zp3 = rhs.z[3];
+		z[0] = z0 * zp0 + Vc(z1 * zp1).mulW(w); z[1] = z0 * zp1 + zp0 * z1;
+		z[2] = z2 * zp2 - Vc(z3 * zp3).mulW(w); z[3] = z2 * zp3 + zp2 * z3;
+		bwde(w);
 
-		const Vc u4 = z[4], u6 = z[6].mulW(w), u5 = z[5], u7 = z[7].mulW(w);
-		const Vc v4 = u4.addi(u6), v6 = u4.subi(u6), v5 = u5.addi(u7), v7 = u7.addi(u5);
-		const Vc vp4 = rhs.z[4], vp6 = rhs.z[6], vp5 = rhs.z[5], vp7 = rhs.z[7];
-		const Vc s4 = Vc(v5 * vp5).mulW(w).subi(v4 * vp4), s5 = v4 * vp5 + vp4 * v5;
-		const Vc s6 = Vc(v6 * vp6).addi(Vc(v7 * vp7).mulW(w)), s7 = v6 * vp7 + vp6 * v7;
-		z[4] = s6.addi(s4); z[6] = s4.addi(s6).mulWconj(w); z[5] = s5.subi(s7); z[7] = s7.subi(s5).mulWconj(w);
+		fwdo(w);
+		const Vc z4 = z[4], z5 = z[5], z6 = z[6], z7 = z[7];
+		const Vc zp4 = rhs.z[4], zp6 = rhs.z[6], zp5 = rhs.z[5], zp7 = rhs.z[7];
+		z[4] = Vc(z5 * zp5).mulW(w).subi(z4 * zp4); z[5] = z4 * zp5 + zp4 * z5;
+		z[6] = Vc(z6 * zp6).addi(Vc(z7 * zp7).mulW(w)); z[7] = z6 * zp7 + zp6 * z7;
+		bwdo(w);
 	}
 
 	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n)
 	{
 		Vc f = f_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv), vt2_n = Vd<N>::broadcast(t2_n);
 
 		for (size_t i = 0; i < 8; ++i)
 		{
 			Vc & zi = z[i];
-			const Vc of = zi * t2_n, o = of.round();
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			f = f_b + o_b * g;
-			zi = f_i - f_b * b;
+			const Vc of = zi.mulS(vt2_n), o = of.round();
+			const Vc o_b = o.mulS(vb_inv).round();
+			const Vc f_i = f.addmulS(o.submulS(o_b, vb), vg);
+			const Vc f_b = f_i.mulS(vb_inv).round();
+			f = f_b.addmulS(o_b, vg);
+			zi = f_i.submulS(f_b, vb);
 		}
 
 		return f;
@@ -124,17 +129,18 @@ public:
 	finline Vc mul_carry(const Vc & f_prev, const double g, const double b, const double b_inv, const double t2_n, Vc & err)
 	{
 		Vc f = f_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv), vt2_n = Vd<N>::broadcast(t2_n);
 
 		for (size_t i = 0; i < 8; ++i)
 		{
 			Vc & zi = z[i];
-			const Vc of = zi * t2_n, o = of.round();
+			const Vc of = zi.mulS(vt2_n), o = of.round();
 			err.max(Vc(of - o).abs());
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			f = f_b + o_b * g;
-			zi = f_i - f_b * b;
+			const Vc o_b = o.mulS(vb_inv).round();
+			const Vc f_i = f.addmulS(o.submulS(o_b, vb), vg);
+			const Vc f_b = f_i.mulS(vb_inv).round();
+			f = f_b.addmulS(o_b, vg);
+			zi = f_i.submulS(f_b, vb);
 		}
 
 		return f;
@@ -144,26 +150,22 @@ public:
 						   const double sb, const double sb_inv, const double sbh, const double sbl)
 	{
 		Vc f = f_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv), vt2_n = Vd<N>::broadcast(t2_n);
+		const Vd<N> vsb = Vd<N>::broadcast(sb), vsb_inv = Vd<N>::broadcast(sb_inv), vsbh = Vd<N>::broadcast(sbh), vsbl = Vd<N>::broadcast(sbl);
 
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
 
-			// const Vc o = Vc((z0 + z1 * sb) * t2_n).round();
-			// const Vc f_i = f + o * g;
-			// const Vc f_b = Vc(f_i * b_inv).round();
-			// const Vc r = f_i - f_b * b;
-			// f = f_b;
+			const Vc of = z0.addmulS(z1, vsb).mulS(vt2_n), o = of.round();
+			const Vc o_b = o.mulS(vb_inv).round();
+			const Vc f_i = f.addmulS(o.submulS(o_b, vb), vg);
+			const Vc f_b = f_i.mulS(vb_inv).round();
+			const Vc r = f_i.submulS(f_b, vb);
+			f = f_b.addmulS(o_b, vg);
 
-			const Vc of = (z0 + z1 * sb) * t2_n, o = of.round();
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			const Vc r = f_i - f_b * b;
-			f = f_b + o_b * g;
-
-			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
+			const Vc irh = r.mulS(vsb_inv).round();
+			z0 = r.submulS(irh, vsbh).submulS(irh, vsbl); z1 = irh;
 		}
 
 		return f;
@@ -173,22 +175,24 @@ public:
 						   const double sb_inv, const double sbh, const double sbl, Vc & err)
 	{
 		Vc f = f_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv), vt2_n = Vd<N>::broadcast(t2_n);
+		const Vd<N> vsb_inv = Vd<N>::broadcast(sb_inv), vsbh = Vd<N>::broadcast(sbh), vsbl = Vd<N>::broadcast(sbl);
 
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
 
-			const Vc of = ((z0 + z1 * sbl) + z1 * sbh) * t2_n, o = of.round();
+			const Vc of = z0.addmulS(z1, vsbl).addmulS(z1, vsbh).mulS(vt2_n), o = of.round();
 			err.max(Vc(of - o).abs());
 
-			const Vc o_b = Vc(o * b_inv).round();
-			const Vc f_i = f + (o - o_b * b) * g;
-			const Vc f_b = Vc(f_i * b_inv).round();
-			const Vc r = f_i - f_b * b;
-			f = f_b + o_b * g;
+			const Vc o_b = o.mulS(vb_inv).round();
+			const Vc f_i = f.addmulS(o.submulS(o_b, vb), vg);
+			const Vc f_b = f_i.mulS(vb_inv).round();
+			const Vc r = f_i.submulS(f_b, vb);
+			f = f_b.addmulS(o_b, vg);
 
-			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
+			const Vc irh = r.mulS(vsb_inv).round();
+			z0 = r.submulS(irh, vsbh).submulS(irh, vsbl); z1 = irh;
 		}
 
 		return f;
@@ -197,13 +201,14 @@ public:
 	finline void carry(const Vc & f_i, const double b, const double b_inv)
 	{
 		Vc f = f_i;
+		const Vd<N> vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv);
 
 		for (size_t i = 0; i < 8 - 1; ++i)
 		{
 			Vc & zi = z[i];
 			f += zi.round();
-			const Vc f_o = Vc(f * b_inv).round();
-			zi = f - f_o * b;
+			const Vc f_o = f.mulS(vb_inv).round();
+			zi = f.submulS(f_o, vb);
 			f = f_o;
 			if (f.isZero()) return;
 		}
@@ -215,23 +220,25 @@ public:
 	finline void carry_i(const Vc & f_i, const double b, const double b_inv, const double sb, const double sb_inv, const double sbh, const double sbl)
 	{
 		Vc f = f_i;
+		const Vd<N> vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv);
+		const Vd<N> vsb = Vd<N>::broadcast(sb), vsb_inv = Vd<N>::broadcast(sb_inv), vsbh = Vd<N>::broadcast(sbh), vsbl = Vd<N>::broadcast(sbl);
 
 		for (size_t i = 0; i < 4 - 1; ++i)
 		{
 			Vc & z0 = z[2 * i + 0]; Vc & z1 = z[2 * i + 1];
-			f += Vc(z0 + z1 * sb).round();
-			const Vc f_o = Vc(f * b_inv).round();
-			const Vc r = f - f_o * b;
+			f += z0.addmulS(z1, vsb).round();
+			const Vc f_o = f.mulS(vb_inv).round();
+			const Vc r = f.submulS(f_o, vb);
 			f = f_o;
-			const Vc irh = Vc(r * sb_inv).round();
-			z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
+			const Vc irh = r.mulS(vsb_inv).round();
+			z0 = r.submulS(irh, vsbh).submulS(irh, vsbl); z1 = irh;
 			if (f.isZero()) return;
 		}
 
 		Vc & z0 = z[2 * (4 - 1) + 0]; Vc & z1 = z[2 * (4 - 1) + 1];
-		const Vc r = f + Vc(z0 + z1 * sb).round();
-		const Vc irh = Vc(r * sb_inv).round();
-		z0 = (r - irh * sbh) - irh * sbl; z1 = irh;
+		const Vc r = f + z0.addmulS(z1, vsb).round();
+		const Vc irh = r.mulS(vsb_inv).round();
+		z0 = r.submulS(irh, vsbh).submulS(irh, vsbl); z1 = irh;
 	}
 };
 

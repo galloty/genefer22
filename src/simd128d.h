@@ -23,6 +23,9 @@ inline simd128d set_pd(const double h, const double l)
 
 inline simd128d set1_pd(const double f) { return vdupq_n_f64(f); }
 
+inline simd128d addmul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmaq_f64(v0, v1, v2); }
+inline simd128d submul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmsq_f64(v0, v1, v2); }
+
 inline bool is_zero_pd(const simd128d v)
 {
 	const uint64x2_t mask = vceqzq_f64(v);
@@ -47,6 +50,9 @@ typedef __m128d simd128d;
 inline simd128d set_pd(const double h, const double l) { return _mm_set_pd(h, l); }
 
 inline simd128d set1_pd(const double f) { return _mm_set1_pd(f); }
+
+inline simd128d addmul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 + v1 * v2; }
+inline simd128d submul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 - v1 * v2; }
 
 inline bool is_zero_pd(const simd128d v) { return (_mm_movemask_pd(_mm_cmpneq_pd(v, _mm_setzero_pd())) == 0); }
 

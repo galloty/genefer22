@@ -17,12 +17,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 namespace transformCPU_namespace
 {
-	static constexpr double split = 1 << 20, split_inv = 1.0 / split;
-
 template<size_t N>
 class Vcx8s
 {
 	using Vc = Vcx<N>;
+
+public:
+	static constexpr double split = 1 << 20, split_inv = 1.0 / split;
 
 private:
 	Vc zl[8], zh[8];
@@ -68,38 +69,26 @@ public:
 
 	finline void fwde(const Vc & w)
 	{
-		const Vc l0 = zl[0], l2 = zl[2].mulW(w), l1 = zl[1], l3 = zl[3].mulW(w);
-		zl[0] = l0 + l2; zl[2] = l0 - l2; zl[1] = l1 + l3; zl[3] = l1 - l3;
-
-		const Vc h0 = zh[0], h2 = zh[2].mulW(w), h1 = zh[1], h3 = zh[3].mulW(w);
-		zh[0] = h0 + h2; zh[2] = h0 - h2; zh[1] = h1 + h3; zh[3] = h1 - h3;
+		Vc::fwd2(zl[0], zl[2], w); Vc::fwd2(zl[1], zl[3], w);
+		Vc::fwd2(zh[0], zh[2], w); Vc::fwd2(zh[1], zh[3], w);
 	}
 
 	finline void fwdo(const Vc & w)
 	{
-		const Vc l4 = zl[4], l6 = zl[6].mulW(w), l5 = zl[5], l7 = zl[7].mulW(w);
-		zl[4] = l4.addi(l6); zl[6] = l4.subi(l6); zl[5] = l5.addi(l7); zl[7] = l7.addi(l5);
-
-		const Vc h4 = zh[4], h6 = zh[6].mulW(w), h5 = zh[5], h7 = zh[7].mulW(w);
-		zh[4] = h4.addi(h6); zh[6] = h4.subi(h6); zh[5] = h5.addi(h7); zh[7] = h7.addi(h5);
+		Vc::fwd2i(zl[4], zl[6], w); Vc::fwd2a(zl[5], zl[7], w);
+		Vc::fwd2i(zh[4], zh[6], w); Vc::fwd2a(zh[5], zh[7], w);
 	}
 
 	finline void bwde(const Vc & w)
 	{
-		const Vc l0 = zl[0], l2 = zl[2], l1 = zl[1], l3 = zl[3];
-		zl[0] = l0 + l2; zl[2] = Vc(l0 - l2).mulWconj(w); zl[1] = l1 + l3; zl[3] = Vc(l1 - l3).mulWconj(w);
-
-		const Vc h0 = zh[0], h2 = zh[2], h1 = zh[1], h3 = zh[3];
-		zh[0] = h0 + h2; zh[2] = Vc(h0 - h2).mulWconj(w); zh[1] = h1 + h3; zh[3] = Vc(h1 - h3).mulWconj(w);
+		Vc::bck2(zl[0], zl[2], w); Vc::bck2(zl[1], zl[3], w);
+		Vc::bck2(zh[0], zh[2], w); Vc::bck2(zh[1], zh[3], w);
 	}
 
 	finline void bwdo(const Vc & w)
 	{
-		const Vc l4 = zl[4], l6 = zl[6], l5 = zl[5], l7 = zl[7];
-		zl[4] = l6.addi(l4); zl[6] = l4.addi(l6).mulWconj(w); zl[5] = l5.subi(l7); zl[7] = l7.subi(l5).mulWconj(w);
-
-		const Vc h4 = zh[4], h6 = zh[6], h5 = zh[5], h7 = zh[7];
-		zh[4] = h6.addi(h4); zh[6] = h4.addi(h6).mulWconj(w); zh[5] = h5.subi(h7); zh[7] = h7.subi(h5).mulWconj(w);
+		Vc::bck2a(zl[4], zl[6], w); Vc::bck2b(zl[5], zl[7], w);
+		Vc::bck2a(zh[4], zh[6], w); Vc::bck2b(zh[5], zh[7], w);
 	}
 
 	finline void square4e(const Vc & w)
@@ -182,22 +171,25 @@ public:
 	finline void mul_carry(const Vc & fl_prev, const Vc & fh_prev, Vc & fl_new, Vc & fh_new, const double g, const double b, const double b_inv, const double t2_n)
 	{
 		Vc fl = fl_prev, fh = fh_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv);
+		const Vd<N> vt2_n = Vd<N>::broadcast(t2_n), vt2_n_split_inv = Vd<N>::broadcast(t2_n * split_inv);
+		const Vd<N> vsplit = Vd<N>::broadcast(split), vsplit_inv = Vd<N>::broadcast(split_inv);
 
 		for (size_t i = 0; i < 8; ++i)
 		{
 			Vc & zli = zl[i]; Vc & zhi = zh[i];
-			const Vc ol = Vc(zli * t2_n).round(), oh = Vc(zhi * (t2_n * split_inv)).round();
+			const Vc ol = zli.mulS(vt2_n).round(), oh = zhi.mulS(vt2_n_split_inv).round();
 
-			fl += ol * g; fh += oh * g;
-			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
-			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			fl = fl.addmulS(ol, vg); fh = fh.addmulS(oh, vg);
+			Vc fl_b = fl.mulS(vb_inv).round(), rl_b = fl.submulS(fl_b, vb);
+			const Vc fh_b = fh.mulS(vb_inv).round(), rh_b = fh.submulS(fh_b, vb);
 			fh = fh_b;
 
-			rl_b += rh_b * split;
-			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
+			rl_b = rl_b.addmulS(rh_b, vsplit);
+			const Vc frl = rl_b.mulS(vb_inv).round(); rl_b = rl_b.submulS(frl, vb); fl_b += frl;
 			fl = fl_b;
 
-			const Vc h = Vc(rl_b * split_inv).round() * split;
+			const Vc h = rl_b.mulS(vsplit_inv).round().mulS(vsplit);
 			zli = rl_b - h; zhi = h;
 		}
 
@@ -207,23 +199,26 @@ public:
 	finline void mul_carry(const Vc & fl_prev, const Vc & fh_prev, Vc & fl_new, Vc & fh_new, const double g, const double b, const double b_inv, const double t2_n, Vc & err)
 	{
 		Vc fl = fl_prev, fh = fh_prev;
+		const Vd<N> vg = Vd<N>::broadcast(g), vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv);
+		const Vd<N> vt2_n = Vd<N>::broadcast(t2_n), vt2_n_split_inv = Vd<N>::broadcast(t2_n * split_inv);
+		const Vd<N> vsplit = Vd<N>::broadcast(split), vsplit_inv = Vd<N>::broadcast(split_inv);
 
 		for (size_t i = 0; i < 8; ++i)
 		{
 			Vc & zli = zl[i]; Vc & zhi = zh[i];
-			const Vc ofl = zli * t2_n, ofh = zhi * (t2_n * split_inv), ol = ofl.round(), oh = ofh.round();
+			const Vc ofl = zli.mulS(vt2_n), ofh = zhi.mulS(vt2_n_split_inv), ol = ofl.round(), oh = ofh.round();
 			err.max(Vc(ofl - ol).abs()); err.max(Vc(ofh - oh).abs());
 
-			fl += ol * g; fh += oh * g;
-			Vc fl_b = Vc(fl * b_inv).round(), rl_b = fl - fl_b * b;
-			const Vc fh_b = Vc(fh * b_inv).round(), rh_b = fh - fh_b * b;
+			fl = fl.addmulS(ol, vg); fh = fh.addmulS(oh, vg);
+			Vc fl_b = fl.mulS(vb_inv).round(), rl_b = fl.submulS(fl_b, vb);
+			const Vc fh_b = fh.mulS(vb_inv).round(), rh_b = fh.submulS(fh_b, vb);
 			fh = fh_b;
 
-			rl_b += rh_b * split;
-			const Vc frl = Vc(rl_b * b_inv).round(); rl_b -= frl * b; fl_b += frl;
+			rl_b = rl_b.addmulS(rh_b, vsplit);
+			const Vc frl = rl_b.mulS(vb_inv).round(); rl_b = rl_b.submulS(frl, vb); fl_b += frl;
 			fl = fl_b;
 
-			const Vc h = Vc(rl_b * split_inv).round() * split;
+			const Vc h = rl_b.mulS(vsplit_inv).round().mulS(vsplit);
 			zli = rl_b - h; zhi = h;
 		}
 
@@ -232,23 +227,26 @@ public:
 
 	finline void carry(const Vc & fl_i, const Vc & fh_i, const double b, const double b_inv)
 	{
-		Vc f = fl_i + fh_i * split;
+		const Vd<N> vb = Vd<N>::broadcast(b), vb_inv = Vd<N>::broadcast(b_inv), v;
+		const Vd<N> vsplit = Vd<N>::broadcast(split), vsplit_inv = Vd<N>::broadcast(split_inv);
+
+		Vc f = fl_i.addmulS(fh_i, vsplit);
 
 		for (size_t i = 0; i < 8 - 1; ++i)
 		{
 			Vc & zli = zl[i]; Vc & zhi = zh[i];
 			f += zli.round() + zhi.round();
-			const Vc f_b = Vc(f * b_inv).round();
-			const Vc r_b = f - f_b * b;
+			const Vc f_b = f.mulS(vb_inv).round();
+			const Vc r_b = f.submulS(f_b, vb);
 			f = f_b;
-			const Vc h = Vc(r_b * split_inv).round() * split;
+			const Vc h = r_b.mulS(vsplit_inv).round().mulS(vsplit);
 			zli = r_b - h; zhi = h;
 			if (f.isZero()) return;
 		}
 
 		Vc & zli = zl[8 - 1]; Vc & zhi = zh[8 - 1];
 		f += zli.round() + zhi.round();
-		const Vc h = Vc(f * split_inv).round() * split;
+		const Vc h = f.mulS(vsplit_inv).round().mulS(vsplit);
 		zli = f - h; zhi = h;
 	}
 };
@@ -798,6 +796,8 @@ protected:
 		Vc * const zl = (Vc *)&_mem[zlOffset];
 		Vc * const zh = (Vc *)&_mem[zhOffset];
 
+		const Vd<VSIZE> vsplit = Vd<VSIZE>::broadcast(Vc8s::split), vsplit_inv = Vd<VSIZE>::broadcast(Vc8s::split_inv);
+
 		for (size_t k = 0; k < N; k += VSIZE)
 		{
 			Vc vc;
@@ -806,7 +806,7 @@ protected:
 				const Complex zc(static_cast<double>(zi[k + i + 0 * N]), static_cast<double>(zi[k + i + 1 * N]));
 				vc.set(i, zc);
 			}
-			const Vc h = Vc(vc * split_inv).round() * split;
+			const Vc h = vc.mulS(vsplit_inv).round().mulS(vsplit);
 			zl[index(k) / VSIZE] = vc - h;
 			zh[index(k) / VSIZE] = h;
 		}

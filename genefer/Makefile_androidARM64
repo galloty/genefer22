@@ -50,8 +50,8 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -ffp-contract=fast -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -ffp-contract=fast -S $< -o neon.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fno-signed-zeros -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fno-signed-zeros -S $< -o neon.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

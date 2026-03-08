@@ -11,6 +11,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #if defined(__aarch64__)
 
+#if defined(__clang__)
+#pragma clang fp contract(fast) reassociate(on) reciprocal(off)
+#endif
+
 #include <arm_neon.h>
 
 typedef float64x2_t simd128d;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008-2020 The Khronos Group Inc.
+ * Copyright (c) 2008-2026 The Khronos Group Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ extern "C" {
 #ifdef __GNUC__
   #define CL_API_SUFFIX_DEPRECATED __attribute__((deprecated))
   #define CL_API_PREFIX_DEPRECATED
-#elif defined(_WIN32)
+#elif defined(_MSC_VER) && !defined(__clang__)
   #define CL_API_SUFFIX_DEPRECATED
   #define CL_API_PREFIX_DEPRECATED __declspec(deprecated)
 #else
@@ -361,11 +361,6 @@ typedef double          cl_double;
 
 #include <stddef.h>
 
-/* Mirror types to GL types. Mirror types allow us to avoid deciding which 87s to load based on whether we are using GL or GLES here. */
-typedef unsigned int cl_GLuint;
-typedef int          cl_GLint;
-typedef unsigned int cl_GLenum;
-
 /*
  * Vector types
  *
@@ -516,9 +511,22 @@ typedef unsigned int cl_GLenum;
 #elif defined(__GNUC__) && ! defined(__STRICT_ANSI__)
 #define  __CL_HAS_ANON_STRUCT__ 1
 #define  __CL_ANON_STRUCT__ __extension__
+#elif defined(__clang__)
+#define  __CL_HAS_ANON_STRUCT__ 1
+#define  __CL_ANON_STRUCT__ __extension__
 #else
 #define  __CL_HAS_ANON_STRUCT__ 0
 #define  __CL_ANON_STRUCT__
+#endif
+
+/* Define capabilities for anonymous union members. */
+#if defined(__cplusplus) && __cplusplus >= 201103L
+#define  __CL_HAS_ANON_UNION__ 1
+#define  __CL_ANON_UNION__
+#else
+    /* Follow anonymous struct logic */
+#define  __CL_HAS_ANON_UNION__ __CL_HAS_ANON_STRUCT__
+#define  __CL_ANON_UNION__ __CL_ANON_STRUCT__
 #endif
 
 #if defined(_WIN32) && defined(_MSC_VER) && __CL_HAS_ANON_STRUCT__
@@ -1406,4 +1414,4 @@ typedef union
     #pragma warning( pop )
 #endif
 
-#endif /* __CL_PLATFORM_H  */
+#endif  /* __CL_PLATFORM_H  */

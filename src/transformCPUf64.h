@@ -262,8 +262,8 @@ private:
 
 	static const size_t wSize = N / 8 * sizeof(Complex);
 	static const size_t wsSize = N / 8 * sizeof(Complex);
-	static const size_t zSize = index(N) * sizeof(Complex);
-	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);	// num_threads <= 64
+	static const size_t zSize = index(N) * sizeof(Complex) + 1024;	// L1 line size is 4K;
+	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);		// num_threads <= 64
 
 	static const size_t wOffset = 0;
 	static const size_t wsOffset = wOffset + wSize;

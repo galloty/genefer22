@@ -553,6 +553,8 @@ private:
 	Vc z[4];
 
 public:
+	finline explicit Vradix4() {}
+
 	finline explicit Vradix4(const Vc * const mem, const size_t step)
 	{
 		for (size_t i = 0; i < 4; ++i) z[i] = mem[i * step];
@@ -572,6 +574,9 @@ public:
 	{
 		for (size_t i = 0; i < 4; ++i) mem[(4 * i) / 8 + ((4 * i) % 8)] = z[i];
 	}
+
+	Vc & operator [](const size_t i) { return z[i]; }
+	Vc operator [](const size_t i) const { return z[i]; }
 
 	finline void interleave()
 	{
@@ -853,6 +858,8 @@ private:
 	Vc z[8];
 
 public:
+	finline explicit Vradix8() {}
+
 	finline explicit Vradix8(const Vc * const mem, const size_t step)
 	{
 		for (size_t i = 0; i < 8; ++i) z[i] = mem[i * step];
@@ -862,6 +869,9 @@ public:
 	{
 		for (size_t i = 0; i < 8; ++i) mem[i * step] = z[i];
 	}
+
+	Vc & operator [](const size_t i) { return z[i]; }
+	Vc operator [](const size_t i) const { return z[i]; }
 
 	finline void forward8_0()
 	{

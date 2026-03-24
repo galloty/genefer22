@@ -262,8 +262,8 @@ private:
 
 	static const size_t wSize = N / 8 * sizeof(Complex);
 	static const size_t wsSize = N / 8 * sizeof(Complex);
-	static const size_t zSize = index(N) * sizeof(Complex) + 1024;	// L1 line size is 4K;
-	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);		// num_threads <= 64
+	static const size_t zSize = index(N) * sizeof(Complex);
+	static const size_t fcSize = 64 * n_io_inv * sizeof(Vc);	// num_threads <= 64
 
 	static const size_t wOffset = 0;
 	static const size_t wsOffset = wOffset + wSize;
@@ -1017,8 +1017,7 @@ inline transform * create_transformCPUf64(const uint32_t b, const uint32_t n, co
 #elif defined(SBDTRANSFORM)
 	(void)b; (void)n; (void)num_threads; (void)num_regs; (void)checkError;
 #else
-	if      (n == 18) pTransform = new transformCPUf64<(1 << 18), VSIZE, true>(b, n, num_threads, num_regs, checkError);
-	else if (n == 19) pTransform = new transformCPUf64<(1 << 19), VSIZE, true>(b, n, num_threads, num_regs, checkError);
+	if      (n == 19) pTransform = new transformCPUf64<(1 << 19), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	else if (n == 20) pTransform = new transformCPUf64<(1 << 20), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	else if (n == 21) pTransform = new transformCPUf64<(1 << 21), VSIZE, true>(b, n, num_threads, num_regs, checkError);
 	else if (n == 22) pTransform = new transformCPUf64<(1 << 22), VSIZE, true>(b, n, num_threads, num_regs, checkError);

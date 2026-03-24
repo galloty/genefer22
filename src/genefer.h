@@ -1384,7 +1384,7 @@ public:
 #else
 			false;
 
-		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 80, 65, 50, 40, 30, 20 };
+		static constexpr uint32_t bm[23 - 12 + 1] = { 2000, 2000, 2000, 2000, 1500, 1000, 1000, 65, 50, 40, 30, 20 };
 		if (impl != "i32")
 		{
 			if (b > bm[n - 12] * 1000000) checkError = true;

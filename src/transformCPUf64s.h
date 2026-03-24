@@ -281,8 +281,8 @@ private:
 
 	static const size_t wSize = N / 8 * sizeof(Complex);
 	static const size_t wsSize = N / 8 * sizeof(Complex);
-	static const size_t zSize = 2 * index(N) * sizeof(Complex) + 1024;	// L1 line size is 4K;
-	static const size_t fcSize = 2 * 64 * n_io_inv * sizeof(Vc);		// num_threads <= 64
+	static const size_t zSize = 2 * index(N) * sizeof(Complex);
+	static const size_t fcSize = 2 * 64 * n_io_inv * sizeof(Vc);	// num_threads <= 64
 
 	static const size_t wOffset = 0;
 	static const size_t wsOffset = wOffset + wSize;
@@ -950,10 +950,10 @@ inline transform * create_transformCPUf64s(const uint32_t b, const uint32_t n, c
 	else if (n == 15) pTransform = new transformCPUf64s<(1 << 14), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 16) pTransform = new transformCPUf64s<(1 << 15), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 17) pTransform = new transformCPUf64s<(1 << 16), VSIZE>(b, n, num_threads, num_regs, checkError);
+	else if (n == 18) pTransform = new transformCPUf64s<(1 << 17), VSIZE>(b, n, num_threads, num_regs, checkError);
 #endif
 #if defined(SBDTRANSFORM)
-	if      (n == 18) pTransform = new transformCPUf64s<(1 << 17), VSIZE>(b, n, num_threads, num_regs, checkError);
-	else if (n == 19) pTransform = new transformCPUf64s<(1 << 18), VSIZE>(b, n, num_threads, num_regs, checkError);
+	if      (n == 19) pTransform = new transformCPUf64s<(1 << 18), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 20) pTransform = new transformCPUf64s<(1 << 19), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 21) pTransform = new transformCPUf64s<(1 << 20), VSIZE>(b, n, num_threads, num_regs, checkError);
 	else if (n == 22) pTransform = new transformCPUf64s<(1 << 21), VSIZE>(b, n, num_threads, num_regs, checkError);

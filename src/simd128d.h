@@ -19,31 +19,22 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 typedef float64x2_t simd128d;
 
-inline simd128d set_pd(const double h, const double l)
+inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmaq_f64(v0, v1, v2); }
+inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmsq_f64(v0, v1, v2); }
+
+inline bool is_zero_128d(const simd128d v) { const uint64x2_t mask = vceqzq_f64(v); return ((mask[0] & mask[1]) != 0); }
+
+inline simd128d abs_128d(const simd128d v) { return vabsq_f64(v); }
+
+inline simd128d max_128d(const simd128d v0, const simd128d v1) { return vmaxq_f64(v0, v1); }
+
+inline simd128d round_128d(const simd128d v) { return vrndnq_f64(v); }
+
+inline void transpose_128d(simd128d & v0, simd128d & v1)
 {
-	const double __attribute__((aligned(16))) data[2] = { l, h };
-	return vld1q_f64((const float64_t *)data);
+	const simd128d t = vzip2q_f64(v0, v1);
+	v0 = vzip1q_f64(v0, v1); v1 = t;
 }
-
-inline simd128d set1_pd(const double f) { return vdupq_n_f64(f); }
-
-inline simd128d addmul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmaq_f64(v0, v1, v2); }
-inline simd128d submul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmsq_f64(v0, v1, v2); }
-
-inline bool is_zero_pd(const simd128d v)
-{
-	const uint64x2_t mask = vceqzq_f64(v);
-	return ((vgetq_lane_u64(mask, 0) & vgetq_lane_u64(mask, 1)) != 0);
-}
-
-inline simd128d abs_pd(const simd128d v) { return vabsq_f64(v); }
-
-inline simd128d max_pd(const simd128d v0, const simd128d v1) { return vmaxq_f64(v0, v1); }
-
-inline simd128d round_pd(const simd128d v) { return vrndnq_f64(v); }
-
-inline simd128d unpacklo_pd(const simd128d v0, const simd128d v1) { return vzip1q_f64(v0, v1); }
-inline simd128d unpackhi_pd(const simd128d v0, const simd128d v1) { return vzip2q_f64(v0, v1); }
 
 #else	// SSE2/SSE4.1
 
@@ -51,33 +42,39 @@ inline simd128d unpackhi_pd(const simd128d v0, const simd128d v1) { return vzip2
 
 typedef __m128d simd128d;
 
-inline simd128d set_pd(const double h, const double l) { return _mm_set_pd(h, l); }
+inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 + v1 * v2; }
+inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 - v1 * v2; }
 
-inline simd128d set1_pd(const double f) { return _mm_set1_pd(f); }
+inline bool is_zero_128d(const simd128d v) { return (_mm_movemask_pd(_mm_cmpneq_pd(v, _mm_setzero_pd())) == 0); }
 
-inline simd128d addmul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 + v1 * v2; }
-inline simd128d submul_pd(const simd128d v0, const simd128d v1, const simd128d v2) { return v0 - v1 * v2; }
+inline simd128d abs_128d(const simd128d v)
+{
+	const long long m = (long long)(uint64_t(1) << 63);
+	const simd128d mask = _mm_castsi128_pd((__m128i){m, m});	// _mm_set1_pd(-0.0);
+	return _mm_andnot_pd(mask, v);
+}
 
-inline bool is_zero_pd(const simd128d v) { return (_mm_movemask_pd(_mm_cmpneq_pd(v, _mm_setzero_pd())) == 0); }
+inline simd128d max_128d(const simd128d v0, const simd128d v1) { return _mm_max_pd(v0, v1); }
 
-inline simd128d abs_pd(const simd128d v) { return _mm_andnot_pd(_mm_set1_pd(-0.0), v); }
-
-inline simd128d max_pd(const simd128d v0, const simd128d v1) { return _mm_max_pd(v0, v1); }
-
-inline simd128d round_pd(const simd128d v)
+inline simd128d round_128d(const simd128d v)
 {
 #if defined(__SSE4_1__)
 	return _mm_round_pd(v, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
 #else // SSE2
-	const __m128d signMask = _mm_set1_pd(-0.0), C52 = _mm_set1_pd(4503599627370496.0);  // 2^52
-	const __m128d ar = _mm_andnot_pd(signMask, v);
-	const __m128d ir = _mm_or_pd(_mm_sub_pd(_mm_add_pd(ar, C52), C52), _mm_and_pd(signMask, v));
-	const __m128d mr = _mm_cmpge_pd(ar, C52);
+	const long long m = (long long)(uint64_t(1) << 63);
+	const simd128d mask = _mm_castsi128_pd((__m128i){m, m});	// _mm_set1_pd(-0.0);
+	const simd128d C52 = _mm_set1_pd(4503599627370496.0);		// 2^52
+	const simd128d ar = _mm_andnot_pd(mask, v);
+	const simd128d ir = _mm_or_pd(_mm_sub_pd(_mm_add_pd(ar, C52), C52), _mm_and_pd(mask, v));
+	const simd128d mr = _mm_cmpge_pd(ar, C52);
 	return _mm_or_pd(_mm_and_pd(mr, v), _mm_andnot_pd(mr, ir));
 #endif
 }
 
-inline simd128d unpacklo_pd(const simd128d v0, const simd128d v1) { return _mm_unpacklo_pd(v0, v1); }
-inline simd128d unpackhi_pd(const simd128d v0, const simd128d v1) { return _mm_unpackhi_pd(v0, v1); }
+inline void transpose_128d(simd128d & v0, simd128d & v1)
+{
+	const simd128d t = _mm_unpackhi_pd(v0, v1);
+	v0 = _mm_unpacklo_pd(v0, v1); v1 = t;
+}
 
 #endif

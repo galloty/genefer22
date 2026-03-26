@@ -11,6 +11,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 
 #include "simd128d.h"
+#include "simd256d.h"
+#include "simd512d.h"
 
 #define finline	__attribute__((always_inline))
 
@@ -106,17 +108,17 @@ private:
 
 public:
 	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : r(set_pd(0.0, f)) {}
+	finline explicit Vd(const double & f) : r((simd128d){f, 0.0}) {}
 	finline Vd(const Vd & rhs) : r(rhs.r) {}
 	finline Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	finline static Vd broadcast(const double & f) { return Vd(set1_pd(f)); }
+	finline static Vd broadcast(const double & f) { return Vd((simd128d){f, f}); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	finline double operator[](const size_t i) const { return r[i]; }
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 
-	finline bool isZero() const { return is_zero_pd(r); }
+	finline bool isZero() const { return is_zero_128d(r); }
 
 	finline Vd operator-() const { return Vd(-r); }
 
@@ -128,24 +130,20 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(addmul_pd(vd0.r, vd1.r, vd2.r)); }
-	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(submul_pd(vd0.r, vd1.r, vd2.r)); }
+	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(addmul_128d(vd0.r, vd1.r, vd2.r)); }
+	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(submul_128d(vd0.r, vd1.r, vd2.r)); }
 
-	finline void shift(const double f) { r = set_pd(r[0], f); }
+	finline void shift(const double f) { r = (simd128d){f, r[0]}; }
 
-	finline Vd round() const { return Vd(round_pd(r)); } 
+	finline Vd round() const { return Vd(round_128d(r)); } 
 
-	finline Vd abs() const { return Vd(abs_pd(r)); }
-	finline Vd & max(const Vd & rhs) { r = max_pd(r, rhs.r); return *this; }
+	finline Vd abs() const { return Vd(abs_128d(r)); }
+	finline Vd & max(const Vd & rhs) { r = max_128d(r, rhs.r); return *this; }
 	finline double max() const { return std::max(r[0], r[1]); }
 
 	finline void interleave(Vd &) {}	// unused
 
-	finline static void transpose(Vd vd[2])
-	{
-		const simd128d t = unpackhi_pd(vd[0].r, vd[1].r);
-		vd[0].r = unpacklo_pd(vd[0].r, vd[1].r); vd[1].r = t;
-	}
+	finline static void transpose(Vd vd[2]) { transpose_128d(vd[0].r, vd[1].r); }
 };
 
 #if defined(__AVX__)
@@ -153,18 +151,18 @@ template<>
 class Vd<4>
 {
 private:
-	__m256d r;
+	simd256d r;
 
 private:
-	constexpr explicit Vd(const __m256d & _r) : r(_r) {}
+	constexpr explicit Vd(const simd256d & _r) : r(_r) {}
 
 public:
 	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : r(_mm256_set_pd(0.0, 0.0, 0.0, f)) {}
+	finline explicit Vd(const double & f) : r((simd256d){f, 0.0, 0.0, 0.0}) {}
 	finline Vd(const Vd & rhs) : r(rhs.r) {}
 	finline Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	finline static Vd broadcast(const double & f) { return Vd(_mm256_set1_pd(f)); }
+	finline static Vd broadcast(const double & f) { return Vd((simd256d){f, f, f, f}); }
 	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
 
 	finline double operator[](const size_t i) const { return r[i]; }
@@ -176,7 +174,7 @@ public:
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 #pragma GCC diagnostic pop
 
-	finline bool isZero() const { return (_mm256_movemask_pd(_mm256_cmp_pd(r, _mm256_setzero_pd(), _CMP_NEQ_OQ)) == 0); }
+	finline bool isZero() const { return is_zero_256d(r); }
 
 	finline Vd operator-() const { return Vd(-r); }
 
@@ -191,90 +189,17 @@ public:
 	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 + vd1 * vd2); }
 	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 - vd1 * vd2); }
 
-	finline void shift(const double f) { r = _mm256_set_pd(r[2], r[1], r[0], f); }
+	finline void shift(const double f) { r = (simd256d){f, r[0], r[1], r[2]}; }
 
-	finline Vd round() const { return Vd(_mm256_round_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
+	finline Vd round() const { return Vd(round_256d(r)); } 
 
-	finline Vd abs() const { return Vd(_mm256_andnot_pd(_mm256_set1_pd(-0.0), r)); }
-	finline Vd & max(const Vd & rhs) { r = _mm256_max_pd(r, rhs.r); return *this; }
+	inline Vd abs() const { return Vd(abs_256d(r)); }
+	finline Vd & max(const Vd & rhs) { r = max_256d(r, rhs.r); return *this; }
 	finline double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
 
 	finline void interleave(Vd &) {}	// unused
 
-	finline static void transpose(Vd vd[4])
-	{
-		const __m256d r0 = _mm256_shuffle_pd(vd[0].r, vd[1].r, 0b0000), r1 = _mm256_shuffle_pd(vd[0].r, vd[1].r, 0b1111);
-		const __m256d r2 = _mm256_shuffle_pd(vd[2].r, vd[3].r, 0b0000), r3 = _mm256_shuffle_pd(vd[2].r, vd[3].r, 0b1111);
-		vd[0].r = _mm256_permute2f128_pd(r0, r2, _MM_SHUFFLE(0, 2, 0, 0));
-		vd[2].r = _mm256_permute2f128_pd(r0, r2, _MM_SHUFFLE(0, 3, 0, 1));
-		vd[1].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 2, 0, 0));
-		vd[3].r = _mm256_permute2f128_pd(r1, r3, _MM_SHUFFLE(0, 3, 0, 1));
-	}
-};
-#else
-template<>
-class Vd<4>
-{
-private:
-	simd128d rl, rh;
-
-private:
-	constexpr explicit Vd(const simd128d & _rl, const simd128d & _rh) : rl(_rl), rh(_rh) {}
-
-public:
-	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : rl(set_pd(0.0, f)), rh(set1_pd(0.0)) {}
-	finline Vd(const Vd & rhs) : rl(rhs.rl), rh(rhs.rh) {}
-	finline Vd & operator=(const Vd & rhs) { rl = rhs.rl; rh = rhs.rh; return *this; }
-
-	finline static Vd broadcast(const double & f) { return Vd(set1_pd(f), set1_pd(f)); }
-	finline static Vd broadcast(const double &, const double &) { return Vd(0.0); }	// unused
-
-	finline double operator[](const size_t i) const { return (i <= 1) ? rl[i] : rh[i - 2]; }
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#if !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-	finline void set(const size_t i, const double & f) { if (i <= 1) rl[i] = f; else rh[i - 2] = f; }
-#pragma GCC diagnostic pop
-
-	finline bool isZero() const { const bool r = is_zero_pd(rl) && is_zero_pd(rh); return r; }
-
-	finline Vd operator-() const { return Vd(-rl, -rh); }
-
-	finline Vd & operator+=(const Vd & rhs) { rl += rhs.rl; rh += rhs.rh; return *this; }
-	finline Vd & operator-=(const Vd & rhs) { rl -= rhs.rl; rh -= rhs.rh; return *this; }
-	finline Vd & operator*=(const Vd & rhs) { rl *= rhs.rl; rh *= rhs.rh; return *this; }
-
-	finline Vd operator+(const Vd & rhs) const { Vd vd = *this; vd += rhs; return vd; }
-	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
-	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
-
-	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(addmul_pd(vd0.rl, vd1.rl, vd2.rl), addmul_pd(vd0.rh, vd1.rh, vd2.rh)); }
-	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(submul_pd(vd0.rl, vd1.rl, vd2.rl), submul_pd(vd0.rh, vd1.rh, vd2.rh)); }
-
-	finline void shift(const double f) { rh = set_pd(rh[0], rl[1]); rl = set_pd(rl[0], f); }
-
-	finline Vd round() const { return Vd(round_pd(rl), round_pd(rh)); } 
-
-	finline Vd abs() const { return Vd(abs_pd(rl), abs_pd(rh)); }
-	finline Vd & max(const Vd & rhs) { rl = max_pd(rl, rhs.rl); rh = max_pd(rh, rhs.rh); return *this; }
-	finline double max() const { const double m02 = std::max(rl[0], rh[0]), m13 = std::max(rl[1], rh[1]); return std::max(m02, m13); }
-
-	finline void interleave(Vd &) {}	// unused
-
-	finline static void transpose(Vd vd[4])
-	{
-		const simd128d a_00_10 = unpacklo_pd(vd[0].rl, vd[1].rl), a_01_11 = unpackhi_pd(vd[0].rl, vd[1].rl);
-		const simd128d a_02_12 = unpacklo_pd(vd[0].rh, vd[1].rh), a_03_13 = unpackhi_pd(vd[0].rh, vd[1].rh);
-		const simd128d a_20_30 = unpacklo_pd(vd[2].rl, vd[3].rl), a_21_31 = unpackhi_pd(vd[2].rl, vd[3].rl);
-		const simd128d a_22_32 = unpacklo_pd(vd[2].rh, vd[3].rh), a_23_33 = unpackhi_pd(vd[2].rh, vd[3].rh);
-		vd[0].rl = a_00_10; vd[0].rh = a_20_30;
-		vd[1].rl = a_01_11; vd[1].rh = a_21_31;
-		vd[2].rl = a_02_12; vd[2].rh = a_22_32;
-		vd[3].rl = a_03_13; vd[3].rh = a_23_33;
-	}
+	finline static void transpose(Vd vd[4]) { transpose_256d(vd[0].r, vd[1].r, vd[2].r, vd[3].r); }
 };
 #endif
 
@@ -283,19 +208,19 @@ template<>
 class Vd<8>
 {
 private:
-	__m512d r;
+	simd512d r;
 
 private:
-	constexpr explicit Vd(const __m512d & _r) : r(_r) {}
+	constexpr explicit Vd(const simd512d & _r) : r(_r) {}
 
 public:
 	finline explicit Vd() {}
-	finline explicit Vd(const double & f) : r(_mm512_set_pd(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f)) {}
+	finline explicit Vd(const double & f) : r((simd512d){f, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}) {}
 	finline Vd(const Vd & rhs) : r(rhs.r) {}
 	finline Vd & operator=(const Vd & rhs) { r = rhs.r; return *this; }
 
-	finline static Vd broadcast(const double & f) { return Vd(_mm512_set1_pd(f)); }
-	finline static Vd broadcast(const double & f_l, const double & f_h) { return Vd(_mm512_set_pd(f_h, f_h, f_h, f_h, f_l, f_l, f_l, f_l)); }
+	finline static Vd broadcast(const double & f) { return Vd((simd512d){f, f, f, f, f, f, f, f}); }
+	finline static Vd broadcast(const double & f_l, const double & f_h) { return Vd((simd512d){f_l, f_l, f_l, f_l, f_h, f_h, f_h, f_h}); }
 
 	finline double operator[](const size_t i) const { return r[i]; }
 #pragma GCC diagnostic push
@@ -306,7 +231,7 @@ public:
 	finline void set(const size_t i, const double & f) { r[i] = f; }
 #pragma GCC diagnostic pop
 
-	finline bool isZero() const { return (_mm512_cmp_pd_mask(r, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0); }
+	finline bool isZero() const { return is_zero_512d(r); }
 
 	finline Vd operator-() const { return Vd(-r); }
 
@@ -321,7 +246,7 @@ public:
 	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 + vd1 * vd2); }
 	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 - vd1 * vd2); }
 
-	finline void shift(const double f) { r = _mm512_set_pd(r[6], r[5], r[4], r[3], r[2], r[1], r[0], f); }
+	finline void shift(const double f) { r = (simd512d){f, r[0], r[1], r[2], r[3], r[4], r[5], r[6]}; }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuninitialized"
@@ -329,33 +254,15 @@ public:
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 
-	finline Vd round() const { return Vd(_mm512_roundscale_pd(r, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)); } 
+	finline Vd round() const { return Vd(round_512d(r)); }
 
-	finline Vd abs() const { return Vd(_mm512_abs_pd(r)); }
-	finline Vd & max(const Vd & rhs) { r = _mm512_max_pd(r, rhs.r); return *this; }
-	finline double max() const { return _mm512_reduce_max_pd(r); }
+	finline Vd abs() const { return Vd(abs_512d(r)); }
+	finline Vd & max(const Vd & rhs) { r = max_512d(r, rhs.r); return *this; }
+	finline double max() const { return reduce_max_512d(r); }
 
-	finline void interleave(Vd & rhs)
-	{
-		const __m512d t = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(2, 3, 2, 3));
-		r = _mm512_shuffle_f64x2(r, rhs.r, _MM_SHUFFLE(0, 1, 0, 1)); rhs.r = t;
-	}
+	finline void interleave(Vd & rhs) { interleave_512d(r, rhs.r); }
 
-	finline static void transpose(Vd vd[8])
-	{
-		const __m512d r0 = _mm512_unpacklo_pd(vd[0].r, vd[1].r), r1 = _mm512_unpackhi_pd(vd[0].r, vd[1].r);
-		const __m512d r2 = _mm512_unpacklo_pd(vd[2].r, vd[3].r), r3 = _mm512_unpackhi_pd(vd[2].r, vd[3].r);
-		const __m512d r4 = _mm512_unpacklo_pd(vd[4].r, vd[5].r), r5 = _mm512_unpackhi_pd(vd[4].r, vd[5].r);
-		const __m512d r6 = _mm512_unpacklo_pd(vd[6].r, vd[7].r), r7 = _mm512_unpackhi_pd(vd[6].r, vd[7].r);
-		const __m512d t0 = _mm512_shuffle_f64x2(r0, r2, _MM_SHUFFLE(2, 0, 2, 0)), t2 = _mm512_shuffle_f64x2(r0, r2, _MM_SHUFFLE(3, 1, 3, 1));
-		const __m512d t1 = _mm512_shuffle_f64x2(r1, r3, _MM_SHUFFLE(2, 0, 2, 0)), t3 = _mm512_shuffle_f64x2(r1, r3, _MM_SHUFFLE(3, 1, 3, 1));
-		const __m512d t4 = _mm512_shuffle_f64x2(r4, r6, _MM_SHUFFLE(2, 0, 2, 0)), t6 = _mm512_shuffle_f64x2(r4, r6, _MM_SHUFFLE(3, 1, 3, 1));
-		const __m512d t5 = _mm512_shuffle_f64x2(r5, r7, _MM_SHUFFLE(2, 0, 2, 0)), t7 = _mm512_shuffle_f64x2(r5, r7, _MM_SHUFFLE(3, 1, 3, 1));
-		vd[0].r = _mm512_shuffle_f64x2(t0, t4, _MM_SHUFFLE(2, 0, 2, 0)); vd[4].r = _mm512_shuffle_f64x2(t0, t4, _MM_SHUFFLE(3, 1, 3, 1));
-		vd[1].r = _mm512_shuffle_f64x2(t1, t5, _MM_SHUFFLE(2, 0, 2, 0)); vd[5].r = _mm512_shuffle_f64x2(t1, t5, _MM_SHUFFLE(3, 1, 3, 1));
-		vd[2].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(2, 0, 2, 0)); vd[6].r = _mm512_shuffle_f64x2(t2, t6, _MM_SHUFFLE(3, 1, 3, 1));
-		vd[3].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(2, 0, 2, 0)); vd[7].r = _mm512_shuffle_f64x2(t3, t7, _MM_SHUFFLE(3, 1, 3, 1));
-	}
+	finline static void transpose(Vd vd[8]) { { transpose_512d(vd[0].r, vd[1].r, vd[2].r, vd[3].r, vd[4].r, vd[5].r, vd[6].r, vd[7].r); }}
 
 #pragma GCC diagnostic pop
 };

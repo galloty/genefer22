@@ -15,6 +15,36 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma clang fp contract(fast) reassociate(on) reciprocal(off)
 #endif
 
+#if defined(__ARM_FEATURE_SVE)	// SVE
+
+#include <arm_sve.h>
+
+typedef svfloat64_t simd128d __attribute__((arm_sve_vector_bits(128)));
+typedef svbool_t bool128 __attribute__((arm_sve_vector_bits(128)));
+
+inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return svmla_f64_x(svptrue_b64(), v0, v1, v2); }
+inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return svmls_f64_x(svptrue_b64(), v0, v1, v2); }
+
+inline bool is_zero_128d(const simd128d v)
+{
+	const bool128 mask = svcmpeq_f64(svptrue_b64(), v, (simd128d){0.0, 0.0});
+	return (mask[0] && mask[1]);
+}
+
+inline simd128d abs_128d(const simd128d v) { return svabs_f64_x(svptrue_b64(), v); }
+
+inline simd128d max_128d(const simd128d v0, const simd128d v1) { return svmax_f64_x(svptrue_b64(), v0, v1); }
+
+inline simd128d round_128d(const simd128d v) { return svrinta_f64_x(svptrue_b64(), v); }
+
+inline void transpose_128d(simd128d & v0, simd128d & v1)
+{
+	const simd128d t = svzip2_f64(v0, v1);
+	v0 = svzip1_f64(v0, v1); v1 = t;
+}
+
+#else	// NEON
+
 #include <arm_neon.h>
 
 typedef float64x2_t simd128d;
@@ -35,6 +65,8 @@ inline void transpose_128d(simd128d & v0, simd128d & v1)
 	const simd128d t = vzip2q_f64(v0, v1);
 	v0 = vzip1q_f64(v0, v1); v1 = t;
 }
+
+#endif
 
 #else	// SSE2/SSE4.1
 

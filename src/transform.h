@@ -53,6 +53,8 @@ private:
 								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose);
 #elif defined(__aarch64__)
 	static transform * create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+	static size_t get_sve_size();
+	static transform * create_sve128(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 #else
 	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -113,9 +115,25 @@ public:
 		transform * pTransform = nullptr;
 
 #if defined(__aarch64__)
-		(void)impl;
-		pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
-		ttype = "neon";
+		if (__builtin_cpu_supports("sve"))
+		{
+			const uint64_t size = transform::get_sve_size();
+			if ((size == 128) && (impl.empty() || (impl == "sve128")))
+			{
+				pTransform = transform::create_sve128(b, n, num_threads, num_regs, checkError);
+				ttype = "sve128";
+			}
+			else	// unsupported SVE size 
+			{
+				pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
+				ttype = "neon";
+			}
+		}
+		else
+		{
+			pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
+			ttype = "neon";
+		}
 #else
 #if defined(__x86_64)
 		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
@@ -164,7 +182,20 @@ public:
 	static std::string implementations()
 	{
 		std::string impls;
+#if !defined(GPU)
 #if defined(__aarch64__)
+		if (__builtin_cpu_supports("sve"))
+		{
+			const uint64_t size = transform::get_sve_size();
+			if (size == 128)      impls += " sve128";
+			else if (size == 256) impls += " sve256";
+			else if (size == 512) impls += " sve512";
+			else
+			{
+				std::ostringstream ss; ss << "Warning: ARM SVE-" << size << " is not supported." << std::endl;
+				pio::print(ss.str());
+			}
+		}
 		impls += " neon";
 #else
 #if defined(__x86_64)
@@ -175,6 +206,7 @@ public:
 		if (__builtin_cpu_supports("sse4.1")) impls += " sse4";
 		if (__builtin_cpu_supports("sse2")) impls += " sse2";
 		if (__builtin_cpu_supports("avx2")) impls += " i32";
+#endif
 #endif
 		return impls;
 	}

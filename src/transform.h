@@ -115,21 +115,13 @@ public:
 		transform * pTransform = nullptr;
 
 #if defined(__aarch64__)
-		if (__builtin_cpu_supports("sve"))
+		const uint64_t size = transform::get_sve_size();
+		if ((size == 128) && (impl.empty() || (impl == "sve128")))
 		{
-			const uint64_t size = transform::get_sve_size();
-			if ((size == 128) && (impl.empty() || (impl == "sve128")))
-			{
-				pTransform = transform::create_sve128(b, n, num_threads, num_regs, checkError);
-				ttype = "sve128";
-			}
-			else	// unsupported SVE size 
-			{
-				pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
-				ttype = "neon";
-			}
+			pTransform = transform::create_sve128(b, n, num_threads, num_regs, checkError);
+			ttype = "sve128";
 		}
-		else
+		else	// no SVE or unsupported SVE size 
 		{
 			pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
 			ttype = "neon";
@@ -184,17 +176,14 @@ public:
 		std::string impls;
 #if !defined(GPU)
 #if defined(__aarch64__)
-		if (__builtin_cpu_supports("sve"))
+		const uint64_t size = transform::get_sve_size();
+		if (size == 128)      impls += " sve128";
+		else if (size == 256) impls += " sve256";
+		else if (size == 512) impls += " sve512";
+		else if (size > 0)
 		{
-			const uint64_t size = transform::get_sve_size();
-			if (size == 128)      impls += " sve128";
-			else if (size == 256) impls += " sve256";
-			else if (size == 512) impls += " sve512";
-			else
-			{
-				std::ostringstream ss; ss << "Warning: ARM SVE-" << size << " is not supported." << std::endl;
-				pio::print(ss.str());
-			}
+			std::ostringstream ss; ss << "Warning: ARM SVE-" << size << " is not supported." << std::endl;
+			pio::print(ss.str());
 		}
 		impls += " neon";
 #else

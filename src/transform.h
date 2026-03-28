@@ -14,6 +14,19 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "gint.h"
 #include "file.h"
 
+#if defined(__aarch64__)
+inline bool cpu_supports_sve()
+{
+#if defined(__clang__)
+	if (__clang_major__ >= 19) return __builtin_cpu_supports("sve");
+#endif
+	uint64_t r = 0;
+	__asm__ __volatile__("mrs %0, ID_AA64PFR0_EL1" : "=r"(r));
+	// SVE, bits [35:32] of ID_AA64PFR0_EL1
+	return (((r >> 32) & 0xf) >= 1);
+}
+ #endif
+
 class transform
 {
 protected:
@@ -115,18 +128,19 @@ public:
 		transform * pTransform = nullptr;
 
 #if defined(__aarch64__)
-		const uint64_t size = transform::get_sve_size();
+		const uint64_t size = cpu_supports_sve() ? transform::get_sve_size() : 0;
 		if ((size == 128) && (impl.empty() || (impl == "sve128")))
 		{
 			pTransform = transform::create_sve128(b, n, num_threads, num_regs, checkError);
 			ttype = "sve128";
 		}
-		else	// no SVE or unsupported SVE size 
+		else
 		{
 			pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
 			ttype = "neon";
 		}
 #else
+		__builtin_cpu_init();
 #if defined(__x86_64)
 		if (__builtin_cpu_supports("avx512f") && (impl.empty() || (impl == "512")))
 		{
@@ -176,17 +190,21 @@ public:
 		std::string impls;
 #if !defined(GPU)
 #if defined(__aarch64__)
-		const uint64_t size = transform::get_sve_size();
-		if (size == 128)      impls += " sve128";
-		else if (size == 256) impls += " sve256";
-		else if (size == 512) impls += " sve512";
-		else if (size > 0)
+		if (cpu_supports_sve())
 		{
-			std::ostringstream ss; ss << "Warning: ARM SVE-" << size << " is not supported." << std::endl;
-			pio::print(ss.str());
+			const uint64_t size = transform::get_sve_size();
+			if (size == 128)      impls += " sve128";
+			else if (size == 256) impls += " sve256";
+			else if (size == 512) impls += " sve512";
+			else if (size > 0)
+			{
+				std::ostringstream ss; ss << "Warning: ARM SVE-" << size << " is not supported." << std::endl;
+				pio::print(ss.str());
+			}
 		}
 		impls += " neon";
 #else
+		__builtin_cpu_init();
 #if defined(__x86_64)
 		if (__builtin_cpu_supports("avx512f")) impls += " 512";
 #endif

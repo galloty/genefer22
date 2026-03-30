@@ -68,6 +68,7 @@ private:
 	static transform * create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static size_t get_sve_size();
 	static transform * create_sve128(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+	static transform * create_sve256(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 #else
 	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -134,6 +135,11 @@ public:
 			pTransform = transform::create_sve128(b, n, num_threads, num_regs, checkError);
 			ttype = "sve128";
 		}
+		else if ((size == 256) && (impl.empty() || (impl == "sve256")))
+		{
+			pTransform = transform::create_sve256(b, n, num_threads, num_regs, checkError);
+			ttype = "sve256";
+		}
 		else
 		{
 			pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
@@ -149,7 +155,7 @@ public:
 		}
 		else
 #endif
-		     if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
+		if (__builtin_cpu_supports("fma") && (impl.empty() || (impl == "fma")))
 		{
 			pTransform = transform::create_fma(b, n, num_threads, num_regs, checkError);
 			ttype = "fma";

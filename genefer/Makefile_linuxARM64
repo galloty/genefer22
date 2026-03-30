@@ -1,6 +1,6 @@
 # Under Ubuntu:22.04, these packages are needed to build BOINC and genefer
 # build-essential autoconf pkg-config libtool openssl libssl-dev libcurl4-openssl-dev libgmp-dev libomp-dev ocl-icd-opencl-dev
-# Compiler: GCC 7.5+
+# Compiler: GCC 11+
 CC = g++ -std=c++17
 RM = rm
 
@@ -12,7 +12,7 @@ SRC_DIR = $(ROOT_DIR)/src
 OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = -L/usr/lib/aarch64-linux-gnu/ -lOpenCL
 
-# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.0.zip
+# BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
 # ./_autosetup
 # ./configure --disable-server --disable-client --disable-manager
 # api: make => libboinc_api.a libboinc_opencl.a
@@ -26,7 +26,7 @@ CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
-OBJS_CPU = main.o transform_neon.o sve_size.o transform_sve128.o
+OBJS_CPU = main.o transform_neon.o sve_size.o transform_sve128.o transform_sve256.o
 OBJS_GPU = maing.o transform_ocl.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
@@ -59,8 +59,12 @@ sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -msve-vector-bits=128 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -msve-vector-bits=128 -c -S $< -o sve128.asm
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c -S $< -o sve128.asm
+
+transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
+	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c $< -o $@
+#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c -S $< -o sve256.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

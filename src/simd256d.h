@@ -9,7 +9,38 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
-#if defined(__AVX__)
+#if defined(__aarch64__)
+
+#if defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 256)	// 256-bit SVE
+
+#include <arm_sve.h>
+
+typedef svfloat64_t simd256d __attribute__((arm_sve_vector_bits(256)));
+typedef svuint8_t simd256u8 __attribute__((arm_sve_vector_bits(256)));
+
+inline bool is_zero_256d(const simd256d v)
+{
+	const simd256u8 mask = svdup_u8_z(svcmpeq_f64(svptrue_b64(), v, (simd256d){0.0, 0.0, 0.0, 0.0}), 1);
+	return ((mask[0] & mask[1] & mask[2] & mask[3]) != 0);
+}
+
+inline simd256d abs_256d(const simd256d v) { return svabs_f64_x(svptrue_b64(), v); }
+
+inline simd256d max_256d(const simd256d v0, const simd256d v1) { return svmax_f64_x(svptrue_b64(), v0, v1); }
+
+inline simd256d round_256d(const simd256d v) { return svrinta_f64_x(svptrue_b64(), v); }
+
+inline void transpose_256d(simd256d & v0, simd256d & v1, simd256d & v2, simd256d & v3)
+{
+	const simd256d t0 = svzip1_f64(v0, v2), t2 = svzip2_f64(v0, v2);
+	const simd256d t1 = svzip1_f64(v1, v3), t3 = svzip2_f64(v1, v3);
+	v0 = svzip1_f64(t0, t1); v1 = svzip2_f64(t0, t1);
+	v2 = svzip1_f64(t2, t3); v3 = svzip2_f64(t2, t3);
+}
+
+#endif
+
+#elif defined(__AVX__)	// AVX/FMA
 
 #include <immintrin.h>
 

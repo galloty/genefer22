@@ -1,3 +1,21 @@
+genefer 25.05.0 => genefer 26.03.0
+
+New Features
+ - SVE support (128, 256 and 512 bits) for ARM64
+
+Improvements
+ - faster ARM64-Neon transform
+ - new CPU transform for n = 18. The CPU limit is b_max > 1G
+
+------------------------------------
+
+genefer 25.05.0 => genefer 25.12.0
+
+Improvements
+ - new CPU transform for n = 22. The CPU limit is b_max > 30M
+
+------------------------------------
+
 genefer 25.04.0 => genefer 25.05.0
 
 Improvements
@@ -8,7 +26,7 @@ Improvements
 genefer 24.04.0 => genefer 25.04.0
 
 Improvements
- - faster GPU transform: vectors of four 32-bit integers for I/O
+ - faster GPU transforms: vectors of four 32-bit integers for I/O
 
 ------------------------------------
 

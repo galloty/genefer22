@@ -9,6 +9,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <cmath>
+#include <algorithm>
+
+#if defined(__aarch64__) && defined(__clang__)
+#pragma clang fp contract(fast) reassociate(on) reciprocal(off)
+#endif
 
 #include "simd128d.h"
 #include "simd256d.h"
@@ -97,6 +102,7 @@ public:
 	}
 };
 
+#if !defined(__ARM_FEATURE_SVE) || (__ARM_FEATURE_SVE_BITS == 128)
 template<>
 class Vd<2>
 {
@@ -145,8 +151,9 @@ public:
 
 	finline static void transpose(Vd vd[2]) { transpose_128d(vd[0].r, vd[1].r); }
 };
+#endif
 
-#if defined(__AVX__)
+#if defined(__AVX__) || (defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 256))
 template<>
 class Vd<4>
 {

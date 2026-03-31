@@ -17,15 +17,28 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <arm_sve.h>
 
 typedef svfloat64_t simd128d __attribute__((arm_sve_vector_bits(128)));
-typedef svuint8_t simd128u8 __attribute__((arm_sve_vector_bits(128)));
 
-inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return svmla_f64_x(svptrue_b64(), v0, v1, v2); }
-inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return svmls_f64_x(svptrue_b64(), v0, v1, v2); }
+inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2)
+{
+#if defined(__clang__)
+	return svmla_f64_x(svptrue_b64(), v0, v1, v2);
+#else
+	return v0 + v1 * v2;
+#endif
+}
+
+inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2)
+{
+#if defined(__clang__)
+	return svmls_f64_x(svptrue_b64(), v0, v1, v2);
+#else
+	return v0 - v1 * v2;
+#endif
+}
 
 inline bool is_zero_128d(const simd128d v)
 {
-	const simd128u8 mask = svdup_u8_z(svcmpeq_f64(svptrue_b64(), v, (simd128d){0.0, 0.0}), 1);
-	return ((mask[0] & mask[1]) != 0);
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -2.0, svdup_f64(1.0)) == 0.0);
 }
 
 inline simd128d abs_128d(const simd128d v) { return svabs_f64_x(svptrue_b64(), v); }
@@ -47,8 +60,23 @@ inline void transpose_128d(simd128d & v0, simd128d & v1)
 
 typedef float64x2_t simd128d;
 
-inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmaq_f64(v0, v1, v2); }
-inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2) { return vfmsq_f64(v0, v1, v2); }
+inline simd128d addmul_128d(const simd128d v0, const simd128d v1, const simd128d v2)
+{
+#if defined(__clang__)
+	return vfmaq_f64(v0, v1, v2);
+#else
+	return v0 + v1 * v2;
+#endif
+}
+
+inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d v2)
+{
+#if defined(__clang__)
+	return vfmsq_f64(v0, v1, v2);
+#else
+	return v0 - v1 * v2;
+#endif
+}
 
 inline bool is_zero_128d(const simd128d v) { const uint64x2_t mask = vceqzq_f64(v); return ((mask[0] & mask[1]) != 0); }
 

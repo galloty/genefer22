@@ -16,12 +16,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <arm_sve.h>
 
 typedef svfloat64_t simd256d __attribute__((arm_sve_vector_bits(256)));
-typedef svuint8_t simd256u8 __attribute__((arm_sve_vector_bits(256)));
 
 inline bool is_zero_256d(const simd256d v)
 {
-	const simd256u8 mask = svdup_u8_z(svcmpeq_f64(svptrue_b64(), v, (simd256d){0.0, 0.0, 0.0, 0.0}), 1);
-	return ((mask[0] & mask[1] & mask[2] & mask[3]) != 0);
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -4.0, svdup_f64(1.0)) == 0.0);
 }
 
 inline simd256d abs_256d(const simd256d v) { return svabs_f64_x(svptrue_b64(), v); }

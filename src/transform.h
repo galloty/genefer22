@@ -69,6 +69,7 @@ private:
 	static size_t get_sve_size();
 	static transform * create_sve128(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_sve256(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+	static transform * create_sve512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 #else
 	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -139,6 +140,11 @@ public:
 		{
 			pTransform = transform::create_sve256(b, n, num_threads, num_regs, checkError);
 			ttype = "sve256";
+		}
+		else if ((size == 512) && (impl.empty() || (impl == "sve512")))
+		{
+			pTransform = transform::create_sve512(b, n, num_threads, num_regs, checkError);
+			ttype = "sve512";
 		}
 		else
 		{

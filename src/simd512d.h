@@ -9,7 +9,55 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
-#if defined(__AVX512F__)
+#if defined(__aarch64__)
+
+#if defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 512)	// 512-bit SVE
+
+#include <arm_sve.h>
+
+typedef svfloat64_t simd512d __attribute__((arm_sve_vector_bits(512)));
+typedef svuint64_t simd512u __attribute__((arm_sve_vector_bits(512)));
+
+inline bool is_zero_512d(const simd512d v)
+{
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -8.0, svdup_f64(1.0)) == 0.0);
+}
+
+inline simd512d abs_512d(const simd512d v) { return svabs_f64_x(svptrue_b64(), v); }
+
+inline simd512d max_512d(const simd512d v0, const simd512d v1) { return svmax_f64_x(svptrue_b64(), v0, v1); }
+inline double reduce_max_512d(const simd512d v) { return svmaxv_f64(svptrue_b64(), v); }
+
+inline simd512d round_512d(const simd512d v) { return svrinta_f64_x(svptrue_b64(), v); }
+
+inline void transpose_512d(simd512d & v0, simd512d & v1, simd512d & v2, simd512d & v3, simd512d & v4, simd512d & v5, simd512d & v6, simd512d & v7)
+{
+	const simd512d r0 = svzip1_f64(v0, v4), r4 = svzip2_f64(v0, v4);
+	const simd512d r1 = svzip1_f64(v1, v5), r5 = svzip2_f64(v1, v5);
+	const simd512d r2 = svzip1_f64(v2, v6), r6 = svzip2_f64(v2, v6);
+	const simd512d r3 = svzip1_f64(v3, v7), r7 = svzip2_f64(v3, v7);
+	const simd512d t0 = svzip1_f64(r0, r2), t2 = svzip2_f64(r0, r2);
+	const simd512d t1 = svzip1_f64(r1, r3), t3 = svzip2_f64(r1, r3);
+	const simd512d t4 = svzip1_f64(r4, r6), t6 = svzip2_f64(r4, r6);
+	const simd512d t5 = svzip1_f64(r5, r7), t7 = svzip2_f64(r5, r7);
+	v0 = svzip1_f64(t0, t1); v1 = svzip2_f64(t0, t1);
+	v2 = svzip1_f64(t2, t3); v3 = svzip2_f64(t2, t3);
+	v4 = svzip1_f64(t4, t5); v5 = svzip2_f64(t4, t5);
+	v6 = svzip1_f64(t6, t7); v7 = svzip2_f64(t6, t7);
+}
+
+inline void interleave_512d(simd512d & v0, simd512d & v1)
+{
+	const simd512d v0_lo = svtbl_f64(v0, (simd512u){0, 1, 2, 3, 16, 16, 16, 16});
+	const simd512d v0_hi = svtbl_f64(v0, (simd512u){4, 5, 6, 7, 16, 16, 16, 16});
+	const simd512d v1_lo = svtbl_f64(v1, (simd512u){16, 16, 16, 16, 0, 1, 2, 3});
+	const simd512d v1_hi = svtbl_f64(v1, (simd512u){16, 16, 16, 16, 4, 5, 6, 7});
+	v0 = v0_lo + v1_lo; v1 = v0_hi + v1_hi;
+}
+
+#endif
+
+#elif defined(__AVX512F__)	// AVX-512
 
 #include <immintrin.h>
 

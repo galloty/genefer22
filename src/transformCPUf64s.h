@@ -13,8 +13,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <gmp.h>
 #include <omp.h>
 
-#include "f64vector_pair.h"
 #include "transform.h"
+#include "f64vector_pair.h"
 
 namespace transformCPU_namespace
 {

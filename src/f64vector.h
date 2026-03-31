@@ -11,10 +11,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 #include <algorithm>
 
-#if defined(__aarch64__) && defined(__clang__)
-#pragma clang fp contract(fast) reassociate(on) reciprocal(off)
-#endif
-
 #include "simd128d.h"
 #include "simd256d.h"
 #include "simd512d.h"
@@ -42,65 +38,7 @@ struct Complex
 
 // Is not used because of full template specialization
 template<size_t N>
-class Vd
-{
-private:
-	double __attribute__((aligned(sizeof(double) * N))) r[N];
-
-public:
-	finline explicit Vd() {}
-	finline explicit Vd(const double & f) { r[0] = f; for (size_t i = 1; i < N; ++i) r[i] = 0.0; }
-	finline Vd(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = rhs.r[i]; }
-	finline Vd & operator=(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = rhs.r[i]; return *this; }
-
-	finline static Vd broadcast(const double & f) { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = f; return vd; }
-	finline static Vd broadcast(const double & f_l, const double & f_h)
-	{
-		Vd vd;
-		for (size_t i = 0; i < N / 2; ++i) vd.r[i + 0 * N / 2] = f_l;
-		for (size_t i = 0; i < N / 2; ++i) vd.r[i + 1 * N / 2] = f_h;
-		return vd;
-	}
-
-	finline double operator[](const size_t i) const { return r[i]; }
-	finline void set(const size_t i, const double & f) { r[i] = f; }
-
-	finline bool isZero() const { bool zero = true; for (size_t i = 0; i < N; ++i) zero &= (r[i] == 0.0); return zero; }
-
-	finline Vd operator-() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = -r[i]; return vd; }
-
-	finline Vd & operator+=(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] += rhs.r[i]; return *this; }
-	finline Vd & operator-=(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] -= rhs.r[i]; return *this; }
-	finline Vd & operator*=(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] *= rhs.r[i]; return *this; }
-
-	finline Vd operator+(const Vd & rhs) const { Vd vd = *this; vd += rhs; return vd; }
-	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
-	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
-
-	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 + vd1 * vd2); }
-	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 - vd1 * vd2); }
-
-	void shift(const double f) { for (size_t i = N - 1; i > 0; --i) r[i] = r[i - 1]; r[0] = f; }
-
-	finline Vd round() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::round(r[i]); return vd; }
-
-	finline Vd abs() const { Vd vd; for (size_t i = 0; i < N; ++i) vd.r[i] = std::fabs(r[i]); return vd; }
-	finline Vd & max(const Vd & rhs) { for (size_t i = 0; i < N; ++i) r[i] = std::max(r[i], rhs.r[i]); return *this; }
-	finline double max() const { double m = r[0]; for (size_t i = 1; i < N; ++i) m = std::max(m, r[i]); return m; }
-
-	finline void interleave(Vd & rhs) { for (size_t i = 0; i < N / 2; ++i) { std::swap(r[i + N / 2], rhs.r[i]); } }	// N = 8
-
-	finline static void transpose(Vd vd[N])
-	{
-		for (size_t i = 0; i < N; ++i)
-		{
-			for (size_t j = 0; j < i; ++j)
-			{
-				std::swap(vd[i].r[j], vd[j].r[i]);
-			}
-		}
-	}
-};
+class Vd {};
 
 #if !defined(__ARM_FEATURE_SVE) || (__ARM_FEATURE_SVE_BITS == 128)
 template<>
@@ -210,7 +148,7 @@ public:
 };
 #endif
 
-#if defined(__AVX512F__)
+#if defined(__AVX512F__) || (defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 512))
 template<>
 class Vd<8>
 {

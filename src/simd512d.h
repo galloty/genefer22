@@ -16,7 +16,24 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <arm_sve.h>
 
 typedef svfloat64_t simd512d __attribute__((arm_sve_vector_bits(512)));
-typedef svuint64_t simd512u __attribute__((arm_sve_vector_bits(512)));
+
+inline simd512d addmul_512d(const simd512d v0, const simd512d v1, const simd512d v2)
+{
+#if defined(__clang__)
+	return svmla_f64_x(svptrue_b64(), v0, v1, v2);
+#else
+	return v0 + v1 * v2;
+#endif
+}
+
+inline simd512d submul_512d(const simd512d v0, const simd512d v1, const simd512d v2)
+{
+#if defined(__clang__)
+	return svmls_f64_x(svptrue_b64(), v0, v1, v2);
+#else
+	return v0 - v1 * v2;
+#endif
+}
 
 inline bool is_zero_512d(const simd512d v)
 {
@@ -46,6 +63,8 @@ inline void transpose_512d(simd512d & v0, simd512d & v1, simd512d & v2, simd512d
 	v6 = svzip1_f64(t6, t7); v7 = svzip2_f64(t6, t7);
 }
 
+typedef svuint64_t simd512u __attribute__((arm_sve_vector_bits(512)));
+
 inline void interleave_512d(simd512d & v0, simd512d & v1)
 {
 	const simd512d v0_lo = svtbl_f64(v0, (simd512u){0, 1, 2, 3, 16, 16, 16, 16});
@@ -62,6 +81,9 @@ inline void interleave_512d(simd512d & v0, simd512d & v1)
 #include <immintrin.h>
 
 typedef __m512d simd512d;
+
+inline simd512d addmul_512d(const simd512d v0, const simd512d v1, const simd512d v2) { return v0 + v1 * v2; }
+inline simd512d submul_512d(const simd512d v0, const simd512d v1, const simd512d v2) { return v0 - v1 * v2; }
 
 inline bool is_zero_512d(const simd512d v) { return (_mm512_cmp_pd_mask(v, _mm512_setzero_pd(), _CMP_NEQ_OQ) == 0); }
 

@@ -44,6 +44,7 @@ inline bool is_zero_128d(const simd128d v)
 inline simd128d abs_128d(const simd128d v) { return svabs_f64_x(svptrue_b64(), v); }
 
 inline simd128d max_128d(const simd128d v0, const simd128d v1) { return svmax_f64_x(svptrue_b64(), v0, v1); }
+inline double reduce_max_128d(const simd128d v) { return svmaxv_f64(svptrue_b64(), v); }
 
 inline simd128d round_128d(const simd128d v) { return svrinta_f64_x(svptrue_b64(), v); }
 
@@ -83,6 +84,7 @@ inline bool is_zero_128d(const simd128d v) { const uint64x2_t mask = vceqzq_f64(
 inline simd128d abs_128d(const simd128d v) { return vabsq_f64(v); }
 
 inline simd128d max_128d(const simd128d v0, const simd128d v1) { return vmaxq_f64(v0, v1); }
+inline double reduce_max_128d(const simd128d v) { return std::max(v[0], v[1]); }
 
 inline simd128d round_128d(const simd128d v) { return vrndnq_f64(v); }
 
@@ -113,6 +115,7 @@ inline simd128d abs_128d(const simd128d v)
 }
 
 inline simd128d max_128d(const simd128d v0, const simd128d v1) { return _mm_max_pd(v0, v1); }
+inline double reduce_max_128d(const simd128d v) { return std::max(v[0], v[1]); }
 
 inline simd128d round_128d(const simd128d v)
 {

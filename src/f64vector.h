@@ -83,7 +83,7 @@ public:
 
 	finline Vd abs() const { return Vd(abs_128d(r)); }
 	finline Vd & max(const Vd & rhs) { r = max_128d(r, rhs.r); return *this; }
-	finline double max() const { return std::max(r[0], r[1]); }
+	finline double max() const { return reduce_max_128d(r); }
 
 	finline void interleave(Vd &) {}	// unused
 
@@ -131,8 +131,8 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 + vd1 * vd2); }
-	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 - vd1 * vd2); }
+	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(addmul_256d(vd0.r, vd1.r, vd2.r)); }
+	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(submul_256d(vd0.r, vd1.r, vd2.r)); }
 
 	finline void shift(const double f) { r = (simd256d){f, r[0], r[1], r[2]}; }
 
@@ -140,7 +140,7 @@ public:
 
 	inline Vd abs() const { return Vd(abs_256d(r)); }
 	finline Vd & max(const Vd & rhs) { r = max_256d(r, rhs.r); return *this; }
-	finline double max() const { const double m01 = std::max(r[0], r[1]), m23 = std::max(r[2], r[3]); return std::max(m01, m23); }
+	finline double max() const { return reduce_max_256d(r); }
 
 	finline void interleave(Vd &) {}	// unused
 
@@ -188,8 +188,8 @@ public:
 	finline Vd operator-(const Vd & rhs) const { Vd vd = *this; vd -= rhs; return vd; }
 	finline Vd operator*(const Vd & rhs) const { Vd vd = *this; vd *= rhs; return vd; }
 
-	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 + vd1 * vd2); }
-	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(vd0 - vd1 * vd2); }
+	finline static Vd addmul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(addmul_512d(vd0.r, vd1.r, vd2.r)); }
+	finline static Vd submul(const Vd & vd0, const Vd & vd1, const Vd & vd2) { return Vd(submul_512d(vd0.r, vd1.r, vd2.r)); }
 
 	finline void shift(const double f) { r = (simd512d){f, r[0], r[1], r[2], r[3], r[4], r[5], r[6]}; }
 

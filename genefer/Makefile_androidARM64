@@ -20,7 +20,7 @@ OCL_DIR = $(ROOT_DIR)/Khronos
 OCL_INC = -I$(OCL_DIR)
 OCL_LIB = -L$(OCL_DIR)/lib -lOpenCL
 
-CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -fassociative-math -ffp-contract=fast $(GMP_INC)
+CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -ffp-contract=fast -ftrapping-math $(GMP_INC)
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 

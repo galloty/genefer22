@@ -38,7 +38,7 @@ inline simd128d submul_128d(const simd128d v0, const simd128d v1, const simd128d
 
 inline bool is_zero_128d(const simd128d v)
 {
-	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -2.0, svdup_f64(1.0)) == 0.0);
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), 0.0, svdup_f64(1.0)) == 2.0);
 }
 
 inline simd128d abs_128d(const simd128d v) { return svabs_f64_x(svptrue_b64(), v); }

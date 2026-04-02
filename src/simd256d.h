@@ -37,7 +37,7 @@ inline simd256d submul_256d(const simd256d v0, const simd256d v1, const simd256d
 
 inline bool is_zero_256d(const simd256d v)
 {
-	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -4.0, svdup_f64(1.0)) == 0.0);
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), 0.0, svdup_f64(1.0)) == 4.0);
 }
 
 inline simd256d abs_256d(const simd256d v) { return svabs_f64_x(svptrue_b64(), v); }

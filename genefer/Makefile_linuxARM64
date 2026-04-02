@@ -22,7 +22,8 @@ BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/api -L$(BOINC_DIR)/lib -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion -ffinite-math-only -frename-registers
+CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion
+OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-zeros -frename-registers -fprefetch-loop-arrays
 FLAGS_CPU = -O3 -fopenmp
 FLAGS_GPU = -O3 -DGPU
 
@@ -52,23 +53,23 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -c -S $< -o neon.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -c -S $< -o neon.asm
 
 sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c -S $< -o sve128.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c -S $< -o sve128.asm
 
 transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c -S $< -o sve256.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c -S $< -o sve256.asm
 
 transform_sve512.o: $(SRC_DIR)/transform_sve512.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -msve-vector-bits=512 -c $< -o $@
-#	$(CC) $(CFLAGS) $(FLAGS_CPU) -fprefetch-loop-arrays -march=armv8-a+sve -msve-vector-bits=512 -S $< -o sve512.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -S $< -o sve512.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

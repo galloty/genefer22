@@ -37,7 +37,7 @@ inline simd512d submul_512d(const simd512d v0, const simd512d v1, const simd512d
 
 inline bool is_zero_512d(const simd512d v)
 {
-	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), -8.0, svdup_f64(1.0)) == 0.0);
+	return (svadda_f64(svcmpeq_f64(svptrue_b64(), v, svdup_f64(0.0)), 0.0, svdup_f64(1.0)) == 8.0);
 }
 
 inline simd512d abs_512d(const simd512d v) { return svabs_f64_x(svptrue_b64(), v); }
@@ -67,11 +67,11 @@ typedef svuint64_t simd512u __attribute__((arm_sve_vector_bits(512)));
 
 inline void interleave_512d(simd512d & v0, simd512d & v1)
 {
-	const simd512d v0_lo = svtbl_f64(v0, (simd512u){0, 1, 2, 3, 16, 16, 16, 16});
-	const simd512d v0_hi = svtbl_f64(v0, (simd512u){4, 5, 6, 7, 16, 16, 16, 16});
-	const simd512d v1_lo = svtbl_f64(v1, (simd512u){16, 16, 16, 16, 0, 1, 2, 3});
-	const simd512d v1_hi = svtbl_f64(v1, (simd512u){16, 16, 16, 16, 4, 5, 6, 7});
-	v0 = v0_lo + v1_lo; v1 = v0_hi + v1_hi;
+	const simd512d v1_lo2hi = svtbl_f64(v1, (simd512u){8, 8, 8, 8, 0, 1, 2, 3});
+	const simd512d v0_hi2lo = svtbl_f64(v0, (simd512u){4, 5, 6, 7, 8, 8, 8, 8});
+	const svbool_t mask_lo = svptrue_pat_b64(SV_VL4), mask_hi = svnot_b_z(svptrue_b64(), mask_lo);
+	v0 = svadd_f64_m(mask_lo, v1_lo2hi, v0);
+	v1 = svadd_f64_m(mask_hi, v0_hi2lo, v1);
 }
 
 #endif

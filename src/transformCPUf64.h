@@ -253,9 +253,9 @@ class transformCPUf64 : public transform
 	using Vr4 = Vradix4<VSIZE>;
 	using Vr8 = Vradix8<VSIZE>;
 	using Vc8 = Vcx8<VSIZE>;
-
+#if defined(NO_OMP)
 	using Par = parallel<transformCPUf64>;
-
+#endif
 private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
 	// n_io must be a power of 4, n_io >= 64, n >= 16 * n_io, n >= num_threads * n_io.

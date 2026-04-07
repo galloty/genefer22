@@ -7,10 +7,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #pragma once
 
-#include <vector>
+#include <array>
 #include <thread>
-#include <functional>
-#include <utility>
+#include <atomic>
 
 #if defined(__aarch64__)
 #define PAUSE()	__builtin_arm_isb(0xF)
@@ -21,47 +20,73 @@ Please give feedback to the authors if improvement is realized. It is distribute
 template<class T>
 class parallel
 {
+public:
+	enum class EFunction : unsigned int { Pass1 = 1, Pass1mul = 2, Pass2_0 = 4, Pass2_1 = 8, Pass1multiplicand = 16 };
+
 private:
 	struct task
 	{
 		std::thread thread;
-		volatile bool running;
-		void (T::*fn)(size_t);
+		std::atomic_uint fn = 0;
 
-		task(parallel * const p, const size_t thread_id) : thread(&parallel::work, p, thread_id), running(false) {}
+		task() {}
+		task(const task &) = delete;
+		task & operator=(const task &) = delete;
 	};
+
 	T * const _transform;
-	std::vector<task> _tasks;
-	volatile bool _start, _stop;
+	const size_t _num_threads;
+	std::atomic_bool _start = false, _stop = false;
+	std::array<task, 64> _tasks;
 
 public:
-	parallel(T * const transform, const size_t num_threads) : _transform(transform), _start(false), _stop(false)
+	parallel(T * const transform, const size_t num_threads) : _transform(transform), _num_threads(num_threads)
 	{
-		for (size_t i = 0; i < num_threads; ++i) _tasks.emplace_back(this, i);
-		_start = true;
+		for (size_t i = 0; i < num_threads; ++i) { std::thread t = std::thread(&parallel::work, this, i); _tasks[i].thread.swap(t); }
+
+		std::atomic_thread_fence(std::memory_order_release);
+		_start.store(true, std::memory_order_relaxed);
 	}
+
+	parallel(const parallel &) = delete;
+	parallel & operator=(const parallel &) = delete;
 
 	virtual ~parallel()
 	{
-		_stop = true;
+		const size_t num_threads = _num_threads;
+
+		std::atomic_thread_fence(std::memory_order_release);
+		_stop.store(true, std::memory_order_relaxed);
+
 		wait();
 
-		for (auto & task : _tasks) if (task.thread.joinable()) task.thread.join();
+		for (size_t i = 0; i < num_threads; ++i)
+		{
+			task & task = _tasks[i];
+			if (task.thread.joinable()) task.thread.join();
+		}
 	}
 
-	void exec(void (T::*func)(size_t), const size_t i)
+	void exec(const size_t i, const EFunction fn)
 	{
 		task & task = _tasks[i - 1];
-		task.fn = func;
-		task.running = true;
+		std::atomic_thread_fence(std::memory_order_release);
+		task.fn.store(static_cast<unsigned int>(fn), std::memory_order_relaxed);
 	}
 
 	void wait() const
 	{
+		const size_t num_threads = _num_threads;
+
 		while (true)
 		{
-			bool running = false; for (const auto & task : _tasks) running |= task.running;
-			if (!running) return;
+			unsigned int running = 0;
+			for (size_t i = 0; i < num_threads; ++i) running |= _tasks[i].fn.load(std::memory_order_relaxed);
+			if (running == 0)
+			{
+				std::atomic_thread_fence(std::memory_order_acquire);
+				return;
+			}
 			PAUSE();
 		}
 	}
@@ -69,21 +94,34 @@ public:
 private:
 	void work(const size_t thread_id)
 	{
-		while (!_start) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		while (!_start.load(std::memory_order_relaxed)) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::atomic_thread_fence(std::memory_order_acquire);
 
 		task & task = _tasks[thread_id];
-
+ 
 		while (true)
 		{
-			while (!task.running)
+			const unsigned int fn = task.fn.load(std::memory_order_relaxed);
+			if (fn == 0) { PAUSE(); }
+			else
 			{
-				if (_stop) return;
-				PAUSE();
+				std::atomic_thread_fence(std::memory_order_acquire);
+
+				if (fn == static_cast<unsigned int>(EFunction::Pass1)) _transform->pass1(thread_id + 1);
+				else if (fn == static_cast<unsigned int>(EFunction::Pass1mul)) _transform->pass1mul(thread_id + 1);
+				else if (fn == static_cast<unsigned int>(EFunction::Pass2_0)) _transform->pass2_0(thread_id + 1);
+				else if (fn == static_cast<unsigned int>(EFunction::Pass2_1)) _transform->pass2_1(thread_id + 1);
+				else if (fn == static_cast<unsigned int>(EFunction::Pass1multiplicand)) _transform->pass1multiplicand(thread_id + 1);
+
+				std::atomic_thread_fence(std::memory_order_release);
+				task.fn.store(0, std::memory_order_relaxed);
 			}
 
-			(_transform->*(task.fn))(thread_id + 1);
-
-			task.running = false;
+			if (_stop.load(std::memory_order_relaxed))
+			{
+				std::atomic_thread_fence(std::memory_order_acquire);
+				return;
+			}
 		};
 	}
 };

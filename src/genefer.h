@@ -37,8 +37,8 @@ inline int ilog2_32(const uint32_t n) { return 31 - __builtin_clz(n); }
 class genefer
 {
 public:
-	enum class EReturn { Success, Failed, Aborted }; 
-	enum class EMode { None, Quick, Proof, Server, Check, Prime, Bench, Limit }; 
+	enum class EReturn { Success, Failed, Aborted };
+	enum class EMode { None, Quick, Proof, Server, Check, Prime, Bench, Limit };
 
 private:
 	struct deleter { void operator()(const genefer * const p) { delete p; } };

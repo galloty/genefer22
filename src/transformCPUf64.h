@@ -254,6 +254,8 @@ class transformCPUf64 : public transform
 	using Vr8 = Vradix8<VSIZE>;
 	using Vc8 = Vcx8<VSIZE>;
 
+	using Par = parallel<transformCPUf64>;
+
 private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
 	// n_io must be a power of 4, n_io >= 64, n >= 16 * n_io, n >= num_threads * n_io.
@@ -286,7 +288,7 @@ private:
 	char * const _mem;
 	Vc * const _z_copy;
 #if defined(NO_OMP)
-	parallel<transformCPUf64> _parallel;
+	Par _parallel;
 #endif
 
 private:
@@ -335,6 +337,7 @@ private:
 		else        Vr4::backward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, z);
 	}
 
+public:	// parallel
 	void pass1(const size_t thread_id)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -912,11 +915,11 @@ public:
 		if (num_threads > 1)
 		{
 #if defined(NO_OMP)
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1);
 			pass1(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_0, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
 			pass2_0(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_1, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
 			pass2_1(0); _parallel.wait();
 #else
 #pragma omp parallel
@@ -954,7 +957,7 @@ public:
 		if (num_threads > 1)
 		{
 #if defined(NO_OMP)
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1multiplicand, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1multiplicand);
 			pass1multiplicand(0); _parallel.wait();
 #else
 #pragma omp parallel
@@ -978,11 +981,11 @@ public:
 		if (num_threads > 1)
 		{
 #if defined(NO_OMP)
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1mul, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1mul);
 			pass1mul(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_0, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
 			pass2_0(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_1, i);
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
 			pass2_1(0); _parallel.wait();
 #else
 #pragma omp parallel

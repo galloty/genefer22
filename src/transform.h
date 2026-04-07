@@ -17,13 +17,14 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #if defined(__aarch64__)
 inline bool cpu_supports_sve()
 {
-#if defined(__clang__)
-	if (__clang_major__ >= 19) return __builtin_cpu_supports("sve");
-#endif
+#if defined(__clang__) && (__clang_major__ >= 19)
+	return __builtin_cpu_supports("sve");
+#else
 	uint64_t r = 0;
 	__asm__ __volatile__("mrs %0, ID_AA64PFR0_EL1" : "=r"(r));
 	// SVE, bits [35:32] of ID_AA64PFR0_EL1
 	return (((r >> 32) & 0xf) >= 1);
+#endif
 }
  #endif
 

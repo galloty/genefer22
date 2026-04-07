@@ -19,7 +19,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sys/stat.h>
 
 #include <gmp.h>
-#if !defined(GPU)
+#if !defined(GPU) && !defined(NO_OMP)
 #include <omp.h>
 #endif
 
@@ -101,6 +101,9 @@ private:
 	{
 		deleteTransform();
 
+#if defined(NO_OMP)
+		const size_t num_threads = nthreads;
+#else
 		if (nthreads > 1) omp_set_num_threads(static_cast<int>(nthreads));
 		size_t num_threads = 1;
 		if (nthreads != 1)
@@ -111,6 +114,7 @@ private:
 				num_threads = size_t(omp_get_num_threads());
 			}
 		}
+#endif
 
 		std::string ttype;
 		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, checkError, ttype);

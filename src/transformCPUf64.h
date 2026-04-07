@@ -11,7 +11,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 
 #include <gmp.h>
+#if defined(NO_OMP)
+#include "parallel.h"
+#else
 #include <omp.h>
+#endif
 
 #include "transform.h"
 #include "f64vector.h"
@@ -275,11 +279,15 @@ private:
 	const size_t _num_threads;
 	const double _b, _b_inv, _sb, _sb_inv;
 	const size_t _mem_size, _cache_size;
+	const bool _checkError;
 	double _sbh, _sbl;
-	bool _checkError;
-	double _error;
+	double _error, _g;
+	double _err_array[64];
 	char * const _mem;
 	Vc * const _z_copy;
+#if defined(NO_OMP)
+	parallel<transformCPUf64> _parallel;
+#endif
 
 private:
 	finline static void forward_out(Vc * const z, const Complex * const w122i)
@@ -607,12 +615,12 @@ private:
 		}
 	}
 
-	double pass2_0(const size_t thread_id, const double g)
+	void pass2_0(const size_t thread_id)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
 		Vc * const z = (Vc *)&_mem[zOffset];
 		Vc * const fc = (Vc *)&_mem[fcOffset]; Vc * const f = &fc[thread_id * n_io_inv];
-		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl;
+		const double b = _b, b_inv = _b_inv, sb = _sb, sb_inv = _sb_inv, sbh = _sbh, sbl = _sbl, g = _g;
 		const bool checkError = _checkError;
 
 		Vc err = Vc(0.0);
@@ -650,7 +658,7 @@ private:
 			if (lh != l_min) forward_out(zl, w122i);
 		}
 
-		return err.max();
+		_err_array[thread_id] = err.max();
 	}
 
 	void pass2_1(const size_t thread_id)
@@ -691,6 +699,9 @@ public:
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
 		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
+#if defined(NO_OMP)
+		, _parallel(this, num_threads - 1)
+#endif
 	{
 		mpz_t sb2e64, t; mpz_init_set_ui(sb2e64, b); mpz_init(t);
 		mpz_mul_2exp(sb2e64, sb2e64, 128); mpz_sqrt(sb2e64, sb2e64);
@@ -896,47 +907,62 @@ public:
 	void squareMul(const int32_t a) override
 	{
 		const size_t num_threads = _num_threads;
-		double e[64];
-		const double g = static_cast<double>(a);
+		_g = static_cast<double>(a);
 
 		if (num_threads > 1)
 		{
+#if defined(NO_OMP)
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1, i);
+			pass1(0); _parallel.wait();
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_0, i);
+			pass2_0(0); _parallel.wait();
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_1, i);
+			pass2_1(0); _parallel.wait();
+#else
 #pragma omp parallel
 			{
 				const size_t thread_id = size_t(omp_get_thread_num());
 
 				pass1(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, g);
+				pass2_0(thread_id);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
+#endif
 		}
 		else
 		{
 			pass1(0);
-			e[0] = pass2_0(0, g);
+			pass2_0(0);
 			pass2_1(0);
 		}
 
-		double err = 0;
+		double err = _error;
+		const double * const e = _err_array;
 		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
-		_error = std::max(_error, err);
+		_error = err;
 	}
 
 	void initMultiplicand(const size_t src) override
 	{
+		const size_t num_threads = _num_threads;
 		const Vc * const z_src = (Vc *)&_mem[(src == 0) ? zOffset : zrOffset + (src - 1) * zSize];
 		Vc * const zp = (Vc *)&_mem[zpOffset];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
 
-		if (_num_threads > 1)
+		if (num_threads > 1)
 		{
+#if defined(NO_OMP)
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1multiplicand, i);
+			pass1multiplicand(0); _parallel.wait();
+#else
 #pragma omp parallel
 			{
 				const size_t thread_id = size_t(omp_get_thread_num());
 				pass1multiplicand(thread_id);
 			}
+#endif
 		}
 		else
 		{
@@ -947,29 +973,39 @@ public:
 	void mul() override
 	{
 		const size_t num_threads = _num_threads;
-		double e[64];
+		_g = 1.0;
 
 		if (num_threads > 1)
 		{
+#if defined(NO_OMP)
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass1mul, i);
+			pass1mul(0); _parallel.wait();
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_0, i);
+			pass2_0(0); _parallel.wait();
+			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(&transformCPUf64::pass2_1, i);
+			pass2_1(0); _parallel.wait();
+#else
 #pragma omp parallel
 			{
 				const size_t thread_id = size_t(omp_get_thread_num());
 
 				pass1mul(thread_id);
 #pragma omp barrier
-				e[thread_id] = pass2_0(thread_id, 1.0);
+				pass2_0(thread_id);
 #pragma omp barrier
 				pass2_1(thread_id);
 			}
+#endif
 		}
 		else
 		{
 			pass1mul(0);
-			e[0] = pass2_0(0, 1.0);
+			pass2_0(0);
 			pass2_1(0);
 		}
 
 		double err = 0;
+		const double * const e = _err_array;
 		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
 		_error = std::max(_error, err);
 	}

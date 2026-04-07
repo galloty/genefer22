@@ -7,14 +7,14 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "transform.h"
 
-#ifdef __ARM_FEATURE_SVE
+#if defined(__ARM_FEATURE_SVE)
 #include <arm_sve.h>
 #endif
 
 size_t transform::get_sve_size()
 {
 	uint64_t n = 0;
-#ifdef __ARM_FEATURE_SVE
+#if defined(__ARM_FEATURE_SVE)
 	n = svcntb() * 8;
 #endif
 	return n;

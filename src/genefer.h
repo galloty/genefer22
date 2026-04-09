@@ -19,9 +19,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sys/stat.h>
 
 #include <gmp.h>
-#if !defined(GPU) && !defined(NO_OMP)
-#include <omp.h>
-#endif
 
 #include "pio.h"
 #include "file.h"
@@ -101,26 +98,11 @@ private:
 	{
 		deleteTransform();
 
-#if defined(NO_OMP)
-		const size_t num_threads = nthreads;
-#else
-		if (nthreads > 1) omp_set_num_threads(static_cast<int>(nthreads));
-		size_t num_threads = 1;
-		if (nthreads != 1)
-		{
-#pragma omp parallel
-			{
-#pragma omp single
-				num_threads = size_t(omp_get_num_threads());
-			}
-		}
-#endif
-
 		std::string ttype;
-		_transform = transform::create_cpu(b, n, num_threads, impl, num_regs, checkError, ttype);
+		_transform = transform::create_cpu(b, n, nthreads, impl, num_regs, checkError, ttype);
 		if (verbose)
 		{
-			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << num_threads << " thread(s)";
+			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << nthreads << " thread(s)";
 			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB";
 			ss << "." << std::endl;
 			pio::print(ss.str());

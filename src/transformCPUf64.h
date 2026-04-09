@@ -11,13 +11,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cmath>
 
 #include <gmp.h>
-#if defined(NO_OMP)
-#include "parallel.h"
-#else
-#include <omp.h>
-#endif
 
 #include "transform.h"
+#include "parallel.h"
 #include "f64vector.h"
 
 namespace transformCPU_namespace
@@ -253,9 +249,9 @@ class transformCPUf64 : public transform
 	using Vr4 = Vradix4<VSIZE>;
 	using Vr8 = Vradix8<VSIZE>;
 	using Vc8 = Vcx8<VSIZE>;
-#if defined(NO_OMP)
+
 	using Par = parallel<transformCPUf64>;
-#endif
+
 private:
 	// Pass 1: n_io Complex (16 bytes), Pass 2/3: N / n_io Complex
 	// n_io must be a power of 4, n_io >= 64, n >= 16 * n_io, n >= num_threads * n_io.
@@ -279,6 +275,7 @@ private:
 	static const size_t zrOffset = zpOffset + zSize;
 
 	const size_t _num_threads;
+	Par _parallel;
 	const double _b, _b_inv, _sb, _sb_inv;
 	const size_t _mem_size, _cache_size;
 	const bool _checkError;
@@ -287,9 +284,6 @@ private:
 	double _err_array[64];
 	char * const _mem;
 	Vc * const _z_copy;
-#if defined(NO_OMP)
-	Par _parallel;
-#endif
 
 private:
 	finline static void forward_out(Vc * const z, const Complex * const w122i)
@@ -337,7 +331,7 @@ private:
 		else        Vr4::backward4_0(index(N / 4) / VSIZE, stepi, 2 * 4 / VSIZE, z);
 	}
 
-public:	// parallel
+public:
 	void pass1(const size_t thread_id)
 	{
 		const Complex * const w122i = (Complex *)&_mem[wOffset];
@@ -697,14 +691,11 @@ public:
 	transformCPUf64(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError)
 		: transform(N, n, b, IBASE ? ((VSIZE == 2) ? EKind::IBDTvec2 : ((VSIZE == 4) ? EKind::IBDTvec4 : EKind::IBDTvec8))
 								   : ((VSIZE == 2) ? EKind::DTvec2 : ((VSIZE == 4) ? EKind::DTvec4 : EKind::DTvec8))),
-		_num_threads(num_threads),
+		_num_threads(num_threads), _parallel(this, num_threads - 1),
 		_b(b), _b_inv(1.0 / b), _sb(sqrt(static_cast<double>(b))), _sb_inv(1 / _sb),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
 		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vc *)alignNew(zSize, 1024))
-#if defined(NO_OMP)
-		, _parallel(this, num_threads - 1)
-#endif
 	{
 		mpz_t sb2e64, t; mpz_init_set_ui(sb2e64, b); mpz_init(t);
 		mpz_mul_2exp(sb2e64, sb2e64, 128); mpz_sqrt(sb2e64, sb2e64);
@@ -902,6 +893,15 @@ public:
 		}
 	}
 
+	void error_update()
+	{
+		const size_t num_threads = _num_threads;
+		double err = _error;
+		const double * const e = _err_array;
+		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
+		_error = err;
+	}
+
 	void squareDup(const bool dup) override
 	{
 		squareMul(dup ? 2 : 1);
@@ -914,37 +914,19 @@ public:
 
 		if (num_threads > 1)
 		{
-#if defined(NO_OMP)
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1);
 			pass1(0); _parallel.wait();
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
 			pass2_0(0); _parallel.wait();
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
 			pass2_1(0); _parallel.wait();
-#else
-#pragma omp parallel
-			{
-				const size_t thread_id = size_t(omp_get_thread_num());
-
-				pass1(thread_id);
-#pragma omp barrier
-				pass2_0(thread_id);
-#pragma omp barrier
-				pass2_1(thread_id);
-			}
-#endif
 		}
 		else
 		{
-			pass1(0);
-			pass2_0(0);
-			pass2_1(0);
+			pass1(0); pass2_0(0); pass2_1(0);
 		}
 
-		double err = _error;
-		const double * const e = _err_array;
-		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
-		_error = err;
+		error_update();
 	}
 
 	void initMultiplicand(const size_t src) override
@@ -956,16 +938,8 @@ public:
 
 		if (num_threads > 1)
 		{
-#if defined(NO_OMP)
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1multiplicand);
 			pass1multiplicand(0); _parallel.wait();
-#else
-#pragma omp parallel
-			{
-				const size_t thread_id = size_t(omp_get_thread_num());
-				pass1multiplicand(thread_id);
-			}
-#endif
 		}
 		else
 		{
@@ -980,25 +954,12 @@ public:
 
 		if (num_threads > 1)
 		{
-#if defined(NO_OMP)
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1mul);
 			pass1mul(0); _parallel.wait();
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
 			pass2_0(0); _parallel.wait();
 			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
 			pass2_1(0); _parallel.wait();
-#else
-#pragma omp parallel
-			{
-				const size_t thread_id = size_t(omp_get_thread_num());
-
-				pass1mul(thread_id);
-#pragma omp barrier
-				pass2_0(thread_id);
-#pragma omp barrier
-				pass2_1(thread_id);
-			}
-#endif
 		}
 		else
 		{
@@ -1007,10 +968,7 @@ public:
 			pass2_1(0);
 		}
 
-		double err = 0;
-		const double * const e = _err_array;
-		for (size_t i = 0; i < num_threads; ++i) err = std::max(err, e[i]);
-		_error = std::max(_error, err);
+		error_update();
 	}
 
 	void copy(const size_t dst, const size_t src) const override

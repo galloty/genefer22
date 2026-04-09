@@ -14,26 +14,26 @@ SRC_DIR = $(ROOT_DIR)/src
 
 GMP_DIR = $(ROOT_DIR)/gmp
 GMP_INC = -I$(GMP_DIR)
-GMP_LIB = -L$(GMP_DIR)/lib -lgmp -ldl
+GMP_LIB = -L$(GMP_DIR)/lib -lgmp
 
 OCL_DIR = $(ROOT_DIR)/Khronos
 OCL_INC = -I$(OCL_DIR)
-OCL_LIB = -L$(OCL_DIR)/lib -lOpenCL
+OCL_LIB = -L$(OCL_DIR)/lib -lOpenCL -ldl
 
 CFLAGS = -Wall -Wextra -Wsign-conversion $(GMP_INC)
 OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-zeros
-FLAGS_CPU = -O3 -fopenmp
+FLAGS_CPU = -O3
 FLAGS_GPU = -O3 -DGPU
 
 OBJS_CPU = main.o transform_neon.o sve_size.o transform_sve128.o transform_sve256.o transform_sve512.o
 OBJS_GPU = maing.o transform_ocl.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
-DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s.h $(SRC_DIR)/f64vector.h $(SRC_DIR)/f64vector_pair.h $(SRC_DIR)/simd128d.h $(SRC_DIR)/simd256d.h $(SRC_DIR)/simd512d.h $(DEPS_COMMON)
+DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s.h $(SRC_DIR)/parallel.h $(SRC_DIR)/f64vector.h $(SRC_DIR)/f64vector_pair.h $(SRC_DIR)/simd128d.h $(SRC_DIR)/simd256d.h $(SRC_DIR)/simd512d.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-EXEC_CPU = $(BIN_DIR)/genefer_androidARM64
-EXEC_GPU = $(BIN_DIR)/geneferg_androidARM64
+EXEC_CPU = $(BIN_DIR)/genefer_android_arm
+EXEC_GPU = $(BIN_DIR)/geneferg_android_arm
 
 .PHONY: all clean_obj rebuild
 
@@ -52,22 +52,22 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -S $< -o neon_clang.asm
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -S $< -o neon_ndk.asm
 
 sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=128 -S $< -o sve128_clang.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -S $< -o sve128_ndk.asm
 
 transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -mtune=neoverse-512tvb -msve-vector-bits=256 -S $< -o sve256_clang.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -S $< -o sve256_ndk.asm
 
 transform_sve512.o: $(SRC_DIR)/transform_sve512.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -S $< -o sve512_clang.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -mtune=a64fx -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -mtune=a64fx -S $< -o sve512_ndk.asm
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(OCL_INC) -c $< -o $@

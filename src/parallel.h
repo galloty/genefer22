@@ -11,15 +11,18 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <thread>
 #include <atomic>
 
+inline void PAUSE()
+{
 #if defined(__aarch64__)
 #if defined(__clang__)
-#define PAUSE()	__builtin_arm_isb(0xF)
+	__builtin_arm_isb(0xF);
 #else
-__asm volatile ("isb" : : : "memory")
+	__asm__ __volatile__ ("isb" : : : "memory");
 #endif
 #else
-#define PAUSE()	__builtin_ia32_pause()
+	__builtin_ia32_pause();
 #endif
+}
 
 template<class T>
 class parallel

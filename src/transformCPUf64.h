@@ -912,19 +912,12 @@ public:
 		const size_t num_threads = _num_threads;
 		_g = static_cast<double>(a);
 
-		if (num_threads > 1)
-		{
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1);
-			pass1(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
-			pass2_0(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
-			pass2_1(0); _parallel.wait();
-		}
-		else
-		{
-			pass1(0); pass2_0(0); pass2_1(0);
-		}
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1);
+		pass1(0); if (num_threads > 1) _parallel.wait();
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
+		pass2_0(0); if (num_threads > 1) _parallel.wait();
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
+		pass2_1(0); if (num_threads > 1) _parallel.wait();
 
 		error_update();
 	}
@@ -936,15 +929,8 @@ public:
 		Vc * const zp = (Vc *)&_mem[zpOffset];
 		for (size_t k = 0; k < index(N) / VSIZE; ++k) zp[k] = z_src[k];
 
-		if (num_threads > 1)
-		{
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1multiplicand);
-			pass1multiplicand(0); _parallel.wait();
-		}
-		else
-		{
-			pass1multiplicand(0);
-		}
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1multiplicand);
+		pass1multiplicand(0); if (num_threads > 1) _parallel.wait();
 	}
 
 	void mul() override
@@ -952,21 +938,12 @@ public:
 		const size_t num_threads = _num_threads;
 		_g = 1.0;
 
-		if (num_threads > 1)
-		{
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1mul);
-			pass1mul(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
-			pass2_0(0); _parallel.wait();
-			for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
-			pass2_1(0); _parallel.wait();
-		}
-		else
-		{
-			pass1mul(0);
-			pass2_0(0);
-			pass2_1(0);
-		}
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass1mul);
+		pass1mul(0); if (num_threads > 1) _parallel.wait();
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_0);
+		pass2_0(0); if (num_threads > 1) _parallel.wait();
+		for (size_t i = 1; i < num_threads; ++i) _parallel.exec(i, Par::EFunction::Pass2_1);
+		pass2_1(0); if (num_threads > 1) _parallel.wait();
 
 		error_update();
 	}

@@ -58,8 +58,8 @@ sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -S $< -o sve128_ndk.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -S $< -o sve128_ndk.asm
 
 transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -c $< -o $@

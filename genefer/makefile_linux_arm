@@ -71,8 +71,8 @@ sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-v2 -c -S $< -o sve128.asm
+	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -c $< -o $@
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -c -S $< -o sve128.asm
 
 transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -c $< -o $@
@@ -89,4 +89,4 @@ $(EXEC_CPU): $(OBJS_CPU)
 	$(CC) $(FLAGS_CPU) -static $^ -lgmp $(BOINC_LIB) -o $@
 
 $(EXEC_GPU): $(OBJS_GPU)
-	$(CC) $(FLAGS_GPU) -static-libgcc -static-libstdc++ $^ /usr/lib/x86_64-linux-gnu/libgmp.a $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@
+	$(CC) $(FLAGS_GPU) -static-libgcc -static-libstdc++ $^ /usr/lib/aarch64-linux-gnu/libgmp.a $(BOINC_LIB) $(BOINC_LIB_OCL) $(OCL_LIB) -o $@

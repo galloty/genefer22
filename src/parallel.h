@@ -12,7 +12,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <atomic>
 
 #if defined(__aarch64__)
+#if defined(__clang__)
 #define PAUSE()	__builtin_arm_isb(0xF)
+#else
+__asm volatile ("isb" : : : "memory")
+#endif
 #else
 #define PAUSE()	__builtin_ia32_pause()
 #endif

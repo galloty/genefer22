@@ -14,6 +14,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <cmath>
 #include <thread>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <sys/stat.h>
@@ -50,9 +51,8 @@ public:
 		return *pInstance;
 	}
 
-protected:
-	volatile bool _quit = false;
 private:
+	std::atomic_bool _quit = false;
 	bool _isBoinc = false;
 #if defined(GPU)
 	cl_platform_id _boinc_platform_id = 0;
@@ -65,8 +65,21 @@ private:
 	int _print_range = 0, _print_i = 0;
 	bool _print_sr = true;
 
+protected:
+	bool quitting() const
+	{
+		const bool b = _quit.load(std::memory_order_relaxed);
+		if (b) std::atomic_thread_fence(std::memory_order_acquire);
+		return b;
+	}
+
 public:
-	void quit() { _quit = true; }
+	void quit()
+	{
+		std::atomic_thread_fence(std::memory_order_release);
+		_quit.store(true, std::memory_order_relaxed);
+	}
+
 	void setBoinc(const bool isBoinc) { _isBoinc = isBoinc; }
 #if defined(GPU)
 	void setBoincParam(const cl_platform_id platform_id, const cl_device_id device_id)
@@ -75,6 +88,7 @@ public:
 		_boinc_device_id = device_id;
 	}
 #endif
+
 	void setFilename(const std::string & mainFilename) { _mainFilename = mainFilename; }
 
 private:
@@ -495,7 +509,7 @@ private:
 		{
 			if (_isBoinc) boincMonitor(0, fast_checkpoints, i, chrono);
 
-			if (_quit)
+			if (quitting())
 			{
 				saveContext(0, fast_checkpoints, i, chrono.getElapsedTime());
 				return EReturn::Aborted;
@@ -558,7 +572,7 @@ private:
 		for (int i = B_GL - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) return EReturn::Aborted;
+			if (quitting()) return EReturn::Aborted;
 			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
@@ -578,7 +592,7 @@ private:
 		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) { mpz_clear(res); return EReturn::Aborted; }
+			if (quitting()) { mpz_clear(res); return EReturn::Aborted; }
 			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
 		}
 
@@ -676,7 +690,7 @@ private:
 				pTransform->copy(1, 0);
 
 				if (_isBoinc) boincMonitor();
-				if (_quit)
+				if (quitting())
 				{
 					for (size_t i = 0; i < L / 2; ++i) mpz_clear(w[i]);
 					delete[] w;
@@ -803,7 +817,7 @@ private:
 			const size_t i = size_t(1) << (depth - k);
 			for (size_t j = 0; j < L; j += 2 * i) mpz_mul_ui(w[i + j], w[j], q);
 
-			if (_quit) return EReturn::Aborted;
+			if (quitting()) return EReturn::Aborted;
 		}
 
 		proofFile.check_crc32();
@@ -919,7 +933,7 @@ private:
 			{
 				if (_isBoinc) boincMonitor(1, false, i, chrono);
 
-				if (_quit)	// || (i == p2size + B/2))	// test context
+				if (quitting())	// || (i == p2size + B/2))	// test context
 				{
 					saveContext(1, false, i, chrono.getElapsedTime());
 					mpz_clear(p2);
@@ -955,7 +969,7 @@ private:
 				for (int i = L - (B % L); i > 0; --i)
 				{
 					if (_isBoinc) boincMonitor();
-					if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
+					if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
 					pTransform->squareDup(false);
 				}
 			}
@@ -968,7 +982,7 @@ private:
 			for (int i = L; i > 0; --i)
 			{
 				if (_isBoinc) boincMonitor();
-				if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
+				if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
 				pTransform->squareDup(false);
 			}
 			pTransform->copy(1, 0);
@@ -997,7 +1011,7 @@ private:
 		{
 			if (_isBoinc) { boincMonitor(1, false, i, chrono); }
 
-			if (_quit)	// || (i == p2size/2))	// test context
+			if (quitting())	// || (i == p2size/2))	// test context
 			{
 				saveContext(1, false, i, chrono.getElapsedTime());
 				mpz_clear(p2);
@@ -1043,7 +1057,7 @@ private:
 		for (int i = GL - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) { mpz_clear(p2); return EReturn::Aborted; }
+			if (quitting()) { mpz_clear(p2); return EReturn::Aborted; }
 			pTransform->squareDup(false);
 		}
 		pTransform->copy(1, 0);
@@ -1062,7 +1076,7 @@ private:
 		for (int i = static_cast<int>(mpz_sizeinbase(res, 2)) - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit) return EReturn::Aborted;
+			if (quitting()) return EReturn::Aborted;
 			pTransform->squareDup(mpz_tstbit(res, mp_bitcnt_t(i)) != 0);
 		}
 
@@ -1137,7 +1151,7 @@ private:
 
 			for (int i = i_start; i >= 0; --i)
 			{
-				if (_quit)
+				if (quitting())
 				{
 					saveContextPrime(k, i, chrono.getElapsedTime(), totalTime, cond);
 					mpz_clear(exponent);
@@ -1158,7 +1172,7 @@ private:
 
 			for (size_t i = 0; i < pfb.size(); ++i)
 			{
-				if (_quit) return EReturn::Aborted;
+				if (quitting()) return EReturn::Aborted;
 
 				if (!cond[i])
 				{
@@ -1256,19 +1270,27 @@ private:
 		else if (qret == EReturn::Aborted) ss << ": aborted." << std::endl;
 		else
 		{
-			static volatile bool _break;
+			static std::atomic_bool _break;
 
-			_break = false;
-			std::thread delay([=]() { std::this_thread::sleep_for(std::chrono::seconds(10)); _break = true; }); delay.detach();
+			std::atomic_thread_fence(std::memory_order_release);
+			_break.store(false, std::memory_order_relaxed);
+
+			std::thread delay([=]()
+			{
+				std::atomic_thread_fence(std::memory_order_release);
+				std::this_thread::sleep_for(std::chrono::seconds(10));
+				_break.store(true, std::memory_order_relaxed);
+			}); delay.detach();
 
 			watch chrono(0);
 			size_t i = 1;
-			while (!_break)
+			while (!_break.load(std::memory_order_relaxed))
 			{
 				pTransform->squareDup((i % 2) != 0);
 				++i;
-				if (_quit) break;
+				if (quitting()) break;
 			}
+			std::atomic_thread_fence(std::memory_order_acquire);
 
 			pTransform->copy(1, 0);	// synchro
 
@@ -1319,7 +1341,7 @@ private:
 			delete _gi; _gi = nullptr;
 			deleteTransform();
 
-			if (_quit) break;
+			if (quitting()) break;
 		}
 
 		mpz_clear(exponent);
@@ -1328,7 +1350,7 @@ private:
 		std::ostringstream ss; ss << n << ": " << b << std::endl;
 		pio::print(ss.str());
 
-		return _quit ? EReturn::Aborted : EReturn::Success;
+		return quitting() ? EReturn::Aborted : EReturn::Success;
 	}
 
 public:

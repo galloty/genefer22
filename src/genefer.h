@@ -1288,7 +1288,13 @@ private:
 			{
 				pTransform->squareDup((i % 2) != 0);
 				++i;
-				if (quitting()) break;
+				if (quitting())
+				{
+					ss << ": aborted." << std::endl;
+					pio::print(ss.str());
+					deleteTransform();
+					return EReturn::Aborted;
+				}
 			}
 			std::atomic_thread_fence(std::memory_order_acquire);
 

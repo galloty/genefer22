@@ -33,7 +33,6 @@ public:
 private:
 	struct task
 	{
-		std::thread _thread;
 		std::atomic_uint _fn = 0;
 
 		task() {}
@@ -57,6 +56,7 @@ private:
 	T * const _transform;
 	const size_t _num_threads;
 	std::atomic_bool _alive = false;
+	std::array<std::thread, 64> _threads;
 	std::array<task, 64> _tasks;
 
 	bool is_alive() const
@@ -75,7 +75,7 @@ private:
 public:
 	parallel(T * const transform, const size_t num_threads) : _transform(transform), _num_threads(num_threads)
 	{
-		for (size_t i = 0; i < num_threads; ++i) { std::thread t = std::thread(&parallel::work, this, i); _tasks[i]._thread.swap(t); }
+		for (size_t i = 0; i < num_threads; ++i) { std::thread t = std::thread(&parallel::work, this, i); _threads[i].swap(t); }
 
 		set_alive(true);
 	}
@@ -92,8 +92,8 @@ public:
 
 		for (size_t i = 0; i < num_threads; ++i)
 		{
-			task & task = _tasks[i];
-			if (task._thread.joinable()) task._thread.join();
+			std::thread & t = _threads[i];
+			if (t.joinable()) t.join();
 		}
 	}
 

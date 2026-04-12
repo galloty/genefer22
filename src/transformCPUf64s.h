@@ -13,6 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <gmp.h>
 
 #include "transform.h"
+#include "alignment.h"
 #include "parallel.h"
 #include "f64vector_pair.h"
 
@@ -708,7 +709,7 @@ public:
 		_b(b), _b_inv(1.0 / b),
 		_mem_size(wSize + wsSize + zSize + fcSize + zSize + (num_regs - 1) * zSize + 2 * 1024 * 1024),
 		_cache_size(wSize + wsSize + zSize + fcSize), _checkError(checkError), _error(0),
-		_mem((char *)alignNew(_mem_size, 2 * 1024 * 1024)), _z_copy((Vcp *)alignNew(zSize, 1024))
+		_mem((char *)align_new(_mem_size, 2 * 1024 * 1024)), _z_copy((Vcp *)align_new(zSize, 1024))
 	{
 		Complex * const w122i = (Complex *)&_mem[wOffset];
 		for (size_t s = N / 16; s >= 4; s /= 4)
@@ -735,8 +736,8 @@ public:
 
 	virtual ~transformCPUf64s()
 	{
-		alignDelete((void *)_mem);
-		alignDelete((void *)_z_copy);
+		align_delete((void *)_mem);
+		align_delete((void *)_z_copy);
 	}
 
 	size_t getMemSize() const override { return _mem_size; }

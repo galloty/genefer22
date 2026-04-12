@@ -7,9 +7,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #pragma once
 
-#include <array>
 #include <thread>
 #include <atomic>
+
+#include "alignment.h"
 
 inline void PAUSE()
 {
@@ -28,12 +29,12 @@ template<class T>
 class parallel
 {
 public:
-	enum class EFunction : unsigned int { None = 0, Pass1 = 1, Pass1mul = 2, Pass2_0 = 3, Pass2_1 = 4, Pass1multiplicand = 5 };
+	enum class EFunction : unsigned char { None = 0, Pass1 = 1, Pass1mul = 2, Pass2_0 = 3, Pass2_1 = 4, Pass1multiplicand = 5 };
 
 private:
 	struct task
 	{
-		std::atomic_uint _fn = 0;
+		std::atomic_uchar _fn = 0;
 
 		task() {}
 		task(const task &) = delete;
@@ -41,7 +42,7 @@ private:
 
 		EFunction get() const
 		{
-			const unsigned int fn = _fn.load(std::memory_order_relaxed);
+			const unsigned char fn = _fn.load(std::memory_order_relaxed);
 			std::atomic_thread_fence(std::memory_order_acquire);	// aarch64: dmb ishld, x64: -
 			return static_cast<EFunction>(fn);
 		}
@@ -49,15 +50,15 @@ private:
 		void set(const EFunction fn)
 		{
 			std::atomic_thread_fence(std::memory_order_release);	// aarch64: dmb ish, x64: -
-			_fn.store(static_cast<unsigned int>(fn), std::memory_order_relaxed);
+			_fn.store(static_cast<unsigned char>(fn), std::memory_order_relaxed);
 		}
 	};
 
 	T * const _transform;
 	const size_t _num_threads;
+	task * const _tasks;
 	std::atomic_bool _alive = false;
-	std::array<std::thread, 64> _threads;
-	std::array<task, 64> _tasks;
+	std::thread _threads[64];
 
 	bool is_alive() const
 	{
@@ -73,7 +74,8 @@ private:
 	}
 
 public:
-	parallel(T * const transform, const size_t num_threads) : _transform(transform), _num_threads(num_threads)
+	parallel(T * const transform, const size_t num_threads) : _transform(transform), _num_threads(num_threads),
+		_tasks((task *)align_new(64 * sizeof(task), 64))	// a single cache line
 	{
 		for (size_t i = 0; i < num_threads; ++i) { std::thread t = std::thread(&parallel::work, this, i); _threads[i].swap(t); }
 
@@ -95,6 +97,8 @@ public:
 			std::thread & t = _threads[i];
 			if (t.joinable()) t.join();
 		}
+
+		align_delete((void *)_tasks);
 	}
 
 	void exec(const size_t i, const EFunction fn)
@@ -106,7 +110,7 @@ public:
 	{
 		const size_t num_threads = _num_threads;
 
-		unsigned int running;
+		unsigned char running;
 		do
 		{
 			running = 0; for (size_t i = 0; i < num_threads; ++i) running |= _tasks[i]._fn.load(std::memory_order_relaxed);

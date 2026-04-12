@@ -11,6 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <immintrin.h>
 
 #include "transform.h"
+#include "alignment.h"
 
 #define finline	__attribute__((always_inline))
 
@@ -506,9 +507,9 @@ public:
 		_mem_size((size_t(1) << n) / 4 * (num_regs + 2) * sizeof(RNS4)), _cache_size((size_t(1) << n) / 4 * sizeof(RNS4)),
 		_norm(Zp1::norm(static_cast<uint32_t>(1) << (n - 1)), Zp2::norm(static_cast<uint32_t>(1) << (n - 1)), Zp3::norm(static_cast<uint32_t>(1) << (n - 1))),
 		_b(b), _b_inv(static_cast<uint32_t>((static_cast<uint64_t>(1) << ((static_cast<int>(31 - __builtin_clz(b) - 1)) + 32)) / b)), _b_s(static_cast<int>(31 - __builtin_clz(b) - 1)),
-		_z((RNS4 *)alignNew((size_t(1) << n) / 4 * num_regs * sizeof(RNS4), 1024)),
-		_wr((RNS4 *)alignNew(2 * (size_t(1) << n) / 4 * sizeof(RNS4), 1024)),
-		_zp((RNS4 *)alignNew((size_t(1) << n) / 4 * sizeof(RNS4), 1024))
+		_z((RNS4 *)align_new((size_t(1) << n) / 4 * num_regs * sizeof(RNS4), 1024)),
+		_wr((RNS4 *)align_new(2 * (size_t(1) << n) / 4 * sizeof(RNS4), 1024)),
+		_zp((RNS4 *)align_new((size_t(1) << n) / 4 * sizeof(RNS4), 1024))
 	{
 		const size_t size_4 = (size_t(1) << n) / 4;
 		RNS4 * const wr = _wr;
@@ -540,9 +541,9 @@ public:
 
 	virtual ~transformCPUi32()
 	{
-		alignDelete((void *)_z);
-		alignDelete((void *)_wr);
-		alignDelete((void *)_zp);
+		align_delete((void *)_z);
+		align_delete((void *)_wr);
+		align_delete((void *)_zp);
 	}
 
 	size_t getMemSize() const override { return _mem_size; }

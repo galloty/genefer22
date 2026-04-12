@@ -11,10 +11,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <vector>
 
-#if defined(_WIN32)
+#if defined(_WIN64)
 #include <Windows.h>
 #else
 #include <signal.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #endif
 
 #if defined(BOINC)
@@ -38,7 +40,7 @@ private:
 	}
 
 private:
-#if defined(_WIN32)
+#if defined(_WIN64)
 	static BOOL WINAPI HandlerRoutine(DWORD)
 	{
 		quit(1);
@@ -49,7 +51,7 @@ private:
 public:
 	application()
 	{
-#if defined(_WIN32)	
+#if defined(_WIN64)	
 		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
 #else
 		signal(SIGTERM, quit);
@@ -70,16 +72,16 @@ private:
 	{
 		const char * const sysver =
 #if defined(_WIN64)
-			"win64";
-#elif defined(_WIN32)
-			"win32";
-#elif defined(__linux__)
-#if defined(__x86_64)
-			"linux x64";
-#elif defined(__aarch64__)
-			"linux arm64";
+#if defined(__aarch64__)
+			"win arm64";
 #else
-			"linux x86";
+			"win x64";
+#endif
+#elif defined(__linux__)
+#if defined(__aarch64__)
+			"linux arm64";
+#else defined(__x86_64)
+			"linux x64";
 #endif
 #elif defined(__APPLE__)
 #if defined(__aarch64__)
@@ -374,6 +376,17 @@ public:
 
 		if ((mode == genefer::EMode::Bench) || (mode == genefer::EMode::Limit))
 		{
+			const bool success = 
+#if defined(_WIN64)
+			(SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) != 0);
+#else
+			(setpriority(PRIO_PROCESS, -20, PROCESS_HIGH_PRIORITY) == 0);
+#endif
+			std::ostringstream ss; ss << "Set high priority";
+			if (!success) ss << ": failed (permission denied)";
+			ss << "." << std::endl;
+			pio::print(ss.str());
+
 			for (size_t n = 16; n <= 23; ++n)
 			{
 				if (g.check(0, n, mode, device, nthreads, impl, depth) != genefer::EReturn::Success) return;

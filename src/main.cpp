@@ -80,7 +80,7 @@ private:
 #elif defined(__linux__)
 #if defined(__aarch64__)
 			"linux arm64";
-#else defined(__x86_64)
+#else
 			"linux x64";
 #endif
 #elif defined(__APPLE__)
@@ -380,7 +380,7 @@ public:
 #if defined(_WIN64)
 			(SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) != 0);
 #else
-			(setpriority(PRIO_PROCESS, -20, PROCESS_HIGH_PRIORITY) == 0);
+			(setpriority(PRIO_PROCESS, getpid(), -20) == 0);
 #endif
 			std::ostringstream ss; ss << "Set high priority";
 			if (!success) ss << ": failed (permission denied)";

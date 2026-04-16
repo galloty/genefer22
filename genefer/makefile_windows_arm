@@ -61,18 +61,18 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -c -S $< -o neon.asm
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -S $< -o neon.asm
 
 sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -c $< -o $@
 
 transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -c -S $< -o sve128.asm
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb -S $< -o sve128.asm
 
 transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -c $< -o $@
-#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -c -S $< -o sve256.asm
+#	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 -S $< -o sve256.asm
 
 transform_sve512.o: $(SRC_DIR)/transform_sve512.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -mtune=a64fx -c $< -o $@

@@ -1,7 +1,7 @@
 # These packages are needed to build genefer: libgmp-dev ocl-icd-opencl-dev
 # Compiler
-COMP = gcc
-#COMP = clang
+COMP = clang
+#COMP = gcc
 
 ifeq ($(COMP), gcc)
 CC = g++ -std=c++17

@@ -16,19 +16,21 @@ It implements an [Efficient Modular Exponentiation Proof Scheme](https://arxiv.o
 The test is validated with [Gerbicz - Li](https://www.mersenneforum.org/showthread.php?t=22510) error checking and a proof is generated with ([Pietrzak - Li](https://eprint.iacr.org/2018/627.pdf)) algorithm. Thanks to the Verifiable Delay Function, distributed projects run at twice the speed of double-checked calculations.  
 
 Any number of the form *b*<sup>2<sup>*n*</sup></sup> + 1 such that 1024 &le; *b* < 2,000,000,000 and 12 &le; *n* &le; 23 can be tested on GPU.  
-On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M (*n* = 12, 13, 14, 15), *b* ~ 1500M (*n* = 16), 1000M (*n* = 17), 95M (*n* = 18), 70M (*n* = 19), 55M (*n* = 20), 45M (*n* = 21), 35M (*n* = 22), 25M (*n* = 23).  
+On CPU, the code is optimized for PrimeGrid tests and the limits are *b* = 2000M (*n* = 12, 13, 14, 15), *b* ~ 1500M (*n* = 16), 1000M (*n* = 17, 18), 70M (*n* = 19), 55M (*n* = 20), 45M (*n* = 21), 35M (*n* = 22), 25M (*n* = 23).  
 
 ## Build
 
 Binaries have been validated using:  
- - genefer: Ubuntu 22.04.4 amd64, gcc 11.4  
- - geneferg: Ubuntu 18.04.6 amd64, gcc 7.5  
- - genefer.exe, geneferg.exe: 64-bit Windows - MSYS2, gcc 14.2  
- - genefer_macIntel, geneferg_macIntel: MacOS 10.13, llvm/clang 15  
- - genefer_macARM, geneferg_macARM: MacOS, llvm/clang 15  
- - genefer_arm64: Ubuntu 22.04 arm64, gcc 11.2  
+ - genefer: Ubuntu 24.04, gcc 13.3 and clang 20.1
+ - geneferg: Ubuntu 18.04, gcc 7.5  
+ - genefer.exe, geneferg.exe: Windows 11 - MSYS2, gcc 15.2 and clang 22.1  
+ - genefer_arm, geneferg_arm: Ubuntu 22.04, gcc 11.4 and clang 14.0
+ - genefer_arm.exe, geneferg_arm.exe: Windows 11 on Arm - MSYS2, ?  
+ - genefer_android_arm: Android 12, NDK r29 - clang 21.0  
+ - genefer_mac_x64, geneferg_mac_x64: MacOS 10.13, clang 15  
+ - genefer_mac_arm, geneferg_mac_arm: MacOS 12, clang 15  
 
-The 32-bit versions of Windows and Linux are no longer supported.  
+The 32-bit versions are no longer supported.  
 
 ## TODO
 

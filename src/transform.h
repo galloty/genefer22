@@ -19,27 +19,18 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "file.h"
 
 #if defined(__aarch64__)
-// #define SVE_VERBOSE
 
 inline bool cpu_supports_sve()
 {
 #if defined(__linux__)
 	// See https://www.kernel.org/doc/Documentation/arm64/sve.txt
-#ifdef SVE_VERBOSE
-	std::cout << "getauxval" << std::endl;
-#endif
 	const unsigned long hwcaps = getauxval(AT_HWCAP);
 	return ((hwcaps & HWCAP_SVE) != 0);
 #elif defined(__clang__) && (__clang_major__ >= 19)
-#ifdef SVE_VERBOSE
-	std::cout << "__builtin_cpu_supports" << std::endl;
-#endif
 	return __builtin_cpu_supports("sve");
 #else
 	// This does not guarantee the presence of the operating system interfaces
-#ifdef SVE_VERBOSE
-	std::cout << "mrs" << std::endl;
-#endif
+	// Windows on Arm supports SVE then it should be OK
 	uint64_t r = 0;
 	__asm__ __volatile__ ("mrs %0, ID_AA64PFR0_EL1" : "=r"(r));
 	// SVE, bits [35:32] of ID_AA64PFR0_EL1

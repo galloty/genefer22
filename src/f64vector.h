@@ -40,7 +40,7 @@ struct Complex
 template<size_t N>
 class Vd {};
 
-#if !defined(__ARM_FEATURE_SVE) || (__ARM_FEATURE_SVE_BITS == 128)
+#if defined(__SSE2__) || defined(__ARM_NEON) || (defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 128))
 template<>
 class Vd<2>
 {

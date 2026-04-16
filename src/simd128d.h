@@ -11,8 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #if defined(__aarch64__)
 
-#if defined(__ARM_FEATURE_SVE)
-#if __ARM_FEATURE_SVE_BITS == 128	// 128-bit SVE
+#if defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 128)	// 128-bit SVE
 
 #include <arm_sve.h>
 
@@ -54,7 +53,6 @@ inline void transpose_128d(simd128d & v0, simd128d & v1)
 	v0 = svzip1_f64(v0, v1); v1 = t;
 }
 
-#endif
 #else	// NEON
 
 #include <arm_neon.h>

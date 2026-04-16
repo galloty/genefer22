@@ -33,10 +33,10 @@ DEPS_TRANSFORM_CPUf64 = $(SRC_DIR)/transformCPUf64.h $(SRC_DIR)/transformCPUf64s
 DEPS_TRANSFORM_CPUi32 = $(SRC_DIR)/transformCPUi32.h $(DEPS_COMMON)
 DEPS_TRANSFORM_GPU = $(SRC_DIR)/transformGPU.h $(SRC_DIR)/ocl.h $(DEPS_COMMON)
 
-INTERMEDIATE_EXEC_CPU = genefer_mac_intel.tmp
-INTERMEDIATE_EXEC_GPU = geneferg_mac_intel.tmp
-EXEC_CPU = $(BIN_DIR)/genefer_mac_intel
-EXEC_GPU = $(BIN_DIR)/geneferg_mac_intel
+INTERMEDIATE_EXEC_CPU = genefer_mac_x64.tmp
+INTERMEDIATE_EXEC_GPU = geneferg_mac_x64.tmp
+EXEC_CPU = $(BIN_DIR)/genefer_mac_x64
+EXEC_GPU = $(BIN_DIR)/geneferg_mac_x64
 
 .PHONY: all clean_obj clean_bin rebuild
 

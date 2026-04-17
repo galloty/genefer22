@@ -1,11 +1,16 @@
-genefer 25.05.0 => genefer 26.03.0
+genefer 25.05.0 => genefer 26.04.0
 
 New Features
  - SVE support (128, 256 and 512 bits) for ARM64
+ - genefer for Windows on Arm
+ - genefer for Android
+ - OpenMP interface is removed
 
 Improvements
  - faster ARM64-Neon transform
+ - faster multi-threading on Windows
  - new CPU transform for n = 18. The CPU limit is b_max > 1G
+ - more independent of the OS and the compiler
 
 ------------------------------------
 

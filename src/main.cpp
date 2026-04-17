@@ -165,8 +165,10 @@ private:
 #if defined(GPU)
 		ss << "  -d <n> or --device <n>      set the device number (default 0)" << std::endl;
 #else
-		ss << "  -t <n> or --nthreads <n>    set the number of threads (default: one thread, 0: all logical cores)" << std::endl;
-#if !defined(__aarch64__)
+		ss << "  -t <n> or --nthreads <n>    set the number of threads (default: one thread)" << std::endl;
+#if defined(__aarch64__)
+		ss << "  -x <implementation>         set a specific implementation (neon, sve128, sve256, sve512)" << std::endl;
+#else
 		ss << "  -x <implementation>         set a specific implementation (sse2, sse4, avx, fma, 512)" << std::endl;
 #endif
 #endif
@@ -331,14 +333,14 @@ public:
 				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				const int nt = std::atoi(ntstr.c_str());
 				if (nt > 64) pio::error("number of threads > 64");
-				nthreads = size_t(std::min(nt, 64));
+				nthreads = size_t(std::max(1, std::min(nt, 64)));
 			}
 			if (arg.substr(0, 10) == "--nthreads")
 			{
 				const std::string ntstr = ((arg == "--nthreads") && (i + 1 < size)) ? args[++i] : arg.substr(10);
 				const int nt = std::atoi(ntstr.c_str());
 				if (nt > 64) pio::error("number of threads > 64");
-				nthreads = size_t(std::min(nt, 64));
+				nthreads = size_t(std::max(1, std::min(nt, 64)));
 			}
 #if !defined(__aarch64__)
 			if (arg.substr(0, 2) == "-x")

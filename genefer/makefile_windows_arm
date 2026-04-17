@@ -1,6 +1,8 @@
-# Compiler
+# Compiler: select clang or gcc
 COMP = clang
 #COMP = gcc
+# Comment this line if Boinc is not needed
+BOINC = true
 
 ifeq ($(COMP), gcc)
 CC = g++ -std=c++17
@@ -17,6 +19,7 @@ SRC_DIR = $(ROOT_DIR)/src
 OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = C:/Windows/System32/OpenCL.dll
 
+ifdef BOINC
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
 # lib: Makefile.mingw => libboinc_api.a libboinc.a libboinc_opencl.a
 BOINC_DIR = $(ROOT_DIR)/../boinc
@@ -24,8 +27,12 @@ BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib -I$(BOINC_DIR)/
 BOINC_LIB_DIR = $(BOINC_DIR)/lib
 BOINC_LIB = $(BOINC_LIB_DIR)/libboinc_api.a $(BOINC_LIB_DIR)/libboinc.a
 BOINC_LIB_OCL = $(BOINC_LIB_DIR)/libboinc_opencl.a
+endif
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion
+CFLAGS = -Wall -Wextra -Wsign-conversion
+ifdef BOINC
+CFLAGS += -DBOINC $(BOINC_INC)
+endif
 ifeq ($(COMP), gcc)
 OFLAGS = -ffinite-math-only -frename-registers -fprefetch-loop-arrays
 else

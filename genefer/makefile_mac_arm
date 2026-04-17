@@ -1,6 +1,9 @@
 # Compiler: llvm/clang 15
 # Use llvm/clang installed from homebrew (brew install llvm)
 CC = /opt/homebrew/opt/llvm/bin/clang++ -std=c++17
+# Comment this line if Boinc is not needed
+BOINC = true
+
 RM = rm
 INSTALL_NAME_TOOL = install_name_tool
 
@@ -15,13 +18,18 @@ GMP_LIB = -L/opt/homebrew/opt/gmp/lib -lgmp
 OCL_INC = -I$(ROOT_DIR)/Khronos
 OCL_LIB = -framework OpenCL
 
+ifdef BOINC
 # BOINC source code: https://github.com/BOINC/boinc/archive/refs/tags/client_release/8.2/8.2.9.zip
 BOINC_DIR = $(ROOT_DIR)/../boinc
 BOINC_INC = -I$(BOINC_DIR) -I$(BOINC_DIR)/api -I$(BOINC_DIR)/lib
 BOINC_LIB = -L$(BOINC_DIR)/mac_build/build/Deployment -lboinc_api -lboinc -lpthread
 BOINC_LIB_OCL = -lboinc_opencl
+endif
 
-CFLAGS = -DBOINC $(BOINC_INC) -Wall -Wextra -Wsign-conversion
+CFLAGS = -Wall -Wextra -Wsign-conversion
+ifdef BOINC
+CFLAGS += -DBOINC $(BOINC_INC)
+endif
 OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-zeros
 FLAGS_CPU = -O3
 FLAGS_GPU = -O3 -DGPU

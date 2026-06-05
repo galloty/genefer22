@@ -13,260 +13,100 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
-// Modulo 2^61 - 1
-class Z61
+// Z/M_qZ: the prime field of order M_q = 2^q - 1
+template<int q, typename uint_t, typename ulong_t>
+class ZMq
 {
 private:
-	static const uint64_t _p = (uint64_t(1) << 61) - 1;
-	uint64_t _n;	// 0 <= n <= p
+	static const uint_t _p = (uint_t(1) << q) - 1;
+	uint_t _n;	// 0 <= n < p
 
-	static uint64_t _add(const uint64_t a, const uint64_t b)
-	{
-		const uint64_t t = a + b;
-		const uint64_t c = (uint32_t(t >> 32) > uint32_t(_p >> 32)) ? _p : 0;	// t > p ?
-		return t - c;
-	}
-
-	static uint64_t _sub(const uint64_t a, const uint64_t b)
-	{
-		const uint64_t t = a - b;
-		const uint64_t c = (int32_t(t >> 32) < 0) ? _p : 0;	// t < 0 ?
-		return t + c;
-	}
-
-	static uint64_t _mul(const uint64_t a, const uint64_t b)
-	{
-		const __uint128_t t = a * __uint128_t(b);
-		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
-		const uint64_t lo61 = lo & _p, hi61 = (lo >> 61) | (hi << 3);
-		return _add(lo61, hi61);
-	}
-
-	static uint64_t _lshift(const uint64_t a, const int s)
-	{
-		const uint64_t lo = a << s, hi = a >> (64 - s);
-		const uint64_t lo61 = lo & _p, hi61 = (lo >> 61) | (hi << 3);
-		return _add(lo61, hi61);
-	}
+	static uint_t _add(const uint_t a, const uint_t b) { const uint_t t = a + b; return t - ((t >= _p) ? _p : 0); }
+	static uint_t _sub(const uint_t a, const uint_t b) { const uint_t t = a - b; return t + ((a < b) ? _p : 0); }
+	static uint_t _mul(const uint_t a, const uint_t b) { const ulong_t t = a * ulong_t(b); return _add(uint_t(t) & _p, uint_t(t >> q)); }
+	static uint_t _lshift(const uint_t a, const int s) { const ulong_t t = ulong_t(a) << s; return _add(uint_t(t) & _p, uint_t(t >> q)); }
 
 public:
-	Z61() {}
-	explicit Z61(const uint64_t n) : _n(n) {}
+	ZMq() {}
+	explicit ZMq(const uint_t n) : _n(n) {}
 
-	uint64_t get() const { return _n; }
-	int64_t get_int() const { return (_n >= _p / 2) ? int64_t(_n - _p) : int64_t(_n); }	// if n = p then return 0
-	Z61 & set_int(const int i) { _n = (i < 0) ? uint64_t(i) + _p : uint64_t(i); return *this; }
+	static int get_q() { return q; }
 
-	// Z61 neg() const { return Z61((_n == 0) ? 0 : _p - _n); }
+	uint_t get() const { return _n; }
+ 	int32_t get_int() const { return (_n >= _p / 2) ? int32_t(_n - _p) : int32_t(_n); }
+ 	ZMq & set_int(const int32_t i) { _n = (i < 0) ? uint_t(i) + _p : uint_t(i); return *this; }
 
-	Z61 add(const Z61 & rhs) const { return Z61(_add(_n, rhs._n)); }
-	Z61 sub(const Z61 & rhs) const { return Z61(_sub(_n, rhs._n)); }
-	Z61 mul(const Z61 & rhs) const { return Z61(_mul(_n, rhs._n)); }
-	Z61 lshift(const int s) const { return Z61(_lshift(_n, s)); }
+	// ZMq neg() const { return ZMq((_n == 0) ? 0 : _p - _n); }
+
+	ZMq operator+(const ZMq & rhs) const { return ZMq(_add(_n, rhs._n)); }
+	ZMq operator-(const ZMq & rhs) const { return ZMq(_sub(_n, rhs._n)); }
+	ZMq operator*(const ZMq & rhs) const { return ZMq(_mul(_n, rhs._n)); }
+
+	ZMq sqr() const { return ZMq(_mul(_n, _n)); }
+
+	ZMq lshift(const int s) const { return ZMq(_lshift(_n, s)); }
 };
 
-// GF((2^61 - 1)^2)
-class GF61
+// GF(p^2): the field of order p^2, where p = 2^q - 1
+// primroot must be a primitive root of order primroot_order and
+// such that primroot^{order/8) = 2^{(q - 1)/2} * (1, 1).
+template<typename Zp, uint64_t primroot_order, uint64_t primroot_0, uint64_t primroot_1>
+class GFp2
 {
 private:
-	Z61 _s0, _s1;
-	// a primitive root of order 2^62 which is a root of (0, 1).
-	static const uint64_t _h_order = uint64_t(1) << 62;
-	static const uint64_t _h_0 = 264036120304204ull, _h_1 = 4677669021635377ull;
+	Zp _s0, _s1;
+
+	explicit GFp2(const uint64_t n0, const uint64_t n1 = 0) : _s0(n0), _s1(n1) {}
+
 public:
-	GF61() {}
-	explicit GF61(const Z61 & s0, const Z61 & s1) : _s0(s0), _s1(s1) {}
+	GFp2() {}
+	explicit GFp2(const Zp & s0, const Zp & s1) : _s0(s0), _s1(s1) {}
 
-	const Z61 & s0() const { return _s0; }
-	const Z61 & s1() const { return _s1; }
+	const Zp & s0() const { return _s0; }
+	const Zp & s1() const { return _s1; }
 
-	GF61 & set_int(const int i0, const int i1) { _s0.set_int(i0); _s1.set_int(i1); return *this; }
+	void get_int(int32_t & i0, int32_t & i1) const { i0 = _s0.get_int(); i1 = _s1.get_int(); }
+	GFp2 & set_int(const int32_t i0, const int32_t i1) { _s0.set_int(i0); _s1.set_int(i1); return *this; }
 
-	// GF61 conj() const { return GF61(_s0, -_s1); }
+	GFp2 operator+(const GFp2 & rhs) const { return GFp2(_s0 + rhs._s0, _s1 + rhs._s1); }
+	GFp2 operator-(const GFp2 & rhs) const { return GFp2(_s0 - rhs._s0, _s1 - rhs._s1); }
 
-	GF61 add(const GF61 & rhs) const { return GF61(_s0.add(rhs._s0), _s1.add(rhs._s1)); }
-	GF61 sub(const GF61 & rhs) const { return GF61(_s0.sub(rhs._s0), _s1.sub(rhs._s1)); }
-	GF61 lshift(const int s) const { return GF61(_s0.lshift(s), _s1.lshift(s)); }
+	GFp2 lshift(const int s) const { return GFp2(_s0.lshift(s), _s1.lshift(s)); }
 
-	GF61 sqr() const { const Z61 t = _s0.mul(_s1); return GF61(_s0.mul(_s0).sub(_s1.mul(_s1)), t.add(t)); }
-	GF61 mul(const GF61 & rhs) const { return GF61(_s0.mul(rhs._s0).sub(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).add(_s0.mul(rhs._s1))); }
-	GF61 mulconj(const GF61 & rhs) const { return GF61(_s0.mul(rhs._s0).add(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).sub(_s0.mul(rhs._s1))); }
+private:
+	// GFp2 muli() const { return GFp2(_s1.neg(), _s0); }
 
-	// GF61 muli() const { return GF61(-_s1, _s0); }
-	GF61 addi(const GF61 & rhs) const { return GF61(_s0.sub(rhs._s1), _s1.add(rhs._s0)); }
-	GF61 subi(const GF61 & rhs) const { return GF61(_s0.add(rhs._s1), _s1.sub(rhs._s0)); }
+	GFp2 addi(const GFp2 & rhs) const { return GFp2(_s0 - rhs._s1, _s1 + rhs._s0); }
+	GFp2 subi(const GFp2 & rhs) const { return GFp2(_s0 + rhs._s1, _s1 - rhs._s0); }
 
-	GF61 pow(const uint64_t e) const
+	// * sqrt(2)/2 * (1 + i)
+	GFp2 mul_R8() const
 	{
-		if (e == 0) return GF61(Z61(1), Z61(0));
-		GF61 r = GF61(Z61(1), Z61(0)), y = *this;
+		const uint8_t log2_sqrt2_2 = uint8_t((Zp::get_q() - 1) / 2);
+		return GFp2((_s0 - _s1).lshift(log2_sqrt2_2), (_s1 + _s0).lshift(log2_sqrt2_2));
+	}
+
+	// * sqrt(2)/2 * (1 - i)
+	GFp2 mul_R8conj() const
+	{
+		const uint8_t log2_sqrt2_2 = uint8_t((Zp::get_q() - 1) / 2);
+		return GFp2((_s0 + _s1).lshift(log2_sqrt2_2), (_s1 - _s0).lshift(log2_sqrt2_2));
+	}
+
+	GFp2 sqr() const { const Zp t = _s0 * _s1; return GFp2(_s0.sqr() - _s1.sqr(), t + t); }
+	GFp2 mul(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s0 - _s1 * rhs._s1, _s1 * rhs._s0 + _s0 * rhs._s1); }
+	GFp2 mulconj(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s0 + _s1 * rhs._s1, _s1 * rhs._s0 - _s0 * rhs._s1); }
+
+	GFp2 pow(const uint64_t e) const
+	{
+		if (e == 0) return GFp2(1);
+		GFp2 r = GFp2(1), y = *this;
 		for (uint64_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
 		return r.mul(y);
 	}
 
-	static const GF61 primroot_n(const uint32_t n) { return GF61(Z61(_h_0), Z61(_h_1)).pow(_h_order / n); }
-};
+	static const GFp2 root_nth(const size_t n) { return GFp2(primroot_0, primroot_1).pow(primroot_order / n); }
 
-// Modulo 2^31 - 1
-class Z31
-{
-private:
-	static const uint32_t _p = (uint32_t(1) << 31) - 1;
-	uint32_t _n;	// 0 <= n < p
-
-	static uint32_t _add(const uint32_t a, const uint32_t b)
-	{
-		const uint32_t t = a + b;
-		return t - ((t >= _p) ? _p : 0);
-	}
-
-	static uint32_t _sub(const uint32_t a, const uint32_t b)
-	{
-		const uint32_t t = a - b;
-		return t + ((int32_t(t) < 0) ? _p : 0);
-	}
-
-	static uint32_t _mul(const uint32_t a, const uint32_t b)
-	{
-		const uint64_t t = a * uint64_t(b);
-		const uint32_t lo = uint32_t(t) & _p, hi = uint32_t(t >> 31);
-		return _add(hi, lo);
-	}
-
-	static uint32_t _lshift(const uint32_t a, const int s)
-	{
-		const uint64_t t = uint64_t(a) << s;
-		const uint32_t lo = uint32_t(t) & _p, hi = uint32_t(t >> 31);
-		return _add(hi, lo);
-	}
-
-public:
-	Z31() {}
-	explicit Z31(const uint32_t n) : _n(n) {}
-
-	uint32_t get() const { return _n; }
-	int32_t get_int() const { return (_n >= _p / 2) ? int32_t(_n - _p) : int32_t(_n); }
-	Z31 & set_int(const int i) { _n = (i < 0) ? uint32_t(i) + _p : uint32_t(i); return *this; }
-
-	// Z31 neg() const { return Z31((_n == 0) ? 0 : _p - _n); }
-
-	Z31 add(const Z31 & rhs) const { return Z31(_add(_n, rhs._n)); }
-	Z31 sub(const Z31 & rhs) const { return Z31(_sub(_n, rhs._n)); }
-	Z31 mul(const Z31 & rhs) const { return Z31(_mul(_n, rhs._n)); }
-	Z31 lshift(const int s) const { return Z31(_lshift(_n, s)); }
-};
-
-// GF((2^31 - 1)^2)
-class GF31
-{
-private:
-	Z31 _s0, _s1;
-	// a primitive root of order 2^32 which is a root of (0, 1).
-	static const uint64_t _h_order = uint64_t(1) << 32;
-	static const uint32_t _h_0 = 7735u, _h_1 = 748621u;
-
-public:
-	GF31() {}
-	explicit GF31(const Z31 & s0, const Z31 & s1) : _s0(s0), _s1(s1) {}
-
-	const Z31 & s0() const { return _s0; }
-	const Z31 & s1() const { return _s1; }
-
-	GF31 & set_int(const int i0, const int i1) { _s0.set_int(i0); _s1.set_int(i1); return *this; }
-
-	// GF31 conj() const { return GF31(_s0, -_s1); }
-
-	GF31 add(const GF31 & rhs) const { return GF31(_s0.add(rhs._s0), _s1.add(rhs._s1)); }
-	GF31 sub(const GF31 & rhs) const { return GF31(_s0.sub(rhs._s0), _s1.sub(rhs._s1)); }
-	GF31 lshift(const int s) const { return GF31(_s0.lshift(s), _s1.lshift(s)); }
-
-	GF31 sqr() const { const Z31 t = _s0.mul(_s1); return GF31(_s0.mul(_s0).sub(_s1.mul(_s1)), t.add(t)); }
-	GF31 mul(const GF31 & rhs) const { return GF31(_s0.mul(rhs._s0).sub(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).add(_s0.mul(rhs._s1))); }
-	GF31 mulconj(const GF31 & rhs) const { return GF31(_s0.mul(rhs._s0).add(_s1.mul(rhs._s1)), _s1.mul(rhs._s0).sub(_s0.mul(rhs._s1))); }
-
-	// GF31 muli() const { return GF31(-_s1, _s0); }
-	GF31 addi(const GF31 & rhs) const { return GF31(_s0.sub(rhs._s1), _s1.add(rhs._s0)); }
-	GF31 subi(const GF31 & rhs) const { return GF31(_s0.add(rhs._s1), _s1.sub(rhs._s0)); }
-
-	GF31 pow(const uint32_t e) const
-	{
-		if (e == 0) return GF31(Z31(1), Z31(0));
-		GF31 r = GF31(Z31(1), Z31(0)), y = *this;
-		for (uint32_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
-		return r.mul(y);
-	}
-
-	static const GF31 primroot_n(const uint32_t n) { return GF31(Z31(_h_0), Z31(_h_1)).pow(uint32_t(_h_order / n)); }
-};
-
-// GF((2^61 - 1)^2) x GF((2^31 - 1)^2)
-class GF61_31
-{
-private:
-	GF61 _n61;
-	GF31 _n31;
-
-	public:
-	GF61_31() {}
-	explicit GF61_31(const GF61 & n61, const GF31 & n31) : _n61(n61), _n31(n31) {}
-	explicit GF61_31(const unsigned int i) : _n61(Z61(i), Z61(0)), _n31(Z31(i), Z31(0)) {}
-
-	const GF61 & n61() const { return _n61; }
-	const GF31 & n31() const { return _n31; }
-
-	GF61_31 & set_int(const int i0, const int i1) { _n61.set_int(i0, i1); _n31.set_int(i0, i1); return *this; }
-
-	// GF61_31 conj() const { return GF61_31(_n61.conj(), _n31.conj()); }
-
-	GF61_31 add(const GF61_31 & rhs) const { return GF61_31(_n61.add(rhs._n61), _n31.add(rhs._n31)); }
-	GF61_31 sub(const GF61_31 & rhs) const { return GF61_31(_n61.sub(rhs._n61), _n31.sub(rhs._n31)); }
-	GF61_31 lshift(const int s61, const int s31) const { return GF61_31(_n61.lshift(s61), _n31.lshift(s31)); }
-
-	GF61_31 sqr() const { return GF61_31(_n61.sqr(), _n31.sqr()); }
-	GF61_31 mul(const GF61_31 & rhs) const { return GF61_31(_n61.mul(rhs._n61), _n31.mul(rhs._n31)); }
-	GF61_31 mulconj(const GF61_31 & rhs) const { return GF61_31(_n61.mulconj(rhs._n61), _n31.mulconj(rhs._n31)); }
-
-	// GF61_31 muli() const { return GF61_31(_n61.muli(), _n31.muli()); }
-	GF61_31 addi(const GF61_31 & rhs) const { return GF61_31(_n61.addi(rhs._n61), _n31.addi(rhs._n31)); }
-	GF61_31 subi(const GF61_31 & rhs) const { return GF61_31(_n61.subi(rhs._n61), _n31.subi(rhs._n31)); }
-
-	GF61_31 pow(const uint64_t e) const
-	{
-		if (e == 0) return GF61_31(1u);
-		GF61_31 r = GF61_31(1u), y = *this;
-		for (uint64_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r = r.mul(y); y = y.sqr(); }
-		return r.mul(y);
-	}
-
-	static const GF61_31 primroot_n(const uint32_t n) { return GF61_31(GF61::primroot_n(n), GF31::primroot_n(n)); }
-
-	void garner(__int128_t & i_0, __int128_t & i_1) const
-	{
-		const uint32_t n31_0 = _n31.s0().get(), n31_1 = _n31.s1().get();
-		const GF61 n31 = GF61(Z61(n31_0), Z61(n31_1));
-		GF61 u = _n61.sub(n31); 
-		// The inverse of 2^31 - 1 mod 2^61 - 1 is 2^31 + 1
-		u = u.add(u.lshift(31));
-		const uint64_t s_0 = u.s0().get(), s_1 = u.s1().get();
-		const __uint128_t n_0 = n31_0 +	(__uint128_t(s_0) << 31) - s_0;
-		const __uint128_t n_1 = n31_1 + (__uint128_t(s_1) << 31) - s_1;
-		static const __uint128_t M61M31 = ((__uint128_t(1) << 61) - 1) * ((uint32_t(1) << 31) - 1);
-		i_0 = __int128_t((n_0 > M61M31 / 2) ? (n_0 - M61M31) : n_0);
-		i_1 = __int128_t((n_1 > M61M31 / 2) ? (n_1 - M61M31) : n_1);
-	}
-};
-
-class Transform
-{
-private:
-	std::vector<GF61_31> _vz;
-	std::vector<GF61_31> _vwr;
-	const int32_t _base;
-	const int32_t _multiplier;
-	const int _snorm31;
-	__uint128_t _fmax;
-
-private:
 	static constexpr size_t bitrev(const size_t i, const size_t n)
 	{
 		size_t r = 0;
@@ -274,123 +114,259 @@ private:
 		return r;
 	}
 
-	void forward2(const size_t m, const size_t s)
+	static void fwd2(GFp2 & z0, GFp2 & z1, const GFp2 & w)
 	{
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
+		const GFp2 u0 = z0, u1 = z1.mul(w);
+		z0 = u0 + u1; z1 = u0 - u1;
+	}
 
+	static void bck2(GFp2 & z0, GFp2 & z1, const GFp2 & w)
+	{
+		const GFp2 u0 = z0, u1 = z1;
+		z0 = u0 + u1; z1 = (u0 - u1).mulconj(w);
+	}
+
+	static void fwd4(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w1, const GFp2 & w2, const GFp2 & w3)
+	{
+		const GFp2 u0 = z0, u2 = z2.mul(w1), u1 = z1.mul(w2), u3 = z3.mul(w3);
+		const GFp2 v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+		z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
+	}
+
+	static void bck4(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w1, const GFp2 & w2, const GFp2 & w3)
+	{
+		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const GFp2 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = u2 - u3;
+		z0 = v0 + v2; z2 = (v0 - v2).mulconj(w1); z1 = v1.subi(v3).mulconj(w2); z3 = v1.addi(v3).mulconj(w3);
+	}
+
+	static void fwd8(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
+					 const GFp2 & w1, const GFp2 & w2, const GFp2 & w3, const GFp2 & w4, const GFp2 & w5, const GFp2 & w6, const GFp2 & w7)
+	{
+		const GFp2 u0 = z0, u4 = z4.mul(w1), u2 = z2.mul(w2), u6 = z6.mul(w3), u1 = z1.mul(w4), u5 = z5.mul(w5), u3 = z3.mul(w6), u7 = z7.mul(w7);
+
+		const GFp2 v0 = u0 + u4, v4 = u0 - u4, v2 = u2 + u6, v6 = u2 - u6;
+		const GFp2 v1 = u1 + u5, v5 = u1 - u5, v3 = u3 + u7, v7 = u3 - u7;
+
+		const GFp2 t0 = v0 + v2, t2 = v0 - v2, t1 = v1 + v3, t3 = v1 - v3;
+		const GFp2 t4 = v4.addi(v6), t6 = v4.subi(v6), t5 = v5.addi(v7).mul_R8(), t7 = v5.subi(v7).mul_R8();
+
+		z0 = t0 + t1; z1 = t0 - t1; z2 = t2.addi(t3); z3 = t2.subi(t3);
+		z4 = t4 + t5; z5 = t4 - t5; z6 = t6.addi(t7); z7 = t6.subi(t7);
+	}
+
+	static void bck8(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
+					 const GFp2 & w1, const GFp2 & w2, const GFp2 & w3, const GFp2 & w4, const GFp2 & w5, const GFp2 & w6, const GFp2 & w7)
+	{
+		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3, u4 = z4, u5 = z5, u6 = z6, u7 = z7;
+		const GFp2 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = u2 - u3;
+		const GFp2 v4 = u4 + u5, v5 = (u4 - u5).mul_R8conj(), v6 = u6 + u7, v7 = (u6 - u7).mul_R8conj();
+
+		const GFp2 t0 = v0 + v2, t2 = v0 - v2, t1 = v1.subi(v3), t3 = v1.addi(v3);
+		const GFp2 t4 = v4 + v6, t6 = v4 - v6, t5 = v5.subi(v7), t7 = v5.addi(v7);
+
+		z0 = t0 + t4; z4 = (t0 - t4).mulconj(w1); z2 = t2.subi(t6).mulconj(w2); z6 = t2.addi(t6).mulconj(w3);
+		z1 = (t1 + t5).mulconj(w4); z5 = (t1 - t5).mulconj(w5); z3 = t3.subi(t7).mulconj(w6); z7 = t3.addi(t7).mulconj(w7);
+	}
+
+	static void sqr2x2(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w)
+	{
+		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		z0 = u0.sqr() + u1.sqr().mul(w), z1 = u0.mul(u1 + u1);
+		z2 = u2.sqr() - u3.sqr().mul(w), z3 = u2.mul(u3 + u3);
+	}
+
+	static void sqr4(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w)
+	{
+		const GFp2 u0 = z0, u2 = z2.mul(w), u1 = z1, u3 = z3.mul(w);
+		const GFp2 v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+		const GFp2 s0 = v0.sqr() + v1.sqr().mul(w), s1 = v0.mul(v1 + v1);
+		const GFp2 s2 = v2.sqr() - v3.sqr().mul(w), s3 = v2.mul(v3 + v3);
+		z0 = s0 + s2; z2 = (s0 - s2).mulconj(w); z1 = s1 + s3; z3 = (s1 - s3).mulconj(w);
+	}
+
+	static void forward2(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
+	{
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF61_31 w = wr[s + j];
+			const GFp2 w1 = w[s + j];
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 2 * m * j + i;
-				const GF61_31 u0 = z[k + 0 * m], u1 = z[k + 1 * m].mul(w);
-				z[k + 0 * m] = u0.add(u1); z[k + 1 * m] = u0.sub(u1);
+				fwd2(z[k + 0 * m], z[k + 1 * m], w1);
 			}
 		}
 	}
 
-	void backward2(const size_t m, const size_t s)
+	static void backward2(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
-
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF61_31 w = wr[s + j];
+			const GFp2 w1 = w[s + j];
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 2 * m * j + i;
-				const GF61_31 u0 = z[k + 0 * m], u1 = z[k + 1 * m];
-				z[k + 0 * m] = u0.add(u1); z[k + 1 * m] = u0.sub(u1).mulconj(w);
+				bck2(z[k + 0 * m], z[k + 1 * m], w1);
 			}
 		}
 	}
 
-	void forward4(const size_t m, const size_t s)
+	static void forward4(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
-
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF61_31 w1 = wr[s + j], w2 = wr[2 * (s + j)], w3 = w1.mul(w2);
+			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w3 = w1.mul(w2);
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 4 * m * j + i;
-				const GF61_31 u0 = z[k + 0 * m], u1 = z[k + 1 * m].mul(w2), u2 = z[k + 2 * m].mul(w1), u3 = z[k + 3 * m].mul(w3);
-				const GF61_31 v0 = u0.add(u2), v1 = u1.add(u3), v2 = u0.sub(u2), v3 = u1.sub(u3);
-				z[k + 0 * m] = v0.add(v1); z[k + 1 * m] = v0.sub(v1);
-				z[k + 2 * m] = v2.addi(v3); z[k + 3 * m] = v2.subi(v3);
+				fwd4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w2, w3);
 			}
 		}
 	}
 
-	void backward4(const size_t m, const size_t s)
+	static void backward4(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
-
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GF61_31 w1 = wr[s + j], w2 = wr[2 * (s + j)], w3 = w1.mul(w2);
+			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w3 = w1.mul(w2);
 
 			for (size_t i = 0; i < m; ++i)
 			{
 				const size_t k = 4 * m * j + i;
-				const GF61_31 u0 = z[k + 0 * m], u1 = z[k + 1 * m], u2 = z[k + 2 * m], u3 = z[k + 3 * m];
-				const GF61_31 v0 = u0.add(u1), v1 = u0.sub(u1), v2 = u2.add(u3), v3 = u3.sub(u2);
-				z[k + 0 * m] = v0.add(v2); z[k + 2 * m] = v0.sub(v2).mulconj(w1);
-				z[k + 1 * m] = v1.addi(v3).mulconj(w2); z[k + 3 * m] = v1.subi(v3).mulconj(w3);
+				bck4(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], w1, w2, w3);
 			}
 		}
 	}
 
-	void square2()
+	static void forward8(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
-		const size_t n = _vz.size();
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
-
-		for (size_t j = 0; j < n / 4; ++j)
+		for (size_t j = 0; j < s; ++j)
 		{
-			const GF61_31 w = wr[n / 4 + j];
+			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w4 = w[4 * (s + j)];
+			const GFp2 w3 = w1.mul(w2), w5 = w1.mul(w4), w6 = w2.mul(w4), w7 = w3.mul(w4);
 
-			const size_t k = 4 * j;
-			const GF61_31 u0 = z[k + 0], u1 = z[k + 1], u2 = z[k + 2], u3 = z[k + 3];
-			z[k + 0] = u0.sqr().add(u1.sqr().mul(w)); z[k + 1] = u0.mul(u1.add(u1));
-			z[k + 2] = u2.sqr().sub(u3.sqr().mul(w)); z[k + 3] = u2.mul(u3.add(u3));
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 8 * m * j + i;
+				fwd8(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], z[k + 4 * m], z[k + 5 * m], z[k + 6 * m], z[k + 7 * m],
+					 w1, w2, w3, w4, w5, w6, w7);
+			}
 		}
 	}
 
-	void square4()
+	static void backward8(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
-		const size_t n = _vz.size();
-		GF61_31 * const z = _vz.data();
-		const GF61_31 * const wr = _vwr.data();
+		for (size_t j = 0; j < s; ++j)
+		{
+			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w4 = w[4 * (s + j)];
+			const GFp2 w3 = w1.mul(w2), w5 = w1.mul(w4), w6 = w2.mul(w4), w7 = w3.mul(w4);
 
+			for (size_t i = 0; i < m; ++i)
+			{
+				const size_t k = 8 * m * j + i;
+				bck8(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], z[k + 4 * m], z[k + 5 * m], z[k + 6 * m], z[k + 7 * m],
+					 w1, w2, w3, w4, w5, w6, w7);
+			}
+		}
+	}
+
+	static void square2(GFp2 * const z, const GFp2 * const w, const size_t n)
+	{
 		for (size_t j = 0; j < n / 4; ++j)
 		{
-			const GF61_31 w = wr[n / 4 + j];
-
-			const size_t k = 4 * j;
-			const GF61_31 u0 = z[k + 0], u1 = z[k + 1], u2 = z[k + 2].mul(w), u3 = z[k + 3].mul(w);
-			const GF61_31 v0 = u0.add(u2), v1 = u1.add(u3), v2 = u0.sub(u2), v3 = u1.sub(u3);
-			const GF61_31 s0 = v0.sqr().add(v1.sqr().mul(w)), s1 = v0.mul(v1.add(v1));
-			const GF61_31 s2 = v2.sqr().sub(v3.sqr().mul(w)), s3 = v2.mul(v3.add(v3));
-			z[k + 0] = s0.add(s2); z[k + 2] = s0.sub(s2).mulconj(w);
-			z[k + 1] = s1.add(s3); z[k + 3] = s1.sub(s3).mulconj(w);
+			sqr2x2(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], w[n / 4 + j]);
 		}
+	}
+
+	static void square4(GFp2 * const z, const GFp2 * const w, const size_t n)
+	{
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			sqr4(z[4 * j + 0], z[4 * j + 1], z[4 * j + 2], z[4 * j + 3], w[n / 4 + j]);
+		}
+	}
+
+public:
+	static void init_twiddle_factors(GFp2 * const w, const size_t n)
+	{
+		for (size_t s = 1; s < n; s *= 2)
+		{
+			const GFp2 r_s = root_nth(2 * 4 * s);
+			for (size_t j = 0; j < s; ++j)
+			{
+				w[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
+			}
+		}
+	}
+
+	static void init(GFp2 * const z, const size_t n, const uint32_t a)
+	{
+		z[0] = GFp2(a); for (size_t k = 1; k < n; ++k) z[k] = GFp2(0);
+	}
+
+	static void square(GFp2 * const z, const GFp2 * const w, const size_t n)
+	{
+		size_t m = n / 2, s = 1;
+
+		// for (; m >= 2; m /= 2, s *= 2) forward2(z, w, m, s);
+		// square2(z, w, n);
+		// for (m = 2, s /= 2; s >= 1; m *= 2, s /= 2) backward2(z, w, m, s);
+
+		// for (; m >= 4; m /= 4, s *= 4) forward4(z, w, m / 2, s);
+		// if (m == 1) square2(z, w, n); else square4(z, w, n);
+		// for (m *= 4, s /= 4; s >= 1; m *= 4, s /= 4) backward4(z, w, m / 2, s);
+
+		for (; m >= 8; m /= 8, s *= 8) forward8(z, w, m / 4, s);
+		if (m == 4) { forward4(z, w, 2, n / 8); square2(z, w, n); backward4(z, w, 2, n / 8); }
+		else if (m == 2) square4(z, w, n);
+		else /*if (m == 1)*/ square2(z, w, n);
+		for (m *= 8, s /= 8; s >= 1; m *= 8, s /= 8) backward8(z, w, m / 4, s);
+	}
+};
+
+using Z61 = ZMq<61, uint64_t, __uint128_t>;
+using Z31 = ZMq<31, uint32_t, uint64_t>;
+
+using GF61 = GFp2<Z61, uint64_t(1) << 31, 2187240813972ull, 5388952866649ull>;
+using GF31 = GFp2<Z31, uint64_t(1) << 31, 12683u, 91810u>;
+
+class Transform
+{
+private:
+	const size_t _n;
+	const int32_t _base;
+	const int32_t _multiplier;
+	const int _snorm31;
+	__uint128_t _fmax;
+	std::vector<GF61> _vz61;
+	std::vector<GF31> _vz31;
+	std::vector<GF61> _vw61;
+	std::vector<GF31> _vw31;
+
+private:
+	void garner(const GF61 & u61, const GF31 & u31, __int128_t & i_0, __int128_t & i_1) const
+	{
+		const uint32_t n31_0 = u31.s0().get(), n31_1 = u31.s1().get();
+		const GF61 n31 = GF61(Z61(n31_0), Z61(n31_1));
+		GF61 u = u61 - n31; 
+		// The inverse of 2^31 - 1 mod 2^61 - 1 is 2^31 + 1
+		u = u + u.lshift(31);
+		const uint64_t s_0 = u.s0().get(), s_1 = u.s1().get();
+		const __uint128_t n_0 = n31_0 +	(__uint128_t(s_0) << 31) - s_0;
+		const __uint128_t n_1 = n31_1 + (__uint128_t(s_1) << 31) - s_1;
+		static const __uint128_t M61M31 = ((__uint128_t(1) << 61) - 1) * ((uint32_t(1) << 31) - 1);
+		i_0 = __int128_t((n_0 > M61M31 / 2) ? (n_0 - M61M31) : n_0);
+		i_1 = __int128_t((n_1 > M61M31 / 2) ? (n_1 - M61M31) : n_1);
 	}
 
 	void carry(const bool mul)
 	{
-		const size_t n = _vz.size();
-		GF61_31 * const z = _vz.data();
+		const size_t n = _vz61.size();
+		GF61 * const z61 = _vz61.data();
+		GF31 * const z31 = _vz31.data();
 
 		const int snorm31 = _snorm31;
 		const int32_t m = _multiplier, base = _base;
@@ -399,14 +375,16 @@ private:
 
 		for (size_t k = 0; k < n; ++k)
 		{
-			const GF61_31 u = z[k].lshift(snorm31 + 61 - 31, snorm31);
-			__int128_t i0, i1; u.garner(i0, i1);
+			const GF61 u61 = z61[k].lshift(snorm31 + 61 - 31);
+			const GF31 u31 = z31[k].lshift(snorm31);
+			__int128_t i0, i1; garner(u61, u31, i0, i1);
 			if (mul) { i0 *= m; i1 *= m; }
 			f0 += i0; f1 += i1;
 			const __uint128_t uf0 = __uint128_t((f0 < 0) ? -f0 : f0), uf1 = __uint128_t((f1 < 0) ? -f1 : f1);
 			fmax = (uf0 > fmax) ? uf0 : fmax; fmax = (uf1 > fmax) ? uf1 : fmax;
-			__int128_t l0 = f0 / base, l1 = f1 / base;
-			z[k].set_int(int(f0 - l0 * base), int(f1 - l1 * base));
+			const __int128_t l0 = f0 / base, l1 = f1 / base;
+			const int32_t r0 = int32_t(f0 - l0 * base), r1 = int32_t(f1 - l1 * base);
+			z61[k].set_int(r0, r1); z31[k].set_int(r0, r1);
 			f0 = l0; f1 = l1;
 		}
 
@@ -418,11 +396,12 @@ private:
 
 			for (size_t k = 0; k < n; ++k)
 			{
-				const GF61_31 u = z[k];
-				int32_t i0 = u.n31().s0().get_int(), i1 = u.n31().s1().get_int();
+				const GF31 u = z31[k];
+				int32_t i0, i1; u.get_int(i0, i1);
 				f0 += i0; f1 += i1;
-				__int128_t l0 = f0 / base, l1 = f1 / base;
-				z[k].set_int(int(f0 - l0 * base), int(f1 - l1 * base));
+				const __int128_t l0 = f0 / base, l1 = f1 / base;
+				const int32_t r0 = int32_t(f0 - l0 * base), r1 = int32_t(f1 - l1 * base);
+				z61[k].set_int(r0, r1); z31[k].set_int(r0, r1);
 				f0 = l0; f1 = l1;
 				if ((l0 == 0) && (l1 == 0)) break;
 			}
@@ -430,53 +409,41 @@ private:
 	}
 
 public:
-	Transform(const uint32_t b, const int n, const uint32_t a)
-		: _vz(size_t(1) << (n - 1), GF61_31(0u)), _vwr(size_t(1) << (n - 2)), _base(int32_t(b)), _multiplier(int32_t(a)), _snorm31(31 - n + 2)
+	Transform(const uint32_t b, const int m, const uint32_t a)
+		: _n(size_t(1) << (m - 1)), _base(int32_t(b)), _multiplier(int32_t(a)), _snorm31(31 - m + 2), _fmax(0),
+		  _vz61(_n), _vz31(_n), _vw61(_n), _vw31(_n)
 	{
-		const size_t size = _vz.size();
-		GF61_31 * const wr = _vwr.data();
-
-		for (size_t s = 1; s < size / 2; s *= 2)
-		{
-			const GF61_31 r_s = GF61_31::primroot_n(2 * 4 * s);
-			for (size_t j = 0; j < s; ++j)
-			{
-				wr[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
-			}
-		}
-
-		_vz[0] = GF61_31(1u);
-
-		_fmax = 0;
+		GF61::init_twiddle_factors(_vw61.data(), _n);
+		GF31::init_twiddle_factors(_vw31.data(), _n);
 	}
 
-public:
-	void squareMul(const bool mul)
+	void init(const uint32_t a)
 	{
-		const size_t n = _vz.size();
+		const size_t n = _vz61.size();
 
-		size_t m = n / 4, s = 1;
-		for (; m > 1; m /= 4, s *= 4) forward4(m, s);
-		if (m == 1) square4(); else square2();
-		for (m = (m == 1) ? 4 : 2, s /= 4; m <= n / 4; m *= 4, s /= 4) backward4(m, s);
+		GF61::init(_vz61.data(), n, a);
+		GF31::init(_vz31.data(), n, a);
+	}
+
+	void square_mul(const bool mul)
+	{
+		const size_t n = _vz61.size();
+
+		GF61::square(_vz61.data(), _vw61.data(), n);
+		GF31::square(_vz31.data(), _vw31.data(), n);
+
 		carry(mul);
 	}
 
 public:
-	bool isOne(uint64_t & res64) const
+	bool equal_one(uint64_t & res64) const
 	{
-		const size_t n = _vz.size();
-		const GF61_31 * const z = _vz.data();
+		const size_t n = _vz31.size();
+		const GF31 * const z = _vz31.data();
 
-		std::vector<int64_t> vzi(2 * n);
-		int64_t * const zi = vzi.data();
-
-		for (size_t i = 0; i < n; ++i)
-		{
-			const GF31 n31 = z[i].n31();
-			zi[i + 0 * n] = n31.s0().get_int();
-			zi[i + 1 * n] = n31.s1().get_int();
-		}
+		std::vector<int32_t> vzi(2 * n);
+		int32_t * const zi = vzi.data();
+		for (size_t i = 0; i < n; ++i) z[i].get_int(zi[i + 0 * n], zi[i + 1 * n]);
 
 		const int32_t base = _base;
 		int64_t f;
@@ -492,11 +459,11 @@ public:
 				f -= r;
 				f /= base;
 			}
-			zi[0] -= f;        // a[n] = -a[0]
+			zi[0] -= f;		// a[n] = -a[0]
 		} while (f != 0);
 
-		bool bOne = (zi[0] == 1);
-		if (bOne) for (size_t i = 1; i < 2 * n; ++i) bOne &= (zi[i] == 0);
+		bool b_one = (zi[0] == 1);
+		if (b_one) for (size_t i = 1; i < 2 * n; ++i) b_one &= (zi[i] == 0);
 
 		uint64_t r64 = 0, b = 1;
 		for (size_t i = 0; i < 2 * n; ++i)
@@ -506,36 +473,37 @@ public:
 		}
 		res64 = r64;
 
-		return bOne;
+		return b_one;
 	}
 
 	__uint128_t fmax() const { return _fmax; }
 };
 
-static void check(const uint32_t b, const int n, const uint64_t expectedResidue = 0)
+static void check(const uint32_t b, const int m, const uint64_t expected_residue = 0)
 {
 	const clock_t start = clock();
 
 	mpz_t exponent; mpz_init(exponent);
-	mpz_ui_pow_ui(exponent, b, static_cast<unsigned long int>(1) << n);
+	mpz_ui_pow_ui(exponent, b, 1u << m);
 
-	const bool ispoweroftwo = ((b != 0) && ((b & (~b + 1)) == b));
-	Transform transform(b, n, ispoweroftwo ? 3 : 2);
+	const bool is_power_of_two = ((b != 0) && ((b & (~b + 1)) == b));
+	Transform transform(b, m, is_power_of_two ? 3 : 2);
 
-	for (int i = static_cast<int>(mpz_sizeinbase(exponent, 2) - 1); i >= 0; --i)
+	transform.init(1);
+	for (int i = int(mpz_sizeinbase(exponent, 2) - 1); i >= 0; --i)
 	{
-		transform.squareMul(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
+		transform.square_mul(mpz_tstbit(exponent, mp_bitcnt_t(i)) != 0);
 	}
 
 	mpz_clear(exponent);
 
 	uint64_t residue;
-	const bool isPrime = transform.isOne(residue);
+	const bool is_prp = transform.equal_one(residue);
 
 	const float duration = (float)(clock() - start) / CLOCKS_PER_SEC;
 
-	std::cout << b << "^{2^" << n << "} + 1 is ";
-	if (isPrime) std::cout << "a probable prime";
+	std::cout << b << "^{2^" << m << "} + 1 is ";
+	if (is_prp) std::cout << "a probable prime";
 	else
 	{
 		std::cout << "composite (RES = ";
@@ -545,48 +513,16 @@ static void check(const uint32_t b, const int n, const uint64_t expectedResidue 
 	std::cout.precision(3);
 	std::cout << ", max = " << transform.fmax() * std::pow(2.0, -96) << ", " << duration << " sec.";
 
-	if ((isPrime && (expectedResidue != 0)) || (!isPrime && (expectedResidue != residue))) std::cout << " ERROR!";
+	if ((is_prp && (expected_residue != 0)) || (!is_prp && (expected_residue != residue))) std::cout << " ERROR!";
 
 	std::cout << std::endl;
 }
 
 int main()
 {
-	// GF31
-	// check(5748, 5);
-	// check(4058, 6);
-	// check(2884, 7);
-	// check(1938, 8);
-	// check(1342, 9);
-	// check(824, 10);
-	// check(150, 11);
+	// The condition are b < (2^31 - 1)/2 and n * (b-1)^2 < (2^31 - 1)*(2^61 - 1)/2
+	// We have 2^31 * (1G - 1)^2 < (2^31 - 1)*(2^61 - 1)/2
 
-	// GF61
-	// check(10234, 6, 0x831a0082ced5b6e1ull);
-	// check(10032, 7, 0x3b2808f35afe61bdull);
-	// check(584328, 8, 0xe6205f75c7438c2eull);
-	// check(419000, 9, 0xfb2b0688cefd4fabull);
-	// check(352220, 10, 0x1e830b3c54de5ef3ull);
-	// check(366672, 11, 0xef2f0357a06a13e3ull);
-	// check(285064, 12, 0x4e349f8254b4e364ull);
-	// check(189812522, 5);
-	// check(134217660, 6);
-	// check(94905500, 7);
-	// check(67108840, 8);
-	// check(47452788, 9);
-	// check(33553366, 10);
-	// check(23723612, 11);
-	// check(16757788, 12);
-	// check(11844594, 13);
-	// check(8351796, 14);
-	// check(5761466, 15);
-	// check(3966304, 16);
-	// check(2639850, 17);
-	// check(2042774, 18);
-	// check(475856, 19);
-	// check(919444, 20);
-
-	// GF61 x GF31
 	check(1000000000, 5, 0x7da127b73585c207ull);
 	check(1000000000, 6, 0xc37bd72acdea47e1ull);
 	check(1000000000, 7, 0xcfa99a35cc4a7179ull);
@@ -595,6 +531,7 @@ int main()
 	check(1000000000, 10, 0x9983e7718a7d7a4dull);
 	check(1000000000, 11, 0x43c6cc5326e5c77full);
 	check(1000000000, 12, 0x4e43a5b93273c649ull);
+
 	check(1000000064, 5);
 	check(1000000432, 6);
 	check(1000000072, 7);
@@ -605,12 +542,13 @@ int main()
 	check(1000005800, 12);
 	check(1000001960, 13);
 	check(1000032014, 14);
-	check(459986590, 15);
-	check(440025190, 16);
-	check(300359914, 17);
-	check(45007104, 18);
-	check(11937916, 19);
-	check(3843236, 20);
+	check(460026578, 15);
+	check(584797994, 16);
+	check(1000032472, 17);
+	check(100013182, 18);
+	check(23865586, 19);
+	check(5336284, 20);
+	check(2524190, 21);
 	
 	return EXIT_SUCCESS;
 }

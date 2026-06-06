@@ -96,6 +96,8 @@ private:
 	GFp2 sqr() const { const Zp t = _s0 * _s1; return GFp2(_s0.sqr() - _s1.sqr(), t + t); }
 	GFp2 mul(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s0 - _s1 * rhs._s1, _s1 * rhs._s0 + _s0 * rhs._s1); }
 	GFp2 mulconj(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s0 + _s1 * rhs._s1, _s1 * rhs._s0 - _s0 * rhs._s1); }
+	GFp2 mul_s(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s1 - _s1 * rhs._s0, _s1 * rhs._s1 + _s0 * rhs._s0); }
+	GFp2 mulconj_s(const GFp2 & rhs) const { return GFp2(_s0 * rhs._s1 + _s1 * rhs._s0, _s1 * rhs._s1 - _s0 * rhs._s0); }
 
 	GFp2 pow(const uint64_t e) const
 	{
@@ -126,6 +128,18 @@ private:
 		z0 = u0 + u1; z1 = (u0 - u1).mulconj(w);
 	}
 
+	static void fwd2_0(GFp2 & z0, GFp2 & z1)
+	{
+		const GFp2 u0 = z0, u1 = z1.mul_R8();
+		z0 = u0 + u1; z1 = u0 - u1;
+	}
+
+	static void bck2_0(GFp2 & z0, GFp2 & z1)
+	{
+		const GFp2 u0 = z0, u1 = z1;
+		z0 = u0 + u1; z1 = (u0 - u1).mul_R8conj();
+	}
+
 	static void fwd4(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w1, const GFp2 & w2, const GFp2 & w3)
 	{
 		const GFp2 u0 = z0, u2 = z2.mul(w1), u1 = z1.mul(w2), u3 = z3.mul(w3);
@@ -138,6 +152,20 @@ private:
 		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
 		const GFp2 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = u2 - u3;
 		z0 = v0 + v2; z2 = (v0 - v2).mulconj(w1); z1 = v1.subi(v3).mulconj(w2); z3 = v1.addi(v3).mulconj(w3);
+	}
+
+	static void fwd4_0(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w2)
+	{
+		const GFp2 u0 = z0, u2 = z2.mul_R8(), u1 = z1.mul(w2), u3 = z3.mul_s(w2);
+		const GFp2 v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = u1 - u3;
+		z0 = v0 + v1; z1 = v0 - v1; z2 = v2.addi(v3); z3 = v2.subi(v3);
+	}
+
+	static void bck4_0(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w2)
+	{
+		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
+		const GFp2 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = u2 - u3;
+		z0 = v0 + v2; z2 = (v0 - v2).mul_R8conj(); z1 = v1.subi(v3).mulconj(w2); z3 = v1.addi(v3).mulconj_s(w2);
 	}
 
 	static void fwd8(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
@@ -169,6 +197,35 @@ private:
 		z1 = (t1 + t5).mulconj(w4); z5 = (t1 - t5).mulconj(w5); z3 = t3.subi(t7).mulconj(w6); z7 = t3.addi(t7).mulconj(w7);
 	}
 
+	static void fwd8_0(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
+					   const GFp2 & w2, const GFp2 & w4, const GFp2 & w5)
+	{
+		const GFp2 u0 = z0, u4 = z4.mul_R8(), u2 = z2.mul(w2), u6 = z6.mul_s(w2), u1 = z1.mul(w4), u5 = z5.mul(w5), u3 = z3.mul_s(w5), u7 = z7.mul_s(w4);
+
+		const GFp2 v0 = u0 + u4, v4 = u0 - u4, v2 = u2 + u6, v6 = u2 - u6;
+		const GFp2 v1 = u1 + u5, v5 = u1 - u5, v3 = u3 + u7, v7 = u3 - u7;
+
+		const GFp2 t0 = v0 + v2, t2 = v0 - v2, t1 = v1 + v3, t3 = v1 - v3;
+		const GFp2 t4 = v4.addi(v6), t6 = v4.subi(v6), t5 = v5.addi(v7).mul_R8(), t7 = v5.subi(v7).mul_R8();
+
+		z0 = t0 + t1; z1 = t0 - t1; z2 = t2.addi(t3); z3 = t2.subi(t3);
+		z4 = t4 + t5; z5 = t4 - t5; z6 = t6.addi(t7); z7 = t6.subi(t7);
+	}
+
+	static void bck8_0(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
+					   const GFp2 & w2, const GFp2 & w4, const GFp2 & w5)
+	{
+		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3, u4 = z4, u5 = z5, u6 = z6, u7 = z7;
+		const GFp2 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = u2 - u3;
+		const GFp2 v4 = u4 + u5, v5 = (u4 - u5).mul_R8conj(), v6 = u6 + u7, v7 = (u6 - u7).mul_R8conj();
+
+		const GFp2 t0 = v0 + v2, t2 = v0 - v2, t1 = v1.subi(v3), t3 = v1.addi(v3);
+		const GFp2 t4 = v4 + v6, t6 = v4 - v6, t5 = v5.subi(v7), t7 = v5.addi(v7);
+
+		z0 = t0 + t4; z4 = (t0 - t4).mul_R8conj(); z2 = t2.subi(t6).mulconj(w2); z6 = t2.addi(t6).mulconj_s(w2);
+		z1 = (t1 + t5).mulconj(w4); z5 = (t1 - t5).mulconj(w5); z3 = t3.subi(t7).mulconj_s(w5); z7 = t3.addi(t7).mulconj_s(w4);
+	}
+
 	static void sqr2x2(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, const GFp2 & w)
 	{
 		const GFp2 u0 = z0, u1 = z1, u2 = z2, u3 = z3;
@@ -183,6 +240,27 @@ private:
 		const GFp2 s0 = v0.sqr() + v1.sqr().mul(w), s1 = v0.mul(v1 + v1);
 		const GFp2 s2 = v2.sqr() - v3.sqr().mul(w), s3 = v2.mul(v3 + v3);
 		z0 = s0 + s2; z2 = (s0 - s2).mulconj(w); z1 = s1 + s3; z3 = (s1 - s3).mulconj(w);
+	}
+
+	static void sqr8(GFp2 & z0, GFp2 & z1, GFp2 & z2, GFp2 & z3, GFp2 & z4, GFp2 & z5, GFp2 & z6, GFp2 & z7,
+					 const GFp2 & w1, const GFp2 & w2, const GFp2 & w3)
+	{
+		const GFp2 u0 = z0, u4 = z4.mul(w1), u1 = z1, u5 = z5.mul(w1), u2 = z2.mul(w2), u6 = z6.mul(w3), u3 = z3.mul(w2), u7 = z7.mul(w3);
+		const GFp2 v0 = u0 + u4, v4 = u0 - u4, v1 = u1 + u5, v5 = u1 - u5;
+		const GFp2 v2 = u2 + u6, v6 = u2 - u6, v3 = u3 + u7, v7 = u3 - u7;
+
+		const GFp2 t0 = v0 + v2, t2 = v0 - v2, t1 = v1 + v3, t3 = v1 - v3;
+		const GFp2 s0 = t0.sqr() + t1.sqr().mul(w2), s1 = t0.mul(t1 + t1);
+		const GFp2 s2 = t2.sqr() - t3.sqr().mul(w2), s3 = t2.mul(t3 + t3);
+		const GFp2 r0 = s0 + s2, r2 = s0 - s2, r1 = s1 + s3, r3 = s1 - s3;
+
+		const GFp2 t4 = v4.addi(v6), t6 = v4.subi(v6), t5 = v5.addi(v7), t7 = v5.subi(v7);
+		const GFp2 s4 = t4.sqr().addi(t5.sqr().mul(w2)), s5 = t4.mul(t5 + t5);
+		const GFp2 s6 = t6.sqr().subi(t7.sqr().mul(w2)), s7 = t6.mul(t7 + t7);
+		const GFp2 r4 = s4 + s6, r6 = s4 - s6, r5 = s5 + s7, r7 = s5 - s7;
+
+		z0 = r0 + r4; z4 = (r0 - r4).mulconj(w1); z1 = r1 + r5; z5 = (r1 - r5).mulconj(w1);
+		z2 = r2.subi(r6).mulconj(w2); z6 = r2.addi(r6).mulconj(w3); z3 = r3.subi(r7).mulconj(w2); z7 = r3.addi(r7).mulconj(w3);
 	}
 
 	static void forward2(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
@@ -213,11 +291,27 @@ private:
 		}
 	}
 
+	static void forward2_0(GFp2 * const z, const size_t n_2)
+	{
+		for (size_t i = 0; i < n_2; ++i)
+		{
+			fwd2_0(z[i + 0 * n_2], z[i + 1 * n_2]);
+		}
+	}
+
+	static void backward2_0(GFp2 * const z, const size_t n_2)
+	{
+		for (size_t i = 0; i < n_2; ++i)
+		{
+			bck2_0(z[i + 0 * n_2], z[i + 1 * n_2]);
+		}
+	}
+
 	static void forward4(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w3 = w1.mul(w2);
+			const GFp2 w1 = w[3 * (s + j) + 0], w2 = w[3 * (s + j) + 1], w3 = w[3 * (s + j) + 2];
 
 			for (size_t i = 0; i < m; ++i)
 			{
@@ -231,7 +325,7 @@ private:
 	{
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w3 = w1.mul(w2);
+			const GFp2 w1 = w[3 * (s + j) + 0], w2 = w[3 * (s + j) + 1], w3 = w[3 * (s + j) + 2];
 
 			for (size_t i = 0; i < m; ++i)
 			{
@@ -241,12 +335,32 @@ private:
 		}
 	}
 
+	static void forward4_0(GFp2 * const z, const GFp2 * const w, const size_t n_4)
+	{
+		const GFp2 w2 = w[4];
+
+		for (size_t i = 0; i < n_4; ++i)
+		{
+			fwd4_0(z[i + 0 * n_4], z[i + 1 * n_4], z[i + 2 * n_4], z[i + 3 * n_4], w2);
+		}
+	}
+
+	static void backward4_0(GFp2 * const z, const GFp2 * const w, const size_t n_4)
+	{
+		const GFp2 w2 = w[4];
+
+		for (size_t i = 0; i < n_4; ++i)
+		{
+			bck4_0(z[i + 0 * n_4], z[i + 1 * n_4], z[i + 2 * n_4], z[i + 3 * n_4], w2);
+		}
+	}
+
 	static void forward8(GFp2 * const z, const GFp2 * const w, const size_t m, const size_t s)
 	{
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w4 = w[4 * (s + j)];
-			const GFp2 w3 = w1.mul(w2), w5 = w1.mul(w4), w6 = w2.mul(w4), w7 = w3.mul(w4);
+			const GFp2 w1 = w[7 * (s + j) + 0], w2 = w[7 * (s + j) + 1], w3 = w[7 * (s + j) + 2], w4 = w[7 * (s + j) + 3],
+					   w5 = w[7 * (s + j) + 4], w6 = w[7 * (s + j) + 5], w7 = w[7 * (s + j) + 6];
 
 			for (size_t i = 0; i < m; ++i)
 			{
@@ -261,8 +375,8 @@ private:
 	{
 		for (size_t j = 0; j < s; ++j)
 		{
-			const GFp2 w1 = w[s + j], w2 = w[2 * (s + j)], w4 = w[4 * (s + j)];
-			const GFp2 w3 = w1.mul(w2), w5 = w1.mul(w4), w6 = w2.mul(w4), w7 = w3.mul(w4);
+			const GFp2 w1 = w[7 * (s + j) + 0], w2 = w[7 * (s + j) + 1], w3 = w[7 * (s + j) + 2], w4 = w[7 * (s + j) + 3],
+					   w5 = w[7 * (s + j) + 4], w6 = w[7 * (s + j) + 5], w7 = w[7 * (s + j) + 6];
 
 			for (size_t i = 0; i < m; ++i)
 			{
@@ -270,6 +384,28 @@ private:
 				bck8(z[k + 0 * m], z[k + 1 * m], z[k + 2 * m], z[k + 3 * m], z[k + 4 * m], z[k + 5 * m], z[k + 6 * m], z[k + 7 * m],
 					 w1, w2, w3, w4, w5, w6, w7);
 			}
+		}
+	}
+
+	static void forward8_0(GFp2 * const z, const GFp2 * const w, const size_t n_8)
+	{
+		const GFp2 w2 = w[8], w4 = w[10], w5 = w[11];
+
+		for (size_t i = 0; i < n_8; ++i)
+		{
+			fwd8_0(z[i + 0 * n_8], z[i + 1 * n_8], z[i + 2 * n_8], z[i + 3 * n_8], z[i + 4 * n_8], z[i + 5 * n_8], z[i + 6 * n_8], z[i + 7 * n_8],
+				   w2, w4, w5);
+		}
+	}
+
+	static void backward8_0(GFp2 * const z, const GFp2 * const w, const size_t n_8)
+	{
+		const GFp2 w2 = w[8], w4 = w[10], w5 = w[11];
+
+		for (size_t i = 0; i < n_8; ++i)
+		{
+			bck8_0(z[i + 0 * n_8], z[i + 1 * n_8], z[i + 2 * n_8], z[i + 3 * n_8], z[i + 4 * n_8], z[i + 5 * n_8], z[i + 6 * n_8], z[i + 7 * n_8],
+				   w2, w4, w5);
 		}
 	}
 
@@ -289,15 +425,57 @@ private:
 		}
 	}
 
+	static void square8(GFp2 * const z, const GFp2 * const w, const size_t n)
+	{
+		for (size_t j = 0; j < n / 8; ++j)
+		{
+			sqr8(z[8 * j + 0], z[8 * j + 1], z[8 * j + 2], z[8 * j + 3], z[8 * j + 4], z[8 * j + 5], z[8 * j + 6], z[8 * j + 7],
+				 w[3 * (n / 8 + j) + 0], w[3 * (n / 8 + j) + 1], w[3 * (n / 8 + j) + 2]);
+		}
+	}
+
 public:
 	static void init_twiddle_factors(GFp2 * const w, const size_t n)
 	{
-		for (size_t s = 1; s < n; s *= 2)
+		// radix-2
+		for (size_t s = 1; s <= n / 4; s *= 2)
 		{
 			const GFp2 r_s = root_nth(2 * 4 * s);
 			for (size_t j = 0; j < s; ++j)
 			{
 				w[s + j] = r_s.pow(bitrev(j, 4 * s) + 1);
+			}
+		}
+
+		// radix-4
+		GFp2 * const w_4 = &w[n / 2];
+		for (size_t s = 1; s <= n / 4; s *= 2)
+		{
+			const GFp2 r2_s = root_nth(4 * 4 * s);
+			for (size_t j = 0; j < s; ++j)
+			{
+				const GFp2 w2 = r2_s.pow(bitrev(j, 4 * s) + 1), w1 = w2.sqr();
+				w_4[3 * (s + j) + 0] = w1;
+				w_4[3 * (s + j) + 1] = w2;
+				w_4[3 * (s + j) + 2] = w1.mul(w2);
+			}
+		}
+
+		// radix-8
+		GFp2 * const w_8 = &w[4 * n / 2];
+		for (size_t s = 1; s <= n / 4; s *= 2)
+		{
+			const GFp2 r4_s = root_nth(8 * 4 * s);
+			for (size_t j = 0; j < s; ++j)
+			{
+				const GFp2 w4 = r4_s.pow(bitrev(j, 4 * s) + 1), w2 = w4.sqr(), w1 = w2.sqr(), w3 = w1.mul(w2);
+				w_8[7 * (s + j) + 0] = w1;
+				w_8[7 * (s + j) + 1] = w2;
+				w_8[7 * (s + j) + 2] = w3;
+				w_8[7 * (s + j) + 3] = w4;
+				w_8[7 * (s + j) + 4] = w1.mul(w4);
+				w_8[7 * (s + j) + 5] = w2.mul(w4);
+				w_8[7 * (s + j) + 6] = w3.mul(w4);
 			}
 		}
 	}
@@ -311,19 +489,27 @@ public:
 	{
 		size_t m = n / 2, s = 1;
 
+		// forward2_0(z, m); m /= 2, s *= 2;
 		// for (; m >= 2; m /= 2, s *= 2) forward2(z, w, m, s);
 		// square2(z, w, n);
-		// for (m = 2, s /= 2; s >= 1; m *= 2, s /= 2) backward2(z, w, m, s);
+		// for (m = 2, s /= 2; s > 1; m *= 2, s /= 2) backward2(z, w, m, s);
+		// backward2_0(z, m);
 
-		// for (; m >= 4; m /= 4, s *= 4) forward4(z, w, m / 2, s);
+		// const GFp2 * const w_4 = &w[n / 2];
+		// forward4_0(z, w_4, m / 2); m /= 4, s *= 4;
+		// for (; m >= 4; m /= 4, s *= 4) forward4(z, w_4, m / 2, s);
 		// if (m == 1) square2(z, w, n); else square4(z, w, n);
-		// for (m *= 4, s /= 4; s >= 1; m *= 4, s /= 4) backward4(z, w, m / 2, s);
+		// for (m *= 4, s /= 4; s > 1; m *= 4, s /= 4) backward4(z, w_4, m / 2, s);
+		// backward4_0(z, w_4, m / 2);
 
-		for (; m >= 8; m /= 8, s *= 8) forward8(z, w, m / 4, s);
-		if (m == 4) { forward4(z, w, 2, n / 8); square2(z, w, n); backward4(z, w, 2, n / 8); }
+		const GFp2 * const w_8 = &w[4 * n / 2];
+		forward8_0(z, w_8, m / 4); m /= 8, s *= 8;
+		for (; m >= 8; m /= 8, s *= 8) forward8(z, w_8, m / 4, s);
+		if (m == 4) { const GFp2 * const w_4 = &w[n / 2]; square8(z, w_4, n); }
 		else if (m == 2) square4(z, w, n);
 		else /*if (m == 1)*/ square2(z, w, n);
-		for (m *= 8, s /= 8; s >= 1; m *= 8, s /= 8) backward8(z, w, m / 4, s);
+		for (m *= 8, s /= 8; s > 1; m *= 8, s /= 8) backward8(z, w_8, m / 4, s);
+		backward8_0(z, w_8, m / 4);
 	}
 };
 
@@ -341,10 +527,10 @@ private:
 	const int32_t _multiplier;
 	const int _snorm31;
 	__uint128_t _fmax;
-	std::vector<GF61> _vz61;
-	std::vector<GF31> _vz31;
-	std::vector<GF61> _vw61;
-	std::vector<GF31> _vw31;
+	std::vector<GF61> _vz_61;
+	std::vector<GF31> _vz_31;
+	std::vector<GF61> _vw_61;
+	std::vector<GF31> _vw_31;
 
 private:
 	void garner(const GF61 & u61, const GF31 & u31, __int128_t & i_0, __int128_t & i_1) const
@@ -364,9 +550,9 @@ private:
 
 	void carry(const bool mul)
 	{
-		const size_t n = _vz61.size();
-		GF61 * const z61 = _vz61.data();
-		GF31 * const z31 = _vz31.data();
+		const size_t n = _n;
+		GF61 * const z61 = _vz_61.data();
+		GF31 * const z31 = _vz_31.data();
 
 		const int snorm31 = _snorm31;
 		const int32_t m = _multiplier, base = _base;
@@ -411,26 +597,28 @@ private:
 public:
 	Transform(const uint32_t b, const int m, const uint32_t a)
 		: _n(size_t(1) << (m - 1)), _base(int32_t(b)), _multiplier(int32_t(a)), _snorm31(31 - m + 2), _fmax(0),
-		  _vz61(_n), _vz31(_n), _vw61(_n), _vw31(_n)
+		  _vz_61(_n), _vz_31(_n), _vw_61((1 + 3 + 7) * _n / 2), _vw_31((1 + 3 + 7) * _n / 2)
 	{
-		GF61::init_twiddle_factors(_vw61.data(), _n);
-		GF31::init_twiddle_factors(_vw31.data(), _n);
+		const size_t n = _n;
+
+		GF61::init_twiddle_factors(_vw_61.data(), n);
+		GF31::init_twiddle_factors(_vw_31.data(), n);
 	}
 
 	void init(const uint32_t a)
 	{
-		const size_t n = _vz61.size();
+		const size_t n = _n;
 
-		GF61::init(_vz61.data(), n, a);
-		GF31::init(_vz31.data(), n, a);
+		GF61::init(_vz_61.data(), n, a);
+		GF31::init(_vz_31.data(), n, a);
 	}
 
 	void square_mul(const bool mul)
 	{
-		const size_t n = _vz61.size();
+		const size_t n = _n;
 
-		GF61::square(_vz61.data(), _vw61.data(), n);
-		GF31::square(_vz31.data(), _vw31.data(), n);
+		GF61::square(_vz_61.data(), _vw_61.data(), n);
+		GF31::square(_vz_31.data(), _vw_31.data(), n);
 
 		carry(mul);
 	}
@@ -438,8 +626,8 @@ public:
 public:
 	bool equal_one(uint64_t & res64) const
 	{
-		const size_t n = _vz31.size();
-		const GF31 * const z = _vz31.data();
+		const size_t n = _n;
+		const GF31 * const z = _vz_31.data();
 
 		std::vector<int32_t> vzi(2 * n);
 		int32_t * const zi = vzi.data();

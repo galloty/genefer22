@@ -100,8 +100,9 @@ private:
 		_transform = transform::create_gpu(b, n, _isBoinc, device, num_regs, _boinc_platform_id, _boinc_device_id, verbose);
 		if (verbose)
 		{
+			const size_t cache_size = _transform->getCacheSize(), mem_size = _transform->getMemSize();
 			std::ostringstream ss;
-			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB";
+			if (full) ss << ", data size: " << std::setprecision(3) << cache_size / (1024 * 1024.0) << "/" << mem_size / (1024 * 1024.0) << " MB";
 			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
@@ -116,8 +117,9 @@ private:
 		_transform = transform::create_cpu(b, n, nthreads, impl, num_regs, checkError, ttype);
 		if (verbose)
 		{
+			const size_t cache_size = _transform->getCacheSize(), mem_size = _transform->getMemSize();
 			std::ostringstream ss; ss << "Using " << ttype << " implementation, " << nthreads << " thread(s)";
-			if (full) ss << ", data size: " << std::setprecision(3) << _transform->getCacheSize() / (1024 * 1024.0) << " MB";
+			if (full) ss << ", data size: " << std::setprecision(3) << cache_size / (1024 * 1024.0) << "/" << mem_size / (1024 * 1024.0) << " MB";
 			ss << "." << std::endl;
 			pio::print(ss.str());
 		}
@@ -1300,13 +1302,13 @@ private:
 
 			pTransform->copy(1, 0);	// synchro
 
-			const size_t memsize = _transform->getCacheSize();
+			const size_t cache_size = _transform->getCacheSize(), mem_size = _transform->getMemSize();
 
 			const double error = _transform->getError();
 			const double mulTime = chrono.getElapsedTime() / i, estimatedTime = mulTime * std::log2(b) * (size_t(1) << n);
 			ss << ": " << timer::formatTime(estimatedTime) << std::setprecision(3) << ", " << mulTime * 1e3 << " ms/bit, ";
 			if (error != 0) ss << "error = " << std::setprecision(4) << error << ", ";
-			ss << "data size: " << memsize / (1024 * 1024.0) << " MB." << std::endl;
+			ss << "data size: " << cache_size / (1024 * 1024.0) << "/" << mem_size / (1024 * 1024.0) << " MB." << std::endl;
 		}
 		pio::print(ss.str());
 
@@ -1361,7 +1363,7 @@ private:
 
 public:
 	EReturn check(const uint32_t b, const uint32_t n, const EMode mode, const size_t device, const size_t nthreads, const std::string & impl,
-				  const int depth, const bool oldfashion = false)
+				  const int depth)
 	{
 		_n = n;
 		const bool emptyMainFilename = _mainFilename.empty();
@@ -1481,44 +1483,15 @@ public:
 				success = quick(exponent, testTime, validTime, isPrp, res64, old64);
 				const double error = _transform->getError();
 				clearline();
-				if (oldfashion)
+				std::ostringstream ss; ss << gfn(b, n);
+				if (success == EReturn::Success) ss << gfnStatus(isPrp, 0, 0, res64, old64, error, testTime + validTime);
+				else if (success == EReturn::Failed) ss << ": validation failed!";
+				else ss << ": terminated.";
+				ss << std::endl; pio::print(ss.str());
+				if ((success == EReturn::Success) || (!_isBoinc && (success == EReturn::Failed)))
 				{
-					std::ostringstream ss; ss << b << "^" << (size_t(1) << n) << "+1";
-					if (success == EReturn::Success)
-					{
-						ss << " is complete";
-						if (error != 0) ss << ", err = " << std::setprecision(4) << error;
-						ss << ", time = " << timer::formatTime(testTime + validTime) << ".";
-					}
-					else if (success == EReturn::Failed) ss << ": validation failed!";
-					else ss << ": terminated.";
-					ss << std::endl; pio::print(ss.str());
-					pio::result(ss.str(), "genefer.log");
-					if (success == EReturn::Success)
-					{
-						std::ostringstream ssres; ssres << std::hex << std::setfill('0') << std::setw(16) << old64;
-						std::ostringstream ssr; ssr << b << "^" << (size_t(1) << n) << "+1 is ";
-						if (isPrp) ssr << "a probable prime."; else ssr << "composite. (RES=" << ssres.str() << ")";
-						ssr << " (" << static_cast<uint32_t>((size_t(1) << n) * log(static_cast<double>(b)) / log(10.0)) + 1 << " digits) (err = 0.0000) (time = "
-							<< timer::formatTime(testTime + validTime) << ") ";
-						time_t ltime; time(&ltime);
-						ssr << std::string(asctime(localtime(&ltime))).substr(11, 8) << std::endl;
-						pio::result(ssr.str(), "out");
-						if (!_isBoinc) clearContext();
-					}
-				}
-				else
-				{
-					std::ostringstream ss; ss << gfn(b, n);
-					if (success == EReturn::Success) ss << gfnStatus(isPrp, 0, 0, res64, old64, error, testTime + validTime);
-					else if (success == EReturn::Failed) ss << ": validation failed!";
-					else ss << ": terminated.";
-					ss << std::endl; pio::print(ss.str());
-					if ((success == EReturn::Success) || (!_isBoinc && (success == EReturn::Failed)))
-					{
-						pio::result(ss.str());
-						if (!_isBoinc) clearContext();
-					}
+					pio::result(ss.str());
+					if (!_isBoinc) clearContext();
 				}
 			}
 			else if (mode == EMode::Proof)

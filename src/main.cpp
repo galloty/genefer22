@@ -228,7 +228,6 @@ public:
 
 		uint32_t b = 0, n = 0;
 		genefer::EMode mode = genefer::EMode::None;
-		bool oldfashion = false;
 		size_t device = 0, nthreads = 1;
 #if defined(BOINC) && defined(GPU)
 		bool ext_device = false;
@@ -261,25 +260,6 @@ public:
 			}
 			if (arg.substr(0, 2) == "-q")
 			{
-				const std::string qstr = ((arg == "-q") && (i + 1 < size)) ? args[i + 1] : arg.substr(2);
-				const auto flex = qstr.find('^');
-				if (flex != std::string::npos)
-				{
-					const auto end = qstr.find('+');
-					if (end != std::string::npos)
-					{
-						const uint32_t c = static_cast<uint32_t>(std::atoi(qstr.substr(0, flex).c_str()));
-						const uint32_t m = static_cast<uint32_t>(std::atoi(qstr.substr(flex + 1, end - (flex + 1)).c_str()));
-						for (uint32_t lm = 12; lm <= 22; ++lm)
-						{
-							if (m == (static_cast<uint32_t>(1) << lm))
-							{
-								b = c; n = lm; oldfashion = true;
-								if ((arg == "-q") && (i + 1 < size)) ++i;
-							}
-						}
-					}
-				}
 				if (mode != genefer::EMode::None) throw std::runtime_error("-q used with an incompatible option (-p, -s, -c, -e, -h)");
 				mode = genefer::EMode::Quick;
 			}
@@ -472,7 +452,7 @@ public:
 			return;
 		}
 
-		const genefer::EReturn ret = g.check(b, n, mode, device, nthreads, impl, depth, oldfashion);
+		const genefer::EReturn ret = g.check(b, n, mode, device, nthreads, impl, depth);
 		if (bBoinc)
 		{
 			if (ret == genefer::EReturn::Success) boinc_finish(BOINC_SUCCESS);

@@ -77,21 +77,16 @@ private:
 
 private:
 	// result: normal: 'results.txt' file
-	bool _result(const std::string & str, const std::string & filename) const
+	bool _result(const std::string & str) const
 	{
-		const char * const file_name = filename.empty() ? "results.txt" : filename.c_str();
-		if (_isBoinc)
+		FILE * const out_file = _open("results.txt", "a");
+		if (out_file == nullptr)
 		{
-			FILE * const out_file = _open(file_name, "a");
-			if (out_file == nullptr) throw std::runtime_error("Cannot write 'results.txt' file");
-			std::fprintf(out_file, "%s", str.c_str());
-			std::fclose(out_file);
-			return true;
+			if (_isBoinc) throw std::runtime_error("Cannot write 'results.txt' file");
+			return false;
 		}
-		std::ofstream resFile(file_name, std::ios::app);
-		if (!resFile.is_open()) return false;
-		resFile << str;
-		resFile.close();
+		std::fprintf(out_file, "%s", str.c_str());
+		std::fclose(out_file);
 		return true;
 	}
 
@@ -104,14 +99,30 @@ private:
 			boinc_resolve_filename(filename, path, sizeof(path));
 			return boinc_fopen(path, mode);
 		}
-		return std::fopen(filename, mode);
+
+		// resolve filename as Boinc does
+		std::string path = filename;
+		std::ifstream linkFile(filename);
+		if (linkFile.is_open())
+		{
+			std::string line; std::getline(linkFile, line);
+			linkFile.close();
+			std::string::size_type first = line.find("<soft_link>"), last = line.find("</soft_link>");
+			if ((first != std::string::npos) && (last != std::string::npos))
+			{
+				first += 11;
+				path = line.substr(first, last - first);
+			}
+		}
+
+		return std::fopen(path.c_str(), mode);
 	}
 
 public:
 	static void print(const std::string & str) { getInstance()._print(str); }
 	static void display(const std::string & str) { getInstance()._display(str); }
 	static void error(const std::string & str, const bool fatal = false) { getInstance()._error(str, fatal); }
-	static bool result(const std::string & str, const std::string & filename = "") { return getInstance()._result(str, filename); }
+	static bool result(const std::string & str) { return getInstance()._result(str); }
 
 	static FILE * open(const char * const filename, const char * const mode) { return getInstance()._open(filename, mode); }
 };

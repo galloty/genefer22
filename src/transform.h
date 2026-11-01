@@ -26,6 +26,9 @@ inline bool cpu_supports_sve()
 	// See https://www.kernel.org/doc/Documentation/arm64/sve.txt
 	const unsigned long hwcaps = getauxval(AT_HWCAP);
 	return ((hwcaps & HWCAP_SVE) != 0);
+#elif defined(__APPLE__)
+	// Apple M processors do not support SVE, ID_AA64PFR0_EL1 cannot be read (SIGILL)
+	return false;
 #elif defined(__clang__) && (__clang_major__ >= 19)
 	return __builtin_cpu_supports("sve");
 #else

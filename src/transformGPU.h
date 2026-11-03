@@ -242,6 +242,8 @@ private:
 	cl_kernel _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr, _mul4096 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
+	cl_kernel _forward64_0c = nullptr;
+	bool _fuse = false, _carryPending = false;
 #if defined(TUNE)
 	splitter * _pSplit = nullptr;
 	size_t _splitIndex = 0;
@@ -337,7 +339,7 @@ private:
 	}
 
 public:
-	void createKernels(const uint32_t b)
+	void createKernels(const uint32_t b, const bool fuse)
 	{
 #if defined(ocl_debug)
 		std::ostringstream ss; ss << "Create ocl kernels." << std::endl;
@@ -415,6 +417,16 @@ public:
 		CREATE_NORMALIZE_KERNEL(normalize2, b_ui, b_inv, b_s);
 		CREATE_NORMALIZE_KERNEL(mulscalar, b_ui, b_inv, b_s);
 
+		if (fuse)
+		{
+			CREATE_TRANSFORM_KERNEL(forward64_0c);
+			_setKernelArg(_forward64_0c, 2, sizeof(cl_mem), &_c);
+			_setKernelArg(_forward64_0c, 3, sizeof(uint32), &b_ui);
+			_setKernelArg(_forward64_0c, 4, sizeof(uint32), &b_inv);
+			_setKernelArg(_forward64_0c, 5, sizeof(int32), &b_s);
+			_fuse = true;
+		}
+
 		CREATE_SETCOPY_KERNEL(set);
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
@@ -455,12 +467,23 @@ public:
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2); _releaseKernel(_mulscalar);
 
 		_releaseKernel(_set); _releaseKernel(_copy); _releaseKernel(_copyp);
+		_releaseKernel(_forward64_0c);
+	}
+
+	// If _fuse is set, normalize2 is executed by the next forward64_0c, or by flush() before any other access to the registers.
+	void flush()
+	{
+		if (_carryPending)
+		{
+			_carryPending = false;
+			_executeKernel(_normalize2, (_n / 4) >> _lnormWGsize);
+		}
 	}
 
 ///////////////////////////////
 
-	void readMemory_z(ZP * const zPtr, const size_t count = 1) { _readBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
-	void writeMemory_z(const ZP * const zPtr, const size_t count = 1) { _writeBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
+	void readMemory_z(ZP * const zPtr, const size_t count = 1) { flush(); _readBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
+	void writeMemory_z(const ZP * const zPtr, const size_t count = 1) { flush(); _writeBuffer(_z, zPtr, RNS_SIZE * _n * count * sizeof(ZP)); }
 	void writeMemory_w(const ZP * const wPtr, const size_t offset) { _writeBuffer(_w, wPtr, _n * sizeof(ZP), offset * _n * sizeof(ZP)); }
 
 ///////////////////////////////
@@ -505,6 +528,12 @@ private:
 
 	DEFINE_FORWARDn(64, 0);
 	DEFINE_BACKWARDn(64, 0);
+
+	void forward64_0f()
+	{
+		if (_carryPending) { _carryPending = false; ek(_forward64_0c, 64 / 4 * CHUNK64, 4 * VSIZE); }
+		else forward64_0();
+	}
 	DEFINE_FORWARDn(64, 9);
 	DEFINE_BACKWARDn(64, 9);
 	DEFINE_FORWARDn(64, 11);
@@ -676,24 +705,25 @@ public:
 		_mul(splitIndex, true);
 #else
 		const int ln = _ln;
-		if (ln == 11) { forward64_0(); square32(); backward64_0(); }
-		else if (ln == 12) { forward64_0(); square64(); backward64_0(); }
-		else if (ln == 13) { forward64_0(); square128(); backward64_0(); }
-		else if (ln == 14) { forward64_0(); square256(); backward64_0(); }
-		else if (ln == 15) { forward64_0(); square512(); backward64_0(); }
-		else if (ln == 16) { forward64_0(); square1024(); backward64_0(); }
-		else if (ln == 17) { forward64_0(); square2048(); backward64_0(); }
+		if (ln == 11) { forward64_0f(); square32(); backward64_0(); }
+		else if (ln == 12) { forward64_0f(); square64(); backward64_0(); }
+		else if (ln == 13) { forward64_0f(); square128(); backward64_0(); }
+		else if (ln == 14) { forward64_0f(); square256(); backward64_0(); }
+		else if (ln == 15) { forward64_0f(); square512(); backward64_0(); }
+		else if (ln == 16) { forward64_0f(); square1024(); backward64_0(); }
+		else if (ln == 17) { forward64_0f(); square2048(); backward64_0(); }
 		else if (ln == 18) { forward256_0(); square1024(); backward256_0(); }
 		else if (ln == 19) { forward256_0(); square2048(); backward256_0(); }
 		else if (ln == 20) { forward256_0(); square4096(); backward256_0(); }
-		else if (ln == 21) { forward64_0(); forward64_9(); square512(); backward64_9(); backward64_0(); }
+		else if (ln == 21) { forward64_0f(); forward64_9(); square512(); backward64_9(); backward64_0(); }
 		else if (ln == 22) { forward1024_0(); square4096(); backward1024_0(); }
-		else { forward64_0(); forward64_11(); square2048(); backward64_11(); backward64_0(); }
+		else { forward64_0f(); forward64_11(); square2048(); backward64_11(); backward64_0(); }
 #endif
 	}
 
 	void mul()
 	{
+		flush();
 #if defined(TUNE)
 		_mul(_splitIndex, false);
 #else
@@ -716,6 +746,7 @@ public:
 
 	void initMultiplicand(const size_t src)
 	{
+		flush();
 		const uint32 isrc = static_cast<uint32>(src * RNS_SIZE * _n / 4);
 		_setKernelArg(_copyp, 2, sizeof(uint32), &isrc);
 		_executeKernel(_copyp, RNS_SIZE * _n / 4);
@@ -800,6 +831,7 @@ public:
 
 	void set(const uint32_t a)
 	{
+		flush();
 		const uint32 ia = static_cast<uint32>(a);
 		_setKernelArg(_set, 1, sizeof(uint32), &ia);
 		_executeKernel(_set, RNS_SIZE * _n / 4);
@@ -807,6 +839,7 @@ public:
 
 	void copy(const size_t dst, const size_t src)
 	{
+		flush();
 		const size_t size = _n / 4;
 		const uint32 idst = static_cast<uint32>(dst * RNS_SIZE * size), isrc = static_cast<uint32>(src * RNS_SIZE * size);
 		_setKernelArg(_copy, 1, sizeof(uint32), &idst);
@@ -820,20 +853,24 @@ public:
 		const int32 idup = dup ? 1 : 0;
 		const size_t size = _n / 4;
 
+		flush();
 		_setKernelArg(_normalize1, 5, sizeof(int32), &idup);
 		_executeKernel(_normalize1, size, 1u << _lnormWGsize);
-		_executeKernel(_normalize2, size >> _lnormWGsize);
+		if (_fuse) _carryPending = true;
+		else _executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
 	void baseModMul(const int a)
 	{
 		baseMod(false);
+		flush();
 
 		const int32 ia = static_cast<int32>(a);
 		const size_t size = _n / 4;
 		_setKernelArg(_mulscalar, 5, sizeof(int32), &ia);
 		_executeKernel(_mulscalar, size, 1u << _lnormWGsize);
-		_executeKernel(_normalize2, size >> _lnormWGsize);
+		if (_fuse) _carryPending = true;
+		else _executeKernel(_normalize2, size >> _lnormWGsize);
 	}
 
 #if defined(TUNE)
@@ -1035,13 +1072,23 @@ public:
 
 		src << "#define NORM_WG_SZ\t" << _pEngine->getNormWGsize() << std::endl;
 
+#if (VSIZE == 4) && !defined(TUNE)
+		// carry_in requires |digit| <= b + 1 < p / 2
+		uint64_t p_min = std::min(is32 ? P1U : P1S, is32 ? P2U : P2S);
+		if (RNS_SIZE == 3) p_min = std::min<uint64_t>(p_min, is32 ? P3U : P3S);
+		const bool fuse = _pEngine->isApple() && ((n <= 17) || (n == 21) || (n >= 23)) && (2 * (uint64_t(b) + 1) < p_min);
+#else
+		const bool fuse = false;
+#endif
+		if (fuse) src << "#define FUSE_CARRY\t" << 1 << std::endl;
+
 		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 
 		if (isBoinc || !_pEngine->readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		_pEngine->loadProgram(src.str());
 		_pEngine->allocMemory();
-		_pEngine->createKernels(b);
+		_pEngine->createKernels(b, fuse);
 
 		ZP1 * const wr1 = new ZP1[size];
 		ZP2 * const wr2 = new ZP2[size];

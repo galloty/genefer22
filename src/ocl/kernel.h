@@ -171,6 +171,24 @@ static const char * const src_ocl_kernel = \
 "	return (uint4_32)(mulmod2(lhs.s01, rhs.s01, pq), mulmod2(lhs.s23, rhs.s23, pq));\n" \
 "}\n" \
 "\n" \
+"#if defined(SB4) && defined(IS32)\n" \
+"#error \"SB4 requires p < 2^31\"\n" \
+"#endif\n" \
+"\n" \
+"#if defined(SB4)\n" \
+"// Montgomery reduction of a lazy sum t < p * 2^32 (or < 2p * 2^32 for redc_wide), fully reduced result.\n" \
+"INLINE uint_32 redc(const uint_64 t, const uint2_32 pq)\n" \
+"{\n" \
+"	return submod((uint_32)(t >> 32), mul_hi((uint_32)(t) * pq.s1, pq.s0), pq.s0);\n" \
+"}\n" \
+"\n" \
+"INLINE uint_32 redc_wide(const uint_64 t, const uint2_32 pq)\n" \
+"{\n" \
+"	const uint_32 hi = (uint_32)(t >> 32);\n" \
+"	return submod(hi - ((hi >= pq.s0) ? pq.s0 : 0), mul_hi((uint_32)(t) * pq.s1, pq.s0), pq.s0);\n" \
+"}\n" \
+"#endif\n" \
+"\n" \
 "// --- uint96/int96 ---\n" \
 "\n" \
 "typedef struct { uint_32 s0; uint_64 s1; } uint96;\n" \
@@ -490,6 +508,37 @@ static const char * const src_ocl_kernel = \
 "	}\n" \
 "}\n" \
 "\n" \
+"#if defined(SB4)\n" \
+"// 2 * (a(y)^2 mod (y^4 - c)), the same residues as FWD2v2 + SQR2/SQR2N + BCK2v2 (which skips the halving).\n" \
+"// d = 2a and e3 = 2c a3 are fully reduced, so each output is a sum of at most 3 products < 3p^2 < 2p * 2^32.\n" \
+"INLINE uint4_32 _square4sb(const uint2_32 pq, const uint4_32 a, const uint_32 c)\n" \
+"{\n" \
+"	const uint_32 p = pq.s0;\n" \
+"	const uint_32 d0 = addmod(a.s0, a.s0, p), d1 = addmod(a.s1, a.s1, p), d2 = addmod(a.s2, a.s2, p), d3 = addmod(a.s3, a.s3, p);\n" \
+"	const uint_32 b2 = mulmod(a.s2, c, pq), e3 = mulmod(d3, c, pq);\n" \
+"	uint4_32 r;\n" \
+"	r.s0 = redc_wide(d0 * (uint_64)(a.s0) + d1 * (uint_64)(e3) + d2 * (uint_64)(b2), pq);\n" \
+"	r.s1 = redc(d0 * (uint_64)(d1) + d2 * (uint_64)(e3), pq);\n" \
+"	r.s2 = redc_wide(d0 * (uint_64)(d2) + d1 * (uint_64)(a.s1) + a.s3 * (uint_64)(e3), pq);\n" \
+"	r.s3 = redc(d0 * (uint_64)(d3) + d1 * (uint_64)(d2), pq);\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"// w2[0]^2 = w1 and w2[1]^2 = -w1: z[0] is mod (y^4 - w1) and z[1] mod (y^4 + w1).\n" \
+"INLINE void _square4x2v4_sb4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1)\n" \
+"{\n" \
+"	z[0] = _square4sb(pq, z[0], w1);\n" \
+"	z[1] = _square4sb(pq, z[1], pq.s0 - w1);\n" \
+"}\n" \
+"\n" \
+"INLINE void _square8v4_sb4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 win1)\n" \
+"{\n" \
+"	FWD2v4(z[0], z[1], w1);\n" \
+"	_square4x2v4_sb4(pq, z, w1);\n" \
+"	BCK2v4(z[0], z[1], win1);\n" \
+"}\n" \
+"#endif\n" \
+"\n" \
 "INLINE void _square8v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 win1, const uint_32 w2[2], const uint_32 win2[2])\n" \
 "{\n" \
 "	FWD2v4(z[0], z[1], w1);\n" \
@@ -723,22 +772,37 @@ static const char * const src_ocl_kernel = \
 "INLINE void square4x4io(const uint2_32 pq, __global uint4_32 * restrict const z,\n" \
 "	__global const uint_32 * restrict const w, __global const uint_32 * restrict const wi, const sz_t sj, const sz_t sji)\n" \
 "{\n" \
+"#if defined(SB4)\n" \
+"	DECLARE_W1_2(sj);\n" \
+"	uint4_32 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_square4x2v4_sb4(pq, &zl[0], w1[0]);\n" \
+"	_square4x2v4_sb4(pq, &zl[2], w1[1]);\n" \
+"#else\n" \
 "	DECLARE_W2_4(sj);\n" \
 "	DECLARE_WIN2_4(sji);\n" \
 "	uint4_32 zl[4]; _loadg4(4, zl, z, 1);\n" \
 "	_square4x2v4(pq, &zl[0], &w2[0], &win2[0]);\n" \
 "	_square4x2v4(pq, &zl[2], &w2[2], &win2[2]);\n" \
+"#endif\n" \
 "	_storeg4(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void square8x2io(const uint2_32 pq, __global uint4_32 * restrict const z,\n" \
 "	__global const uint_32 * restrict const w, __global const uint_32 * restrict const wi, const sz_t sj, const sz_t sji)\n" \
 "{\n" \
+"#if defined(SB4)\n" \
+"	DECLARE_W1_2(sj);\n" \
+"	DECLARE_WIN1_2(sji);\n" \
+"	uint4_32 zl[4]; _loadg4(4, zl, z, 1);\n" \
+"	_square8v4_sb4(pq, &zl[0], w1[0], win1[0]);\n" \
+"	_square8v4_sb4(pq, &zl[2], w1[1], win1[1]);\n" \
+"#else\n" \
 "	DECLARE_W12_24(sj);\n" \
 "	DECLARE_WIN12_24(sji);\n" \
 "	uint4_32 zl[4]; _loadg4(4, zl, z, 1);\n" \
 "	_square8v4(pq, &zl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
 "	_square8v4(pq, &zl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"#endif\n" \
 "	_storeg4(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
@@ -1056,24 +1120,41 @@ static const char * const src_ocl_kernel = \
 "INLINE void square_4x4(const uint2_32 pq, __local uint4_32 * restrict const Z,\n" \
 "	__global const uint_32 * restrict const w, __global const uint_32 * restrict const wi, const sz_t sj, const sz_t sji)\n" \
 "{\n" \
+"#if defined(SB4)\n" \
+"	DECLARE_W1_2(sj);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint4_32 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_square4x2v4_sb4(pq, &zl[0], w1[0]);\n" \
+"	_square4x2v4_sb4(pq, &zl[2], w1[1]);\n" \
+"#else\n" \
 "	DECLARE_W2_4(sj);\n" \
 "	DECLARE_WIN2_4(sji);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	uint4_32 zl[4]; _loadl4(4, zl, Z, 1);\n" \
 "	_square4x2v4(pq, &zl[0], &w2[0], &win2[0]);\n" \
 "	_square4x2v4(pq, &zl[2], &w2[2], &win2[2]);\n" \
+"#endif\n" \
 "	_storel4(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \
 "INLINE void square_8x2(const uint2_32 pq, __local uint4_32 * restrict const Z,\n" \
 "	__global const uint_32 * restrict const w, __global const uint_32 * restrict const wi, const sz_t sj, const sz_t sji)\n" \
 "{\n" \
+"#if defined(SB4)\n" \
+"	DECLARE_W1_2(sj);\n" \
+"	DECLARE_WIN1_2(sji);\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"	uint4_32 zl[4]; _loadl4(4, zl, Z, 1);\n" \
+"	_square8v4_sb4(pq, &zl[0], w1[0], win1[0]);\n" \
+"	_square8v4_sb4(pq, &zl[2], w1[1], win1[1]);\n" \
+"#else\n" \
 "	DECLARE_W12_24(sj);\n" \
 "	DECLARE_WIN12_24(sji);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	uint4_32 zl[4]; _loadl4(4, zl, Z, 1);\n" \
 "	_square8v4(pq, &zl[0], w1[0], win1[0], &w2[0], &win2[0]);\n" \
 "	_square8v4(pq, &zl[2], w1[1], win1[1], &w2[2], &win2[2]);\n" \
+"#endif\n" \
 "	_storel4(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \

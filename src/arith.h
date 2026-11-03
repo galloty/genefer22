@@ -21,7 +21,7 @@ inline uint32_t powmod(const uint32_t a, const uint32_t e, const uint32_t m)
 	}
 	r = (r * t) % m;
 
-	return uint32_t((r * t) % m);
+	return uint32_t(r);
 }
 
 inline int kronecker(const uint32_t x, const uint32_t y)

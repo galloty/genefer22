@@ -87,9 +87,36 @@ typedef long4	int4_64;
 #define	PQ2		(uint2_32)(P2, Q2)
 #define	PQ3		(uint2_32)(P3, Q3)
 
+// SHOUP: a constant is (w, floor(w * 2^32 / p)), where w is the integer value, not the Montgomery form.
+
+#if defined(SHOUP) && (defined(IS32) || defined(USE_WI))
+#error "SHOUP requires p < 2^31 and the free second half of the root table"
+#endif
+
+#define MF_INT(x, p, q)		((uint_32)(((p) - (uint_32)(((uint_64)((uint_32)((x) * (q))) * (p)) >> 32)) % (p)))
+#define SHOUP_Q(x, p, q)	((uint_32)(((uint_64)(MF_INT(x, p, q)) << 32) / (p)))
+
+#if defined(SHOUP)
+typedef uint2_32	tw_t;
+typedef uint8		cst_t;
+#define WQ_SHFT				WI_SHFT
+#define TWC(x, p, q)		(tw_t)(MF_INT(x, p, q), SHOUP_Q(x, p, q))
+#define CST4(a, b, c, d, p, q)	(cst_t)(MF_INT(a, p, q), MF_INT(b, p, q), MF_INT(c, p, q), MF_INT(d, p, q), \
+									SHOUP_Q(a, p, q), SHOUP_Q(b, p, q), SHOUP_Q(c, p, q), SHOUP_Q(d, p, q))
+#define CST_W(c, i, iq)		(tw_t)(c.s##i, c.s##iq)
+#define TWLD(w, k)			(tw_t)((w)[k], (w)[WQ_SHFT + (k)])
+#else
+typedef uint_32		tw_t;
+typedef uint4_32	cst_t;
+#define TWC(x, p, q)		(x)
+#define CST4(a, b, c, d, p, q)	(cst_t)(a, b, c, d)
+#define CST_W(c, i, iq)		c.s##i
+#define TWLD(w, k)			(w)[k]
+#endif
+
 __constant uint2_32 g_pq[3] = { PQ1, PQ2, PQ3 };
-__constant uint4_32 g_f0[3] = { (uint4_32)(RSQ1, MFIM1, SQRTI1, ISQRTI1), (uint4_32)(RSQ2, MFIM2, SQRTI2, ISQRTI2), (uint4_32)(RSQ3, MFIM3, SQRTI3, ISQRTI3) };
-__constant uint4_32 g_b0[3] = { (uint4_32)(ISQRTI1, SQRTI1, IM1, 0), (uint4_32)(ISQRTI2, SQRTI2, IM2, 0), (uint4_32)(ISQRTI3, SQRTI3, IM3, 0) };
+__constant cst_t g_f0[3] = { CST4(RSQ1, MFIM1, SQRTI1, ISQRTI1, P1, Q1), CST4(RSQ2, MFIM2, SQRTI2, ISQRTI2, P2, Q2), CST4(RSQ3, MFIM3, SQRTI3, ISQRTI3, P3, Q3) };
+__constant cst_t g_b0[3] = { CST4(ISQRTI1, SQRTI1, IM1, 0, P1, Q1), CST4(ISQRTI2, SQRTI2, IM2, 0, P2, Q2), CST4(ISQRTI3, SQRTI3, IM3, 0, P3, Q3) };
 
 INLINE uint_32 addmod(const uint_32 lhs, const uint_32 rhs, const uint_32 p)
 {
@@ -158,6 +185,23 @@ INLINE uint4_32 mulmod4(const uint4_32 lhs, const uint4_32 rhs, const uint2_32 p
 {
 	return (uint4_32)(mulmod2(lhs.s01, rhs.s01, pq), mulmod2(lhs.s23, rhs.s23, pq));
 }
+
+// --- multiplication by a constant
+
+#if defined(SHOUP)
+// 1 mul_hi + 2 mul, p < 2^31: lhs * w - q * p is in [0, 2p)
+INLINE uint_32 mulw(const uint_32 lhs, const tw_t w, const uint2_32 pq)
+{
+	const uint_32 q = mul_hi(lhs, w.s1);
+	const uint_32 r = lhs * w.s0 - q * pq.s0;
+	return r - ((r >= pq.s0) ? pq.s0 : 0);
+}
+#else
+INLINE uint_32 mulw(const uint_32 lhs, const tw_t w, const uint2_32 pq) { return mulmod(lhs, w, pq); }
+#endif
+
+INLINE uint2_32 mulw2(const uint2_32 lhs, const tw_t w, const uint2_32 pq) { return (uint2_32)(mulw(lhs.s0, w, pq), mulw(lhs.s1, w, pq)); }
+INLINE uint4_32 mulw4(const uint4_32 lhs, const tw_t w, const uint2_32 pq) { return (uint4_32)(mulw2(lhs.s01, w, pq), mulw2(lhs.s23, w, pq)); }
 
 // --- uint96/int96 ---
 
@@ -234,66 +278,66 @@ INLINE uint96 uint96_mul_64_32(const uint_64 x, const uint_32 y)
 
 #define FWD2(z0, z1, w) \
 { \
-	const uint_32 t = mulmod(z1, w, pq); \
+	const uint_32 t = mulw(z1, w, pq); \
 	z1 = submod(z0, t, pq.s0); z0 = addmod(z0, t, pq.s0); \
 }
 
 #define BCK2(z0, z1, win) \
 { \
 	const uint_32 t = submod(z1, z0, pq.s0); z0 = addmod(z0, z1, pq.s0); \
-	z1 = mulmod(t, win, pq); \
+	z1 = mulw(t, win, pq); \
 }
 
 #define SQR2(z0, z1, w) \
 { \
-	const uint_32 t = mulmod(sqrmod(z1, pq), w, pq); \
+	const uint_32 t = mulw(sqrmod(z1, pq), w, pq); \
 	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \
 	z0 = addmod(sqrmod(z0, pq), t, pq.s0); \
 }
 
 #define SQR2N(z0, z1, w) \
 { \
-	const uint_32 t = mulmod(sqrmod(z1, pq), w, pq); \
+	const uint_32 t = mulw(sqrmod(z1, pq), w, pq); \
 	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \
 	z0 = submod(sqrmod(z0, pq), t, pq.s0); \
 }
 
 #define MUL2(z0, z1, zp0, zp1, w) \
 { \
-	const uint_32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \
+	const uint_32 t = mulw(mulmod(z1, zp1, pq), w, pq); \
 	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \
 	z0 = addmod(mulmod(z0, zp0, pq), t, pq.s0); \
 }
 
 #define MUL2N(z0, z1, zp0, zp1, w) \
 { \
-	const uint_32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \
+	const uint_32 t = mulw(mulmod(z1, zp1, pq), w, pq); \
 	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \
 	z0 = submod(mulmod(z0, zp0, pq), t, pq.s0); \
 }
 
 #define FWD2v2(z0, z1, w) \
 { \
-	const uint2_32 t = mulmod2(z1, w, pq); \
+	const uint2_32 t = mulw2(z1, w, pq); \
 	z1 = submod2(z0, t, pq.s0); z0 = addmod2(z0, t, pq.s0); \
 }
 
 #define BCK2v2(z0, z1, win) \
 { \
 	const uint2_32 t = submod2(z1, z0, pq.s0); z0 = addmod2(z0, z1, pq.s0); \
-	z1 = mulmod2(t, win, pq); \
+	z1 = mulw2(t, win, pq); \
 }
 
 #define FWD2v4(z0, z1, w) \
 { \
-	const uint4_32 t = mulmod4(z1, w, pq); \
+	const uint4_32 t = mulw4(z1, w, pq); \
 	z1 = submod4(z0, t, pq.s0); z0 = addmod4(z0, t, pq.s0); \
 }
 
 #define BCK2v4(z0, z1, win) \
 { \
 	const uint4_32 t = submod4(z1, z0, pq.s0); z0 = addmod4(z0, z1, pq.s0); \
-	z1 = mulmod4(t, win, pq); \
+	z1 = mulw4(t, win, pq); \
 }
 
 INLINE void _loadg1(const sz_t n, uint_32 * const zl, __global const uint_32 * restrict const z, const sz_t s) { for (sz_t l = 0; l < n; ++l) zl[l] = z[l * s]; }
@@ -313,56 +357,56 @@ INLINE void _storel4(const sz_t n, __local uint4_32 * restrict const Z, const sz
 
 // ---
 
-INLINE void _forward4x1(const uint2_32 pq, uint_32 z[4], const uint_32 w1, const uint_32 w2[2])
+INLINE void _forward4x1(const uint2_32 pq, uint_32 z[4], const tw_t w1, const tw_t w2[2])
 {
 	FWD2(z[0], z[2], w1); FWD2(z[1], z[3], w1);
 	FWD2(z[0], z[1], w2[0]); FWD2(z[2], z[3], w2[1]);
 }
 
-INLINE void _backward4x1(const uint2_32 pq, uint_32 z[4], const uint_32 win1, const uint_32 win2[2])
+INLINE void _backward4x1(const uint2_32 pq, uint_32 z[4], const tw_t win1, const tw_t win2[2])
 {
 	BCK2(z[0], z[1], win2[0]); BCK2(z[2], z[3], win2[1]);
 	BCK2(z[0], z[2], win1); BCK2(z[1], z[3], win1);
 }
 
-INLINE void _forward4x1_0(const uint2_32 pq, const uint4_32 f0, uint_32 z[4])
+INLINE void _forward4x1_0(const uint2_32 pq, const cst_t f0, uint_32 z[4])
 {
-	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
-	z[0] = mulmod(z[0], rsq, pq); z[1] = mulmod(z[1], rsq, pq);
+	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);
+	z[0] = mulw(z[0], rsq, pq); z[1] = mulw(z[1], rsq, pq);
 	FWD2(z[0], z[2], mfim); FWD2(z[1], z[3], mfim);
 	FWD2(z[0], z[1], sqrti); FWD2(z[2], z[3], isqrti);
 }
 
-INLINE void _backward4x1_0(const uint2_32 pq, const uint4_32 b0, uint_32 z[4])
+INLINE void _backward4x1_0(const uint2_32 pq, const cst_t b0, uint_32 z[4])
 {
-	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);
 	BCK2(z[0], z[1], isqrti); BCK2(z[2], z[3], sqrti);
 	BCK2(z[0], z[2], im); BCK2(z[1], z[3], im);
 }
 
-INLINE void _square2x2(const uint2_32 pq, uint_32 z[4], const uint_32 w)
+INLINE void _square2x2(const uint2_32 pq, uint_32 z[4], const tw_t w)
 {
 	SQR2(z[0], z[1], w); SQR2N(z[2], z[3], w);
 }
 
-INLINE void _square4(const uint2_32 pq, uint_32 z[4], const uint_32 w, const uint_32 win)
+INLINE void _square4(const uint2_32 pq, uint_32 z[4], const tw_t w, const tw_t win)
 {
 	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);
 	_square2x2(pq, z, w);
 	BCK2(z[0], z[2], win); BCK2(z[1], z[3], win);
 }
 
-INLINE void _fwd4(const uint2_32 pq, uint_32 z[4], const uint_32 w)
+INLINE void _fwd4(const uint2_32 pq, uint_32 z[4], const tw_t w)
 {
 	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);
 }
 
-INLINE void _mul2x2(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const uint_32 w)
+INLINE void _mul2x2(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const tw_t w)
 {
 	MUL2(z[0], z[1], zp[0], zp[1], w); MUL2N(z[2], z[3], zp[2], zp[3], w);
 }
 
-INLINE void _mul4(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const uint_32 w, const uint_32 win)
+INLINE void _mul4(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const tw_t w, const tw_t win)
 {
 	_fwd4(pq, z, w);
 	_mul2x2(pq, z, zp, w);
@@ -371,34 +415,34 @@ INLINE void _mul4(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const ui
 
 // --- v2
 
-INLINE void _forward4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 w2[2])
+INLINE void _forward4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t w2[2])
 {
 	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);
 	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);
 }
 
-INLINE void _backward4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 win1, const uint_32 win2[2])
+INLINE void _backward4x2(const uint2_32 pq, uint2_32 z[4], const tw_t win1, const tw_t win2[2])
 {
 	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);
 	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);
 }
 
-INLINE void _forward4x2_0(const uint2_32 pq, const uint4_32 f0, uint2_32 z[4])
+INLINE void _forward4x2_0(const uint2_32 pq, const cst_t f0, uint2_32 z[4])
 {
-	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
-	z[0] = mulmod2(z[0], rsq, pq); z[1] = mulmod2(z[1], rsq, pq);
+	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);
+	z[0] = mulw2(z[0], rsq, pq); z[1] = mulw2(z[1], rsq, pq);
 	FWD2v2(z[0], z[2], mfim); FWD2v2(z[1], z[3], mfim);
 	FWD2v2(z[0], z[1], sqrti); FWD2v2(z[2], z[3], isqrti);
 }
 
-INLINE void _backward4x2_0(const uint2_32 pq, const uint4_32 b0, uint2_32 z[4])
+INLINE void _backward4x2_0(const uint2_32 pq, const cst_t b0, uint2_32 z[4])
 {
-	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);
 	BCK2v2(z[0], z[1], isqrti); BCK2v2(z[2], z[3], sqrti);
 	BCK2v2(z[0], z[2], im); BCK2v2(z[1], z[3], im);
 }
 
-INLINE void _square4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _square4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);
 	SQR2(z[0].s0, z[0].s1, w2[0]); SQR2N(z[1].s0, z[1].s1, w2[0]);
@@ -406,25 +450,25 @@ INLINE void _square4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w2[2], co
 	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);
 }
 
-INLINE void _square8(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 win1, const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _square8(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t win1, const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);
 	_square4x2(pq, z, w2, win2);
 	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);
 }
 
-INLINE void _fwd4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w2[2])
+INLINE void _fwd4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w2[2])
 {
 	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);
 }
 
-INLINE void _fwd8(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 w2[2])
+INLINE void _fwd8(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t w2[2])
 {
 	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);
 	_fwd4x2(pq, z, w2);
 }
 
-INLINE void _mul4x2(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _mul4x2(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);
 	MUL2(z[0].s0, z[0].s1, zp[0].s0, zp[0].s1, w2[0]); MUL2N(z[1].s0, z[1].s1, zp[1].s0, zp[1].s1, w2[0]);
@@ -432,7 +476,7 @@ INLINE void _mul4x2(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], cons
 	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);
 }
 
-INLINE void _mul8(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const uint_32 w1, const uint_32  win1, const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _mul8(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const tw_t w1, const tw_t  win1, const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);
 	_mul4x2(pq, z, zp, w2, win2);
@@ -441,34 +485,34 @@ INLINE void _mul8(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const 
 
 // --- v4
 
-INLINE void _forward4x4(const uint2_32 pq, uint4_32 z[4], const uint_32 w1, const uint_32 w2[2])
+INLINE void _forward4x4(const uint2_32 pq, uint4_32 z[4], const tw_t w1, const tw_t w2[2])
 {
 	FWD2v4(z[0], z[2], w1); FWD2v4(z[1], z[3], w1);
 	FWD2v4(z[0], z[1], w2[0]); FWD2v4(z[2], z[3], w2[1]);
 }
 
-INLINE void _backward4x4(const uint2_32 pq, uint4_32 z[4], const uint_32 win1, const uint_32 win2[2])
+INLINE void _backward4x4(const uint2_32 pq, uint4_32 z[4], const tw_t win1, const tw_t win2[2])
 {
 	BCK2v4(z[0], z[1], win2[0]); BCK2v4(z[2], z[3], win2[1]);
 	BCK2v4(z[0], z[2], win1); BCK2v4(z[1], z[3], win1);
 }
 
-INLINE void _forward4x4_0(const uint2_32 pq, const uint4_32 f0, uint4_32 z[4])
+INLINE void _forward4x4_0(const uint2_32 pq, const cst_t f0, uint4_32 z[4])
 {
-	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;
-	z[0] = mulmod4(z[0], rsq, pq); z[1] = mulmod4(z[1], rsq, pq);
+	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);
+	z[0] = mulw4(z[0], rsq, pq); z[1] = mulw4(z[1], rsq, pq);
 	FWD2v4(z[0], z[2], mfim); FWD2v4(z[1], z[3], mfim);
 	FWD2v4(z[0], z[1], sqrti); FWD2v4(z[2], z[3], isqrti);
 }
 
-INLINE void _backward4x4_0(const uint2_32 pq, const uint4_32 b0, uint4_32 z[4])
+INLINE void _backward4x4_0(const uint2_32 pq, const cst_t b0, uint4_32 z[4])
 {
-	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;
+	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);
 	BCK2v4(z[0], z[1], isqrti); BCK2v4(z[2], z[3], sqrti);
 	BCK2v4(z[0], z[2], im); BCK2v4(z[1], z[3], im);
 }
 
-INLINE void _square4x2v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _square4x2v4(const uint2_32 pq, uint4_32 z[2], const tw_t w2[2], const tw_t win2[2])
 {
 	for (sz_t i = 0; i < 2; ++i)
 	{
@@ -478,25 +522,25 @@ INLINE void _square4x2v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w2[2], 
 	}
 }
 
-INLINE void _square8v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 win1, const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _square8v4(const uint2_32 pq, uint4_32 z[2], const tw_t w1, const tw_t win1, const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v4(z[0], z[1], w1);
 	_square4x2v4(pq, z, w2, win2);
 	BCK2v4(z[0], z[1], win1);
 }
 
-INLINE void _fwd4x2v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w2[2])
+INLINE void _fwd4x2v4(const uint2_32 pq, uint4_32 z[2], const tw_t w2[2])
 {
 	for (sz_t i = 0; i < 2; ++i) FWD2v2(z[i].s01, z[i].s23, w2[i]);
 }
 
-INLINE void _fwd8v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 w2[2])
+INLINE void _fwd8v4(const uint2_32 pq, uint4_32 z[2], const tw_t w1, const tw_t w2[2])
 {
 	FWD2v4(z[0], z[1], w1);
 	_fwd4x2v4(pq, z, w2);
 }
 
-INLINE void _mul4x2v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _mul4x2v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const tw_t w2[2], const tw_t win2[2])
 {
 	for (sz_t i = 0; i < 2; ++i)
 	{
@@ -506,7 +550,7 @@ INLINE void _mul4x2v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], co
 	}
 }
 
-INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const uint_32 w1, const uint_32  win1, const uint_32 w2[2], const uint_32 win2[2])
+INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const tw_t w1, const tw_t  win1, const tw_t w2[2], const tw_t win2[2])
 {
 	FWD2v4(z[0], z[1], w1);
 	_mul4x2v4(pq, z, zp, w2, win2);
@@ -515,6 +559,24 @@ INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], cons
 
 // --- inverse of roots is wi[s + j] or w[s + s - j - 1] ---
 
+#if defined(SHOUP)
+#define LOADW2(w, k)			const uint2_32 t = ((__global const uint2_32 *)(w))[k], tq = ((__global const uint2_32 *)&(w)[WQ_SHFT])[k];
+#define LOADW4(w, k)			const uint4_32 t = ((__global const uint4_32 *)(w))[k], tq = ((__global const uint4_32 *)&(w)[WQ_SHFT])[k];
+#define DECLARE_W1(sj)			const tw_t w1 = TWLD(w, sj);
+#define DECLARE_W2(sj)			tw_t w2[2]; { LOADW2(w, sj); w2[0] = (tw_t)(t.s0, tq.s0); w2[1] = (tw_t)(t.s1, tq.s1); }
+#define DECLARE_W12(sj)			DECLARE_W1(sj); DECLARE_W2(sj);
+#define DECLARE_W1_2(sj)		tw_t w1[2]; { LOADW2(w, sj); w1[0] = (tw_t)(t.s0, tq.s0); w1[1] = (tw_t)(t.s1, tq.s1); }
+#define DECLARE_W2_4(sj)		tw_t w2[4]; { LOADW4(w, sj); w2[0] = (tw_t)(t.s0, tq.s0); w2[1] = (tw_t)(t.s1, tq.s1); w2[2] = (tw_t)(t.s2, tq.s2); w2[3] = (tw_t)(t.s3, tq.s3); }
+#define DECLARE_W12_24(sj)		DECLARE_W1_2(sj); DECLARE_W2_4(sj);
+
+#define DECLARE_WIN1(sji)		const tw_t win1 = TWLD(wi, sji);
+#define DECLARE_IVAR(s, j)		const sz_t sji = s + s - j - 1; __global const uint_32 * restrict const wi = w;
+#define DECLARE_WIN2(sji)		tw_t win2[2]; { LOADW2(wi, sji); win2[0] = (tw_t)(t.s1, tq.s1); win2[1] = (tw_t)(t.s0, tq.s0); }
+#define DECLARE_WIN1_2(sji)		tw_t win1[2]; { LOADW2(wi, sji); win1[0] = (tw_t)(t.s1, tq.s1); win1[1] = (tw_t)(t.s0, tq.s0); }
+#define DECLARE_WIN2_4(sji)		tw_t win2[4]; { LOADW4(wi, sji); win2[0] = (tw_t)(t.s3, tq.s3); win2[1] = (tw_t)(t.s2, tq.s2); win2[2] = (tw_t)(t.s1, tq.s1); win2[3] = (tw_t)(t.s0, tq.s0); }
+#define DECLARE_WIN12(sj)		DECLARE_WIN1(sj); DECLARE_WIN2(sj);
+#define DECLARE_WIN12_24(sj)	DECLARE_WIN1_2(sj); DECLARE_WIN2_4(sj);
+#else
 #define DECLARE_W1(sj)			const uint_32 w1 = w[sj];
 #define DECLARE_W2(sj)			uint_32 w2[2]; { const uint2_32 t = ((__global const uint2_32 *)w)[sj]; w2[0] = t.s0; w2[1] = t.s1; }
 #define DECLARE_W12(sj)			DECLARE_W1(sj); DECLARE_W2(sj);
@@ -536,6 +598,7 @@ INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], cons
 #endif
 #define DECLARE_WIN12(sj)		DECLARE_WIN1(sj); DECLARE_WIN2(sj);
 #define DECLARE_WIN12_24(sj)	DECLARE_WIN1_2(sj); DECLARE_WIN2_4(sj);
+#endif
 
 // --- vector size (1, 2 or 4) ---
 
@@ -591,7 +654,7 @@ INLINE void backward4io(const uint2_32 pq, const sz_t m, __global VTYPE * restri
 	_storeg(4, z, m, zl);
 }
 
-INLINE void forward4io_0(const uint2_32 pq, const uint4_32 f0, __global VTYPE * restrict const z)
+INLINE void forward4io_0(const uint2_32 pq, const cst_t f0, __global VTYPE * restrict const z)
 {
 	const sz_t m = N_SZ / 4 / VSIZE;
 	VTYPE zl[4]; _loadg(4, zl, z, m);
@@ -599,7 +662,7 @@ INLINE void forward4io_0(const uint2_32 pq, const uint4_32 f0, __global VTYPE * 
 	_storeg(4, z, m, zl);
 }
 
-INLINE void backwardio_0(const uint2_32 pq, const uint4_32 b0, __global VTYPE * restrict const z)
+INLINE void backwardio_0(const uint2_32 pq, const cst_t b0, __global VTYPE * restrict const z)
 {
 	const sz_t m = N_SZ / 4 / VSIZE;
 	VTYPE zl[4]; _loadg(4, zl, z, m);
@@ -609,28 +672,28 @@ INLINE void backwardio_0(const uint2_32 pq, const uint4_32 b0, __global VTYPE * 
 
 // --- v1
 
-INLINE void square2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w)
+INLINE void square2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w)
 {
 	uint_32 zl[4]; _loadg1(4, zl, z, 1);
 	_square2x2(pq, zl, w);
 	_storeg1(4, z, 1, zl);
 }
 
-INLINE void square4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w, const uint_32 win)
+INLINE void square4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w, const tw_t win)
 {
 	uint_32 zl[4]; _loadg1(4, zl, z, 1);
 	_square4(pq, zl, w, win);
 	_storeg1(4, z, 1, zl);
 }
 
-INLINE void fwd4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w)
+INLINE void fwd4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w)
 {
 	uint_32 zl[4]; _loadg1(4, zl, z, 1);
 	_fwd4(pq, zl, w);
 	_storeg1(4, z, 1, zl);
 }
 
-INLINE void mul2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const uint_32 w)
+INLINE void mul2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const tw_t w)
 {
 	uint_32 zpl[4]; _loadg1(4, zpl, zp, 1);
 	uint_32 zl[4]; _loadg1(4, zl, z, 1);
@@ -638,7 +701,7 @@ INLINE void mul2x2io(const uint2_32 pq, __global uint_32 * restrict const z, con
 	_storeg1(4, z, 1, zl);
 }
 
-INLINE void mul4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const uint_32 w, const uint_32 win)
+INLINE void mul4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const tw_t w, const tw_t win)
 {
 	uint_32 zpl[4]; _loadg1(4, zpl, zp, 1);
 	uint_32 zl[4]; _loadg1(4, zl, z, 1);
@@ -782,7 +845,7 @@ INLINE void square4io(const uint2_32 pq, __global VTYPE * restrict const z,
 #elif VSIZE == 2
 	square4x2io(pq, z, w, wi, sj, sji);
 #else
-	square4x1io(pq, z, w[sj], wi[sji]);
+	square4x1io(pq, z, TWLD(w, sj), TWLD(wi, sji));
 #endif
 }
 
@@ -793,7 +856,7 @@ INLINE void fwd4io(const uint2_32 pq, __global VTYPE * restrict const z, __globa
 #elif VSIZE == 2
 	fwd4x2io(pq, z, w, sj);
 #else
-	fwd4x1io(pq, z, w[sj]);
+	fwd4x1io(pq, z, TWLD(w, sj));
 #endif
 }
 
@@ -805,7 +868,7 @@ INLINE void mul4io(const uint2_32 pq, __global VTYPE * restrict const z, const _
 #elif VSIZE == 2
 	mul4x2io(pq, z, zp, w, wi, sj, sji);
 #else
-	mul4x1io(pq, z, zp, w[sj], wi[sji]);
+	mul4x1io(pq, z, zp, TWLD(w, sj), TWLD(wi, sji));
 #endif
 }
 
@@ -862,7 +925,7 @@ INLINE void forward_4i(const uint2_32 pq, const sz_t ml, __local VTYPE * restric
 	_storel(4, Z, ml, zl);
 }
 
-INLINE void forward_4i_0(const uint2_32 pq, const uint4_32 f0, const sz_t ml, __local VTYPE * restrict const Z,
+INLINE void forward_4i_0(const uint2_32 pq, const cst_t f0, const sz_t ml, __local VTYPE * restrict const Z,
 	const sz_t mg, __global const VTYPE * restrict const z)
 {
 	VTYPE zl[4]; _loadg(4, zl, z, mg);
@@ -908,7 +971,7 @@ INLINE void backward_4o(const uint2_32 pq, const sz_t mg, __global VTYPE * restr
 	_storeg(4, z, mg, zl);
 }
 
-INLINE void backward_4o_0(const uint2_32 pq, const uint4_32 b0, const sz_t mg, __global VTYPE * restrict const z,
+INLINE void backward_4o_0(const uint2_32 pq, const cst_t b0, const sz_t mg, __global VTYPE * restrict const z,
 	const sz_t ml, __local const VTYPE * restrict const Z)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -919,7 +982,7 @@ INLINE void backward_4o_0(const uint2_32 pq, const uint4_32 b0, const sz_t mg, _
 
 // --- v1
 
-INLINE void square_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const uint_32 w)
+INLINE void square_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const tw_t w)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
 	uint_32 zl[4]; _loadl1(4, zl, Z, 1);
@@ -927,7 +990,7 @@ INLINE void square_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, co
 	_storel1(4, Z, 1, zl);
 }
 
-INLINE void square_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const uint_32 w, const uint_32 win)
+INLINE void square_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const tw_t w, const tw_t win)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
 	uint_32 zl[4]; _loadl1(4, zl, Z, 1);
@@ -943,7 +1006,7 @@ INLINE void write_4(const sz_t mg, __global VTYPE * restrict const z, __local co
 }
 
 INLINE void fwd4x1_write(const uint2_32 pq, const sz_t mg, __global uint_32 * restrict const z,
-	__local const uint_32 * restrict const Z, const uint_32 w)
+	__local const uint_32 * restrict const Z, const tw_t w)
 {
 	barrier(CLK_LOCAL_MEM_FENCE);
 	uint_32 zl[4]; _loadl1(4, zl, Z, 1);
@@ -952,7 +1015,7 @@ INLINE void fwd4x1_write(const uint2_32 pq, const sz_t mg, __global uint_32 * re
 }
 
 INLINE void mul_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const sz_t mg,
-	__global const uint_32 * restrict const zp, const uint_32 w)
+	__global const uint_32 * restrict const zp, const tw_t w)
 {
 	uint_32 zpl[4]; _loadg1(4, zpl, zp, mg);
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -962,7 +1025,7 @@ INLINE void mul_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const
 }
 
 INLINE void mul_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const sz_t mg,
-	__global const uint_32 * restrict const zp, const uint_32 w, const uint_32 win)
+	__global const uint_32 * restrict const zp, const tw_t w, const tw_t win)
 {
 	uint_32 zpl[4]; _loadg1(4, zpl, zp, mg);
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -1123,7 +1186,7 @@ INLINE void square_4(const uint2_32 pq, __local VTYPE * restrict const Z,
 #elif VSIZE == 2
 	square_4x2(pq, Z, w, wi, sj, sji);
 #else
-	square_4x1(pq, Z, w[sj], wi[sji]);
+	square_4x1(pq, Z, TWLD(w, sj), TWLD(wi, sji));
 #endif
 }
 
@@ -1135,7 +1198,7 @@ INLINE void fwd4_write(const uint2_32 pq, const sz_t mg, __global VTYPE * restri
 #elif VSIZE == 2
 	fwd4x2_write(pq, mg, z, Z, w, sj);
 #else
-	fwd4x1_write(pq, mg, z, Z, w[sj]);
+	fwd4x1_write(pq, mg, z, Z, TWLD(w, sj));
 #endif
 }
 
@@ -1147,7 +1210,7 @@ INLINE void mul_4(const uint2_32 pq, __local VTYPE * restrict const Z, const sz_
 #elif VSIZE == 2
 	mul_4x2(pq, Z, mg, zp, w, wi, sj, sji);
 #else
-	mul_4x1(pq, Z, mg, zp, w[sj], wi[sji]);
+	mul_4x1(pq, Z, mg, zp, TWLD(w, sj), TWLD(wi, sji));
 #endif
 }
 
@@ -1264,7 +1327,7 @@ void square2x2(__global uint_32 * restrict const zg, __global const uint_32 * re
 {
 	DECLARE_VAR_REGv1();
 	const sz_t j = id, k = 4 * id;
-	square2x2io(pq, &z[k], w[N_SZ / 4 + j]);
+	square2x2io(pq, &z[k], TWLD(w, N_SZ / 4 + j));
 }
 
 __kernel
@@ -1300,7 +1363,7 @@ void mul2x2(__global uint_32 * restrict const zg, __global const uint_32 * restr
 	DECLARE_VAR_REGv1();
 	DECLARE_VARP_REGv1();
 	const sz_t j = id, k = 4 * id;
-	mul2x2io(pq, &z[k], &zp[k], w[N_SZ / 4 + j]);
+	mul2x2io(pq, &z[k], &zp[k], TWLD(w, N_SZ / 4 + j));
 }
 
 // --- v2, v4
@@ -1644,7 +1707,7 @@ void square32(__global VTYPE * restrict const zg, __global const uint_32 * restr
 	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	square_8(pq, Z4, w, wi, sj, sji);
@@ -1719,7 +1782,7 @@ void square128(__global VTYPE * restrict const zg, __global const uint_32 * rest
 	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	square_8(pq, Z4, w, wi, sj, sji);
@@ -1802,7 +1865,7 @@ void square512(__global VTYPE * restrict const zg, __global const uint_32 * rest
 	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	square_8(pq, Z4, w, wi, sj, sji);
@@ -1893,7 +1956,7 @@ void square2048(__global VTYPE * restrict const zg, __global const uint_32 * res
 	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	square_2x2(pq, Z4, w[sj]);
+	square_2x2(pq, Z4, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	square_8(pq, Z4, w, wi, sj, sji);
@@ -2097,7 +2160,7 @@ void mul32(__global VTYPE * restrict const zg, __global const VTYPE * restrict c
 	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	mul_2x2(pq, Z4, 8, zpk, w[sj]);
+	mul_2x2(pq, Z4, 8, zpk, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	mul_8(pq, Z4, L32S / 4, zpk, w, wi, sj, sji);
@@ -2136,7 +2199,7 @@ void mul128(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	mul_2x2(pq, Z4, 32, zpk, w[sj]);
+	mul_2x2(pq, Z4, 32, zpk, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	mul_8(pq, Z4, L128S / 4, zpk, w, wi, sj, sji);
@@ -2179,7 +2242,7 @@ void mul512(__global VTYPE * restrict const zg, __global const VTYPE * restrict 
 	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	mul_2x2(pq, Z4, 128, zpk, w[sj]);
+	mul_2x2(pq, Z4, 128, zpk, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	mul_8(pq, Z4, L512S / 4, zpk, w, wi, sj, sji);
@@ -2226,7 +2289,7 @@ void mul2048(__global VTYPE * restrict const zg, __global const VTYPE * restrict
 	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
 #if VSIZE == 1
 	forward_4(pq, 2, Zi2, w, sj / 2);
-	mul_2x2(pq, Z4, 512, zpk, w[sj]);
+	mul_2x2(pq, Z4, 512, zpk, TWLD(w, sj));
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	mul_8(pq, Z4, L2048S / 4, zpk, w, wi, sj, sji);
@@ -2318,7 +2381,7 @@ INLINE int_32 reduce96(int96 * f, const uint_32 b, const uint_32 b_inv, const in
 INLINE int_64 garner2(const uint_32 r1, const uint_32 r2)
 {
 	const uint_64 P1P2 = P1 * (uint_64)(P2);
-	uint_32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1
+	uint_32 u12 = mulw(submod(r1, r2, P1), TWC(INVP2_P1, P1, Q1), PQ1);	// P2 < P1
 	const uint_64 n = r2 + u12 * (uint_64)(P2);
 	const bool b = (n > P1P2 / 2);
 	return (int_64)(n - (b ? P1P2 : 0));
@@ -2326,9 +2389,9 @@ INLINE int_64 garner2(const uint_32 r1, const uint_32 r2)
 
 INLINE int96 garner3(const uint_32 r1, const uint_32 r2, const uint_32 r3)
 {
-	const uint_32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);
-	const uint_32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);
-	const uint_32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);
+	const uint_32 u13 = mulw(submod(r1, r3, P1), TWC(INVP3_P1, P1, Q1), PQ1);
+	const uint_32 u23 = mulw(submod(r2, r3, P2), TWC(INVP3_P2, P2, Q2), PQ2);
+	const uint_32 u123 = mulw(submod(u13, u23, P1), TWC(INVP2_P1, P1, Q1), PQ1);
 	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint_64)(P3), u123), u23 * (uint_64)(P3) + r3);
 	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));
 	return uint96_i(b ? uint96_sub(n, uint96_set(P1P2P3L, P1P2P3H)) : n);
@@ -2367,7 +2430,7 @@ INLINE int4_32 normalize_1(__global uint4_32 * restrict const zi, __global int_6
 	__local int_64 * const cl, const sz_t gid, const sz_t lid,
 	const uint_32 b, const uint_32 b_inv, const int b_s, const bool dup)
 {
-	const uint4_32 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);
+	const uint4_32 u1 = mulw4(zi[0 * N_SZ / 4], TWC(NORM1, P1, Q1), PQ1), u2 = mulw4(zi[1 * N_SZ / 4], TWC(NORM2, P2, Q2), PQ2);
 	int4_32 r;
 
 #if RNS_SZ == 2
@@ -2382,7 +2445,7 @@ INLINE int4_32 normalize_1(__global uint4_32 * restrict const zi, __global int_6
 
 #else
 
-	const uint4_32 u3 = mulmod4(zi[2 * N_SZ / 4], NORM3, PQ3);
+	const uint4_32 u3 = mulw4(zi[2 * N_SZ / 4], TWC(NORM3, P3, Q3), PQ3);
 
 	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);
 	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);

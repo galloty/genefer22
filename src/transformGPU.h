@@ -161,6 +161,16 @@ public:
 
 	static const ZPT primroot_n(const uint32 n) { return ZPT(H).pow((P - 1) / n); }
 	static ZPT norm(const uint32 n) { return ZPT(P - (P - 1) / n); }
+
+	static void toShoup(ZPT * const w, const size_t size)
+	{
+		for (size_t i = 1; i < size / 2; ++i)
+		{
+			const uint32 x = _mul(w[i].get(), 1);
+			w[i] = ZPT(x);
+			w[size / 2 + i] = ZPT(uint32((uint64(x) << 32) / P));
+		}
+	}
 };
 
 #if VSIZE == 4
@@ -1014,6 +1024,10 @@ public:
 		src << "#define WI_SHFT\t" << size / 2 << "u" << std::endl;
 #if defined(USE_WI)
 		src << "#define USE_WI\t" << 1 << std::endl;
+		const bool shoup = false;
+#else
+		const bool shoup = !is32 && _pEngine->isApple();
+		if (shoup) src << "#define SHOUP\t" << 1 << std::endl;
 #endif
 		src << "#define BLK32\t" << BLK32 << std::endl;
 		src << "#define BLK64\t" << BLK64 << std::endl;
@@ -1057,6 +1071,7 @@ public:
 				wr2[size / 2 + sji] = wr2[sj] = r_s2.pow(e);
 			}
 		}
+		if (shoup) { ZP1::toShoup(wr1, size); ZP2::toShoup(wr2, size); }
 		_pEngine->writeMemory_w(wr1, 0);
 		_pEngine->writeMemory_w(wr2, 1);
 		delete[] wr1;
@@ -1073,6 +1088,7 @@ public:
 					wr3[size / 2 + s + (s - j - 1)] = wr3[s + j] = r_s3.pow(bitRev(j, 2 * s) + 1);
 				}
 			}
+			if (shoup) ZP3::toShoup(wr3, size);
 			_pEngine->writeMemory_w(wr3, 2);
 			delete[] wr3;
 		}

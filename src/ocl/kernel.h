@@ -99,9 +99,36 @@ static const char * const src_ocl_kernel = \
 "#define	PQ2		(uint2_32)(P2, Q2)\n" \
 "#define	PQ3		(uint2_32)(P3, Q3)\n" \
 "\n" \
+"// SHOUP: a constant is (w, floor(w * 2^32 / p)), where w is the integer value, not the Montgomery form.\n" \
+"\n" \
+"#if defined(SHOUP) && (defined(IS32) || defined(USE_WI))\n" \
+"#error \"SHOUP requires p < 2^31 and the free second half of the root table\"\n" \
+"#endif\n" \
+"\n" \
+"#define MF_INT(x, p, q)		((uint_32)(((p) - (uint_32)(((uint_64)((uint_32)((x) * (q))) * (p)) >> 32)) % (p)))\n" \
+"#define SHOUP_Q(x, p, q)	((uint_32)(((uint_64)(MF_INT(x, p, q)) << 32) / (p)))\n" \
+"\n" \
+"#if defined(SHOUP)\n" \
+"typedef uint2_32	tw_t;\n" \
+"typedef uint8		cst_t;\n" \
+"#define WQ_SHFT				WI_SHFT\n" \
+"#define TWC(x, p, q)		(tw_t)(MF_INT(x, p, q), SHOUP_Q(x, p, q))\n" \
+"#define CST4(a, b, c, d, p, q)	(cst_t)(MF_INT(a, p, q), MF_INT(b, p, q), MF_INT(c, p, q), MF_INT(d, p, q), \\\n" \
+"									SHOUP_Q(a, p, q), SHOUP_Q(b, p, q), SHOUP_Q(c, p, q), SHOUP_Q(d, p, q))\n" \
+"#define CST_W(c, i, iq)		(tw_t)(c.s##i, c.s##iq)\n" \
+"#define TWLD(w, k)			(tw_t)((w)[k], (w)[WQ_SHFT + (k)])\n" \
+"#else\n" \
+"typedef uint_32		tw_t;\n" \
+"typedef uint4_32	cst_t;\n" \
+"#define TWC(x, p, q)		(x)\n" \
+"#define CST4(a, b, c, d, p, q)	(cst_t)(a, b, c, d)\n" \
+"#define CST_W(c, i, iq)		c.s##i\n" \
+"#define TWLD(w, k)			(w)[k]\n" \
+"#endif\n" \
+"\n" \
 "__constant uint2_32 g_pq[3] = { PQ1, PQ2, PQ3 };\n" \
-"__constant uint4_32 g_f0[3] = { (uint4_32)(RSQ1, MFIM1, SQRTI1, ISQRTI1), (uint4_32)(RSQ2, MFIM2, SQRTI2, ISQRTI2), (uint4_32)(RSQ3, MFIM3, SQRTI3, ISQRTI3) };\n" \
-"__constant uint4_32 g_b0[3] = { (uint4_32)(ISQRTI1, SQRTI1, IM1, 0), (uint4_32)(ISQRTI2, SQRTI2, IM2, 0), (uint4_32)(ISQRTI3, SQRTI3, IM3, 0) };\n" \
+"__constant cst_t g_f0[3] = { CST4(RSQ1, MFIM1, SQRTI1, ISQRTI1, P1, Q1), CST4(RSQ2, MFIM2, SQRTI2, ISQRTI2, P2, Q2), CST4(RSQ3, MFIM3, SQRTI3, ISQRTI3, P3, Q3) };\n" \
+"__constant cst_t g_b0[3] = { CST4(ISQRTI1, SQRTI1, IM1, 0, P1, Q1), CST4(ISQRTI2, SQRTI2, IM2, 0, P2, Q2), CST4(ISQRTI3, SQRTI3, IM3, 0, P3, Q3) };\n" \
 "\n" \
 "INLINE uint_32 addmod(const uint_32 lhs, const uint_32 rhs, const uint_32 p)\n" \
 "{\n" \
@@ -170,6 +197,23 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	return (uint4_32)(mulmod2(lhs.s01, rhs.s01, pq), mulmod2(lhs.s23, rhs.s23, pq));\n" \
 "}\n" \
+"\n" \
+"// --- multiplication by a constant\n" \
+"\n" \
+"#if defined(SHOUP)\n" \
+"// 1 mul_hi + 2 mul, p < 2^31: lhs * w - q * p is in [0, 2p)\n" \
+"INLINE uint_32 mulw(const uint_32 lhs, const tw_t w, const uint2_32 pq)\n" \
+"{\n" \
+"	const uint_32 q = mul_hi(lhs, w.s1);\n" \
+"	const uint_32 r = lhs * w.s0 - q * pq.s0;\n" \
+"	return r - ((r >= pq.s0) ? pq.s0 : 0);\n" \
+"}\n" \
+"#else\n" \
+"INLINE uint_32 mulw(const uint_32 lhs, const tw_t w, const uint2_32 pq) { return mulmod(lhs, w, pq); }\n" \
+"#endif\n" \
+"\n" \
+"INLINE uint2_32 mulw2(const uint2_32 lhs, const tw_t w, const uint2_32 pq) { return (uint2_32)(mulw(lhs.s0, w, pq), mulw(lhs.s1, w, pq)); }\n" \
+"INLINE uint4_32 mulw4(const uint4_32 lhs, const tw_t w, const uint2_32 pq) { return (uint4_32)(mulw2(lhs.s01, w, pq), mulw2(lhs.s23, w, pq)); }\n" \
 "\n" \
 "// --- uint96/int96 ---\n" \
 "\n" \
@@ -246,66 +290,66 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "#define FWD2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint_32 t = mulmod(z1, w, pq); \\\n" \
+"	const uint_32 t = mulw(z1, w, pq); \\\n" \
 "	z1 = submod(z0, t, pq.s0); z0 = addmod(z0, t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define BCK2(z0, z1, win) \\\n" \
 "{ \\\n" \
 "	const uint_32 t = submod(z1, z0, pq.s0); z0 = addmod(z0, z1, pq.s0); \\\n" \
-"	z1 = mulmod(t, win, pq); \\\n" \
+"	z1 = mulw(t, win, pq); \\\n" \
 "}\n" \
 "\n" \
 "#define SQR2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint_32 t = mulmod(sqrmod(z1, pq), w, pq); \\\n" \
+"	const uint_32 t = mulw(sqrmod(z1, pq), w, pq); \\\n" \
 "	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \\\n" \
 "	z0 = addmod(sqrmod(z0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define SQR2N(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint_32 t = mulmod(sqrmod(z1, pq), w, pq); \\\n" \
+"	const uint_32 t = mulw(sqrmod(z1, pq), w, pq); \\\n" \
 "	z1 = mulmod(addmod(z0, z0, pq.s0), z1, pq); \\\n" \
 "	z0 = submod(sqrmod(z0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define MUL2(z0, z1, zp0, zp1, w) \\\n" \
 "{ \\\n" \
-"	const uint_32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \\\n" \
+"	const uint_32 t = mulw(mulmod(z1, zp1, pq), w, pq); \\\n" \
 "	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \\\n" \
 "	z0 = addmod(mulmod(z0, zp0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define MUL2N(z0, z1, zp0, zp1, w) \\\n" \
 "{ \\\n" \
-"	const uint_32 t = mulmod(mulmod(z1, zp1, pq), w, pq); \\\n" \
+"	const uint_32 t = mulw(mulmod(z1, zp1, pq), w, pq); \\\n" \
 "	z1 = addmod(mulmod(z0, zp1, pq), mulmod(zp0, z1, pq), pq.s0); \\\n" \
 "	z0 = submod(mulmod(z0, zp0, pq), t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define FWD2v2(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint2_32 t = mulmod2(z1, w, pq); \\\n" \
+"	const uint2_32 t = mulw2(z1, w, pq); \\\n" \
 "	z1 = submod2(z0, t, pq.s0); z0 = addmod2(z0, t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define BCK2v2(z0, z1, win) \\\n" \
 "{ \\\n" \
 "	const uint2_32 t = submod2(z1, z0, pq.s0); z0 = addmod2(z0, z1, pq.s0); \\\n" \
-"	z1 = mulmod2(t, win, pq); \\\n" \
+"	z1 = mulw2(t, win, pq); \\\n" \
 "}\n" \
 "\n" \
 "#define FWD2v4(z0, z1, w) \\\n" \
 "{ \\\n" \
-"	const uint4_32 t = mulmod4(z1, w, pq); \\\n" \
+"	const uint4_32 t = mulw4(z1, w, pq); \\\n" \
 "	z1 = submod4(z0, t, pq.s0); z0 = addmod4(z0, t, pq.s0); \\\n" \
 "}\n" \
 "\n" \
 "#define BCK2v4(z0, z1, win) \\\n" \
 "{ \\\n" \
 "	const uint4_32 t = submod4(z1, z0, pq.s0); z0 = addmod4(z0, z1, pq.s0); \\\n" \
-"	z1 = mulmod4(t, win, pq); \\\n" \
+"	z1 = mulw4(t, win, pq); \\\n" \
 "}\n" \
 "\n" \
 "INLINE void _loadg1(const sz_t n, uint_32 * const zl, __global const uint_32 * restrict const z, const sz_t s) { for (sz_t l = 0; l < n; ++l) zl[l] = z[l * s]; }\n" \
@@ -325,56 +369,56 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// ---\n" \
 "\n" \
-"INLINE void _forward4x1(const uint2_32 pq, uint_32 z[4], const uint_32 w1, const uint_32 w2[2])\n" \
+"INLINE void _forward4x1(const uint2_32 pq, uint_32 z[4], const tw_t w1, const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2(z[0], z[2], w1); FWD2(z[1], z[3], w1);\n" \
 "	FWD2(z[0], z[1], w2[0]); FWD2(z[2], z[3], w2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x1(const uint2_32 pq, uint_32 z[4], const uint_32 win1, const uint_32 win2[2])\n" \
+"INLINE void _backward4x1(const uint2_32 pq, uint_32 z[4], const tw_t win1, const tw_t win2[2])\n" \
 "{\n" \
 "	BCK2(z[0], z[1], win2[0]); BCK2(z[2], z[3], win2[1]);\n" \
 "	BCK2(z[0], z[2], win1); BCK2(z[1], z[3], win1);\n" \
 "}\n" \
 "\n" \
-"INLINE void _forward4x1_0(const uint2_32 pq, const uint4_32 f0, uint_32 z[4])\n" \
+"INLINE void _forward4x1_0(const uint2_32 pq, const cst_t f0, uint_32 z[4])\n" \
 "{\n" \
-"	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
-"	z[0] = mulmod(z[0], rsq, pq); z[1] = mulmod(z[1], rsq, pq);\n" \
+"	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);\n" \
+"	z[0] = mulw(z[0], rsq, pq); z[1] = mulw(z[1], rsq, pq);\n" \
 "	FWD2(z[0], z[2], mfim); FWD2(z[1], z[3], mfim);\n" \
 "	FWD2(z[0], z[1], sqrti); FWD2(z[2], z[3], isqrti);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x1_0(const uint2_32 pq, const uint4_32 b0, uint_32 z[4])\n" \
+"INLINE void _backward4x1_0(const uint2_32 pq, const cst_t b0, uint_32 z[4])\n" \
 "{\n" \
-"	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;\n" \
+"	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);\n" \
 "	BCK2(z[0], z[1], isqrti); BCK2(z[2], z[3], sqrti);\n" \
 "	BCK2(z[0], z[2], im); BCK2(z[1], z[3], im);\n" \
 "}\n" \
 "\n" \
-"INLINE void _square2x2(const uint2_32 pq, uint_32 z[4], const uint_32 w)\n" \
+"INLINE void _square2x2(const uint2_32 pq, uint_32 z[4], const tw_t w)\n" \
 "{\n" \
 "	SQR2(z[0], z[1], w); SQR2N(z[2], z[3], w);\n" \
 "}\n" \
 "\n" \
-"INLINE void _square4(const uint2_32 pq, uint_32 z[4], const uint_32 w, const uint_32 win)\n" \
+"INLINE void _square4(const uint2_32 pq, uint_32 z[4], const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);\n" \
 "	_square2x2(pq, z, w);\n" \
 "	BCK2(z[0], z[2], win); BCK2(z[1], z[3], win);\n" \
 "}\n" \
 "\n" \
-"INLINE void _fwd4(const uint2_32 pq, uint_32 z[4], const uint_32 w)\n" \
+"INLINE void _fwd4(const uint2_32 pq, uint_32 z[4], const tw_t w)\n" \
 "{\n" \
 "	FWD2(z[0], z[2], w); FWD2(z[1], z[3], w);\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul2x2(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const uint_32 w)\n" \
+"INLINE void _mul2x2(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const tw_t w)\n" \
 "{\n" \
 "	MUL2(z[0], z[1], zp[0], zp[1], w); MUL2N(z[2], z[3], zp[2], zp[3], w);\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul4(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const uint_32 w, const uint_32 win)\n" \
+"INLINE void _mul4(const uint2_32 pq, uint_32 z[4], const uint_32 zp[4], const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	_fwd4(pq, z, w);\n" \
 "	_mul2x2(pq, z, zp, w);\n" \
@@ -383,34 +427,34 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- v2\n" \
 "\n" \
-"INLINE void _forward4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 w2[2])\n" \
+"INLINE void _forward4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
 "	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 win1, const uint_32 win2[2])\n" \
+"INLINE void _backward4x2(const uint2_32 pq, uint2_32 z[4], const tw_t win1, const tw_t win2[2])\n" \
 "{\n" \
 "	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
 "	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);\n" \
 "}\n" \
 "\n" \
-"INLINE void _forward4x2_0(const uint2_32 pq, const uint4_32 f0, uint2_32 z[4])\n" \
+"INLINE void _forward4x2_0(const uint2_32 pq, const cst_t f0, uint2_32 z[4])\n" \
 "{\n" \
-"	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
-"	z[0] = mulmod2(z[0], rsq, pq); z[1] = mulmod2(z[1], rsq, pq);\n" \
+"	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);\n" \
+"	z[0] = mulw2(z[0], rsq, pq); z[1] = mulw2(z[1], rsq, pq);\n" \
 "	FWD2v2(z[0], z[2], mfim); FWD2v2(z[1], z[3], mfim);\n" \
 "	FWD2v2(z[0], z[1], sqrti); FWD2v2(z[2], z[3], isqrti);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x2_0(const uint2_32 pq, const uint4_32 b0, uint2_32 z[4])\n" \
+"INLINE void _backward4x2_0(const uint2_32 pq, const cst_t b0, uint2_32 z[4])\n" \
 "{\n" \
-"	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;\n" \
+"	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);\n" \
 "	BCK2v2(z[0], z[1], isqrti); BCK2v2(z[2], z[3], sqrti);\n" \
 "	BCK2v2(z[0], z[2], im); BCK2v2(z[1], z[3], im);\n" \
 "}\n" \
 "\n" \
-"INLINE void _square4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _square4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
 "	SQR2(z[0].s0, z[0].s1, w2[0]); SQR2N(z[1].s0, z[1].s1, w2[0]);\n" \
@@ -418,25 +462,25 @@ static const char * const src_ocl_kernel = \
 "	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _square8(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 win1, const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _square8(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t win1, const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
 "	_square4x2(pq, z, w2, win2);\n" \
 "	BCK2v2(z[0], z[2], win1); BCK2v2(z[1], z[3], win1);\n" \
 "}\n" \
 "\n" \
-"INLINE void _fwd4x2(const uint2_32 pq, uint2_32 z[4], const uint_32 w2[2])\n" \
+"INLINE void _fwd4x2(const uint2_32 pq, uint2_32 z[4], const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _fwd8(const uint2_32 pq, uint2_32 z[4], const uint_32 w1, const uint_32 w2[2])\n" \
+"INLINE void _fwd8(const uint2_32 pq, uint2_32 z[4], const tw_t w1, const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
 "	_fwd4x2(pq, z, w2);\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul4x2(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _mul4x2(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[1], w2[0]); FWD2v2(z[2], z[3], w2[1]);\n" \
 "	MUL2(z[0].s0, z[0].s1, zp[0].s0, zp[0].s1, w2[0]); MUL2N(z[1].s0, z[1].s1, zp[1].s0, zp[1].s1, w2[0]);\n" \
@@ -444,7 +488,7 @@ static const char * const src_ocl_kernel = \
 "	BCK2v2(z[0], z[1], win2[0]); BCK2v2(z[2], z[3], win2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul8(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const uint_32 w1, const uint_32  win1, const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _mul8(const uint2_32 pq, uint2_32 z[4], const uint2_32 zp[4], const tw_t w1, const tw_t  win1, const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v2(z[0], z[2], w1); FWD2v2(z[1], z[3], w1);\n" \
 "	_mul4x2(pq, z, zp, w2, win2);\n" \
@@ -453,34 +497,34 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- v4\n" \
 "\n" \
-"INLINE void _forward4x4(const uint2_32 pq, uint4_32 z[4], const uint_32 w1, const uint_32 w2[2])\n" \
+"INLINE void _forward4x4(const uint2_32 pq, uint4_32 z[4], const tw_t w1, const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2v4(z[0], z[2], w1); FWD2v4(z[1], z[3], w1);\n" \
 "	FWD2v4(z[0], z[1], w2[0]); FWD2v4(z[2], z[3], w2[1]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x4(const uint2_32 pq, uint4_32 z[4], const uint_32 win1, const uint_32 win2[2])\n" \
+"INLINE void _backward4x4(const uint2_32 pq, uint4_32 z[4], const tw_t win1, const tw_t win2[2])\n" \
 "{\n" \
 "	BCK2v4(z[0], z[1], win2[0]); BCK2v4(z[2], z[3], win2[1]);\n" \
 "	BCK2v4(z[0], z[2], win1); BCK2v4(z[1], z[3], win1);\n" \
 "}\n" \
 "\n" \
-"INLINE void _forward4x4_0(const uint2_32 pq, const uint4_32 f0, uint4_32 z[4])\n" \
+"INLINE void _forward4x4_0(const uint2_32 pq, const cst_t f0, uint4_32 z[4])\n" \
 "{\n" \
-"	const uint_32 rsq = f0.s0, mfim = f0.s1, sqrti = f0.s2, isqrti = f0.s3;\n" \
-"	z[0] = mulmod4(z[0], rsq, pq); z[1] = mulmod4(z[1], rsq, pq);\n" \
+"	const tw_t rsq = CST_W(f0, 0, 4), mfim = CST_W(f0, 1, 5), sqrti = CST_W(f0, 2, 6), isqrti = CST_W(f0, 3, 7);\n" \
+"	z[0] = mulw4(z[0], rsq, pq); z[1] = mulw4(z[1], rsq, pq);\n" \
 "	FWD2v4(z[0], z[2], mfim); FWD2v4(z[1], z[3], mfim);\n" \
 "	FWD2v4(z[0], z[1], sqrti); FWD2v4(z[2], z[3], isqrti);\n" \
 "}\n" \
 "\n" \
-"INLINE void _backward4x4_0(const uint2_32 pq, const uint4_32 b0, uint4_32 z[4])\n" \
+"INLINE void _backward4x4_0(const uint2_32 pq, const cst_t b0, uint4_32 z[4])\n" \
 "{\n" \
-"	const uint_32 isqrti = b0.s0, sqrti = b0.s1, im = b0.s2;\n" \
+"	const tw_t isqrti = CST_W(b0, 0, 4), sqrti = CST_W(b0, 1, 5), im = CST_W(b0, 2, 6);\n" \
 "	BCK2v4(z[0], z[1], isqrti); BCK2v4(z[2], z[3], sqrti);\n" \
 "	BCK2v4(z[0], z[2], im); BCK2v4(z[1], z[3], im);\n" \
 "}\n" \
 "\n" \
-"INLINE void _square4x2v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _square4x2v4(const uint2_32 pq, uint4_32 z[2], const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	for (sz_t i = 0; i < 2; ++i)\n" \
 "	{\n" \
@@ -490,25 +534,25 @@ static const char * const src_ocl_kernel = \
 "	}\n" \
 "}\n" \
 "\n" \
-"INLINE void _square8v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 win1, const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _square8v4(const uint2_32 pq, uint4_32 z[2], const tw_t w1, const tw_t win1, const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v4(z[0], z[1], w1);\n" \
 "	_square4x2v4(pq, z, w2, win2);\n" \
 "	BCK2v4(z[0], z[1], win1);\n" \
 "}\n" \
 "\n" \
-"INLINE void _fwd4x2v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w2[2])\n" \
+"INLINE void _fwd4x2v4(const uint2_32 pq, uint4_32 z[2], const tw_t w2[2])\n" \
 "{\n" \
 "	for (sz_t i = 0; i < 2; ++i) FWD2v2(z[i].s01, z[i].s23, w2[i]);\n" \
 "}\n" \
 "\n" \
-"INLINE void _fwd8v4(const uint2_32 pq, uint4_32 z[2], const uint_32 w1, const uint_32 w2[2])\n" \
+"INLINE void _fwd8v4(const uint2_32 pq, uint4_32 z[2], const tw_t w1, const tw_t w2[2])\n" \
 "{\n" \
 "	FWD2v4(z[0], z[1], w1);\n" \
 "	_fwd4x2v4(pq, z, w2);\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul4x2v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _mul4x2v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	for (sz_t i = 0; i < 2; ++i)\n" \
 "	{\n" \
@@ -518,7 +562,7 @@ static const char * const src_ocl_kernel = \
 "	}\n" \
 "}\n" \
 "\n" \
-"INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const uint_32 w1, const uint_32  win1, const uint_32 w2[2], const uint_32 win2[2])\n" \
+"INLINE void _mul8v4(const uint2_32 pq, uint4_32 z[2], const uint4_32 zp[2], const tw_t w1, const tw_t  win1, const tw_t w2[2], const tw_t win2[2])\n" \
 "{\n" \
 "	FWD2v4(z[0], z[1], w1);\n" \
 "	_mul4x2v4(pq, z, zp, w2, win2);\n" \
@@ -527,6 +571,24 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- inverse of roots is wi[s + j] or w[s + s - j - 1] ---\n" \
 "\n" \
+"#if defined(SHOUP)\n" \
+"#define LOADW2(w, k)			const uint2_32 t = ((__global const uint2_32 *)(w))[k], tq = ((__global const uint2_32 *)&(w)[WQ_SHFT])[k];\n" \
+"#define LOADW4(w, k)			const uint4_32 t = ((__global const uint4_32 *)(w))[k], tq = ((__global const uint4_32 *)&(w)[WQ_SHFT])[k];\n" \
+"#define DECLARE_W1(sj)			const tw_t w1 = TWLD(w, sj);\n" \
+"#define DECLARE_W2(sj)			tw_t w2[2]; { LOADW2(w, sj); w2[0] = (tw_t)(t.s0, tq.s0); w2[1] = (tw_t)(t.s1, tq.s1); }\n" \
+"#define DECLARE_W12(sj)			DECLARE_W1(sj); DECLARE_W2(sj);\n" \
+"#define DECLARE_W1_2(sj)		tw_t w1[2]; { LOADW2(w, sj); w1[0] = (tw_t)(t.s0, tq.s0); w1[1] = (tw_t)(t.s1, tq.s1); }\n" \
+"#define DECLARE_W2_4(sj)		tw_t w2[4]; { LOADW4(w, sj); w2[0] = (tw_t)(t.s0, tq.s0); w2[1] = (tw_t)(t.s1, tq.s1); w2[2] = (tw_t)(t.s2, tq.s2); w2[3] = (tw_t)(t.s3, tq.s3); }\n" \
+"#define DECLARE_W12_24(sj)		DECLARE_W1_2(sj); DECLARE_W2_4(sj);\n" \
+"\n" \
+"#define DECLARE_WIN1(sji)		const tw_t win1 = TWLD(wi, sji);\n" \
+"#define DECLARE_IVAR(s, j)		const sz_t sji = s + s - j - 1; __global const uint_32 * restrict const wi = w;\n" \
+"#define DECLARE_WIN2(sji)		tw_t win2[2]; { LOADW2(wi, sji); win2[0] = (tw_t)(t.s1, tq.s1); win2[1] = (tw_t)(t.s0, tq.s0); }\n" \
+"#define DECLARE_WIN1_2(sji)		tw_t win1[2]; { LOADW2(wi, sji); win1[0] = (tw_t)(t.s1, tq.s1); win1[1] = (tw_t)(t.s0, tq.s0); }\n" \
+"#define DECLARE_WIN2_4(sji)		tw_t win2[4]; { LOADW4(wi, sji); win2[0] = (tw_t)(t.s3, tq.s3); win2[1] = (tw_t)(t.s2, tq.s2); win2[2] = (tw_t)(t.s1, tq.s1); win2[3] = (tw_t)(t.s0, tq.s0); }\n" \
+"#define DECLARE_WIN12(sj)		DECLARE_WIN1(sj); DECLARE_WIN2(sj);\n" \
+"#define DECLARE_WIN12_24(sj)	DECLARE_WIN1_2(sj); DECLARE_WIN2_4(sj);\n" \
+"#else\n" \
 "#define DECLARE_W1(sj)			const uint_32 w1 = w[sj];\n" \
 "#define DECLARE_W2(sj)			uint_32 w2[2]; { const uint2_32 t = ((__global const uint2_32 *)w)[sj]; w2[0] = t.s0; w2[1] = t.s1; }\n" \
 "#define DECLARE_W12(sj)			DECLARE_W1(sj); DECLARE_W2(sj);\n" \
@@ -548,6 +610,7 @@ static const char * const src_ocl_kernel = \
 "#endif\n" \
 "#define DECLARE_WIN12(sj)		DECLARE_WIN1(sj); DECLARE_WIN2(sj);\n" \
 "#define DECLARE_WIN12_24(sj)	DECLARE_WIN1_2(sj); DECLARE_WIN2_4(sj);\n" \
+"#endif\n" \
 "\n" \
 "// --- vector size (1, 2 or 4) ---\n" \
 "\n" \
@@ -603,7 +666,7 @@ static const char * const src_ocl_kernel = \
 "	_storeg(4, z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward4io_0(const uint2_32 pq, const uint4_32 f0, __global VTYPE * restrict const z)\n" \
+"INLINE void forward4io_0(const uint2_32 pq, const cst_t f0, __global VTYPE * restrict const z)\n" \
 "{\n" \
 "	const sz_t m = N_SZ / 4 / VSIZE;\n" \
 "	VTYPE zl[4]; _loadg(4, zl, z, m);\n" \
@@ -611,7 +674,7 @@ static const char * const src_ocl_kernel = \
 "	_storeg(4, z, m, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backwardio_0(const uint2_32 pq, const uint4_32 b0, __global VTYPE * restrict const z)\n" \
+"INLINE void backwardio_0(const uint2_32 pq, const cst_t b0, __global VTYPE * restrict const z)\n" \
 "{\n" \
 "	const sz_t m = N_SZ / 4 / VSIZE;\n" \
 "	VTYPE zl[4]; _loadg(4, zl, z, m);\n" \
@@ -621,28 +684,28 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- v1\n" \
 "\n" \
-"INLINE void square2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w)\n" \
+"INLINE void square2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w)\n" \
 "{\n" \
 "	uint_32 zl[4]; _loadg1(4, zl, z, 1);\n" \
 "	_square2x2(pq, zl, w);\n" \
 "	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w, const uint_32 win)\n" \
+"INLINE void square4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	uint_32 zl[4]; _loadg1(4, zl, z, 1);\n" \
 "	_square4(pq, zl, w, win);\n" \
 "	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void fwd4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w)\n" \
+"INLINE void fwd4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const tw_t w)\n" \
 "{\n" \
 "	uint_32 zl[4]; _loadg1(4, zl, z, 1);\n" \
 "	_fwd4(pq, zl, w);\n" \
 "	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const uint_32 w)\n" \
+"INLINE void mul2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const tw_t w)\n" \
 "{\n" \
 "	uint_32 zpl[4]; _loadg1(4, zpl, zp, 1);\n" \
 "	uint_32 zl[4]; _loadg1(4, zl, z, 1);\n" \
@@ -650,7 +713,7 @@ static const char * const src_ocl_kernel = \
 "	_storeg1(4, z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void mul4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const uint_32 w, const uint_32 win)\n" \
+"INLINE void mul4x1io(const uint2_32 pq, __global uint_32 * restrict const z, const __global uint_32 * restrict const zp, const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	uint_32 zpl[4]; _loadg1(4, zpl, zp, 1);\n" \
 "	uint_32 zl[4]; _loadg1(4, zl, z, 1);\n" \
@@ -794,7 +857,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	square4x2io(pq, z, w, wi, sj, sji);\n" \
 "#else\n" \
-"	square4x1io(pq, z, w[sj], wi[sji]);\n" \
+"	square4x1io(pq, z, TWLD(w, sj), TWLD(wi, sji));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -805,7 +868,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	fwd4x2io(pq, z, w, sj);\n" \
 "#else\n" \
-"	fwd4x1io(pq, z, w[sj]);\n" \
+"	fwd4x1io(pq, z, TWLD(w, sj));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -817,7 +880,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	mul4x2io(pq, z, zp, w, wi, sj, sji);\n" \
 "#else\n" \
-"	mul4x1io(pq, z, zp, w[sj], wi[sji]);\n" \
+"	mul4x1io(pq, z, zp, TWLD(w, sj), TWLD(wi, sji));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -874,7 +937,7 @@ static const char * const src_ocl_kernel = \
 "	_storel(4, Z, ml, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void forward_4i_0(const uint2_32 pq, const uint4_32 f0, const sz_t ml, __local VTYPE * restrict const Z,\n" \
+"INLINE void forward_4i_0(const uint2_32 pq, const cst_t f0, const sz_t ml, __local VTYPE * restrict const Z,\n" \
 "	const sz_t mg, __global const VTYPE * restrict const z)\n" \
 "{\n" \
 "	VTYPE zl[4]; _loadg(4, zl, z, mg);\n" \
@@ -920,7 +983,7 @@ static const char * const src_ocl_kernel = \
 "	_storeg(4, z, mg, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void backward_4o_0(const uint2_32 pq, const uint4_32 b0, const sz_t mg, __global VTYPE * restrict const z,\n" \
+"INLINE void backward_4o_0(const uint2_32 pq, const cst_t b0, const sz_t mg, __global VTYPE * restrict const z,\n" \
 "	const sz_t ml, __local const VTYPE * restrict const Z)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -931,7 +994,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "// --- v1\n" \
 "\n" \
-"INLINE void square_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const uint_32 w)\n" \
+"INLINE void square_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const tw_t w)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	uint_32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
@@ -939,7 +1002,7 @@ static const char * const src_ocl_kernel = \
 "	_storel1(4, Z, 1, zl);\n" \
 "}\n" \
 "\n" \
-"INLINE void square_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const uint_32 w, const uint_32 win)\n" \
+"INLINE void square_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	uint_32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
@@ -955,7 +1018,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "INLINE void fwd4x1_write(const uint2_32 pq, const sz_t mg, __global uint_32 * restrict const z,\n" \
-"	__local const uint_32 * restrict const Z, const uint_32 w)\n" \
+"	__local const uint_32 * restrict const Z, const tw_t w)\n" \
 "{\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "	uint_32 zl[4]; _loadl1(4, zl, Z, 1);\n" \
@@ -964,7 +1027,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "INLINE void mul_2x2(const uint2_32 pq, __local uint_32 * restrict const Z, const sz_t mg,\n" \
-"	__global const uint_32 * restrict const zp, const uint_32 w)\n" \
+"	__global const uint_32 * restrict const zp, const tw_t w)\n" \
 "{\n" \
 "	uint_32 zpl[4]; _loadg1(4, zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -974,7 +1037,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "INLINE void mul_4x1(const uint2_32 pq, __local uint_32 * restrict const Z, const sz_t mg,\n" \
-"	__global const uint_32 * restrict const zp, const uint_32 w, const uint_32 win)\n" \
+"	__global const uint_32 * restrict const zp, const tw_t w, const tw_t win)\n" \
 "{\n" \
 "	uint_32 zpl[4]; _loadg1(4, zpl, zp, mg);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -1135,7 +1198,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	square_4x2(pq, Z, w, wi, sj, sji);\n" \
 "#else\n" \
-"	square_4x1(pq, Z, w[sj], wi[sji]);\n" \
+"	square_4x1(pq, Z, TWLD(w, sj), TWLD(wi, sji));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -1147,7 +1210,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	fwd4x2_write(pq, mg, z, Z, w, sj);\n" \
 "#else\n" \
-"	fwd4x1_write(pq, mg, z, Z, w[sj]);\n" \
+"	fwd4x1_write(pq, mg, z, Z, TWLD(w, sj));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -1159,7 +1222,7 @@ static const char * const src_ocl_kernel = \
 "#elif VSIZE == 2\n" \
 "	mul_4x2(pq, Z, mg, zp, w, wi, sj, sji);\n" \
 "#else\n" \
-"	mul_4x1(pq, Z, mg, zp, w[sj], wi[sji]);\n" \
+"	mul_4x1(pq, Z, mg, zp, TWLD(w, sj), TWLD(wi, sji));\n" \
 "#endif\n" \
 "}\n" \
 "\n" \
@@ -1276,7 +1339,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	DECLARE_VAR_REGv1();\n" \
 "	const sz_t j = id, k = 4 * id;\n" \
-"	square2x2io(pq, &z[k], w[N_SZ / 4 + j]);\n" \
+"	square2x2io(pq, &z[k], TWLD(w, N_SZ / 4 + j));\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -1312,7 +1375,7 @@ static const char * const src_ocl_kernel = \
 "	DECLARE_VAR_REGv1();\n" \
 "	DECLARE_VARP_REGv1();\n" \
 "	const sz_t j = id, k = 4 * id;\n" \
-"	mul2x2io(pq, &z[k], &zp[k], w[N_SZ / 4 + j]);\n" \
+"	mul2x2io(pq, &z[k], &zp[k], TWLD(w, N_SZ / 4 + j));\n" \
 "}\n" \
 "\n" \
 "// --- v2, v4\n" \
@@ -1656,7 +1719,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_2x2(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	square_8(pq, Z4, w, wi, sj, sji);\n" \
@@ -1731,7 +1794,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_2x2(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	square_8(pq, Z4, w, wi, sj, sji);\n" \
@@ -1814,7 +1877,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_2x2(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	square_8(pq, Z4, w, wi, sj, sji);\n" \
@@ -1905,7 +1968,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	square_2x2(pq, Z4, w[sj]);\n" \
+"	square_2x2(pq, Z4, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	square_8(pq, Z4, w, wi, sj, sji);\n" \
@@ -2109,7 +2172,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4i(pq, L32S / 4, Zi8, L32S / 4, zk, w, sj / (L32S / 4));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_2x2(pq, Z4, 8, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 8, zpk, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	mul_8(pq, Z4, L32S / 4, zpk, w, wi, sj, sji);\n" \
@@ -2148,7 +2211,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L128S / 16, Zi8, w, sj / (L128S / 16));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_2x2(pq, Z4, 32, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 32, zpk, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	mul_8(pq, Z4, L128S / 4, zpk, w, wi, sj, sji);\n" \
@@ -2191,7 +2254,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L512S / 64, Zi8, w, sj / (L512S / 64));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_2x2(pq, Z4, 128, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 128, zpk, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	mul_8(pq, Z4, L512S / 4, zpk, w, wi, sj, sji);\n" \
@@ -2238,7 +2301,7 @@ static const char * const src_ocl_kernel = \
 "	forward_4(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));\n" \
 "#if VSIZE == 1\n" \
 "	forward_4(pq, 2, Zi2, w, sj / 2);\n" \
-"	mul_2x2(pq, Z4, 512, zpk, w[sj]);\n" \
+"	mul_2x2(pq, Z4, 512, zpk, TWLD(w, sj));\n" \
 "	backward_4(pq, 2, Zi2, wi, sji / 2);\n" \
 "#else\n" \
 "	mul_8(pq, Z4, L2048S / 4, zpk, w, wi, sj, sji);\n" \
@@ -2330,7 +2393,7 @@ static const char * const src_ocl_kernel = \
 "INLINE int_64 garner2(const uint_32 r1, const uint_32 r2)\n" \
 "{\n" \
 "	const uint_64 P1P2 = P1 * (uint_64)(P2);\n" \
-"	uint_32 u12 = mulmod(submod(r1, r2, P1), INVP2_P1, PQ1);	// P2 < P1\n" \
+"	uint_32 u12 = mulw(submod(r1, r2, P1), TWC(INVP2_P1, P1, Q1), PQ1);	// P2 < P1\n" \
 "	const uint_64 n = r2 + u12 * (uint_64)(P2);\n" \
 "	const bool b = (n > P1P2 / 2);\n" \
 "	return (int_64)(n - (b ? P1P2 : 0));\n" \
@@ -2338,9 +2401,9 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "INLINE int96 garner3(const uint_32 r1, const uint_32 r2, const uint_32 r3)\n" \
 "{\n" \
-"	const uint_32 u13 = mulmod(submod(r1, r3, P1), INVP3_P1, PQ1);\n" \
-"	const uint_32 u23 = mulmod(submod(r2, r3, P2), INVP3_P2, PQ2);\n" \
-"	const uint_32 u123 = mulmod(submod(u13, u23, P1), INVP2_P1, PQ1);\n" \
+"	const uint_32 u13 = mulw(submod(r1, r3, P1), TWC(INVP3_P1, P1, Q1), PQ1);\n" \
+"	const uint_32 u23 = mulw(submod(r2, r3, P2), TWC(INVP3_P2, P2, Q2), PQ2);\n" \
+"	const uint_32 u123 = mulw(submod(u13, u23, P1), TWC(INVP2_P1, P1, Q1), PQ1);\n" \
 "	const uint96 n = uint96_add_64(uint96_mul_64_32(P2 * (uint_64)(P3), u123), u23 * (uint_64)(P3) + r3);\n" \
 "	const bool b = uint96_is_greater(n, uint96_set(P1P2P3_2L, P1P2P3_2H));\n" \
 "	return uint96_i(b ? uint96_sub(n, uint96_set(P1P2P3L, P1P2P3H)) : n);\n" \
@@ -2379,7 +2442,7 @@ static const char * const src_ocl_kernel = \
 "	__local int_64 * const cl, const sz_t gid, const sz_t lid,\n" \
 "	const uint_32 b, const uint_32 b_inv, const int b_s, const bool dup)\n" \
 "{\n" \
-"	const uint4_32 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);\n" \
+"	const uint4_32 u1 = mulw4(zi[0 * N_SZ / 4], TWC(NORM1, P1, Q1), PQ1), u2 = mulw4(zi[1 * N_SZ / 4], TWC(NORM2, P2, Q2), PQ2);\n" \
 "	int4_32 r;\n" \
 "\n" \
 "#if RNS_SZ == 2\n" \
@@ -2394,7 +2457,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "#else\n" \
 "\n" \
-"	const uint4_32 u3 = mulmod4(zi[2 * N_SZ / 4], NORM3, PQ3);\n" \
+"	const uint4_32 u3 = mulw4(zi[2 * N_SZ / 4], TWC(NORM3, P3, Q3), PQ3);\n" \
 "\n" \
 "	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);\n" \
 "	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);\n" \

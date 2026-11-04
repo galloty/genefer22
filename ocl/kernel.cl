@@ -2511,3 +2511,46 @@ void copyp(__global uint4_32 * restrict const zp, __global const uint4_32 * rest
 	const sz_t gid = (sz_t)get_global_id(0);
 	zp[gid] = z[src + gid];
 }
+
+#if defined(FUSE_CARRY)
+
+// As normalize2, but the digits are read from the residue of p, not P1: |d| < p / 2 is required.
+INLINE uint4_32 carry_in(const uint4_32 u, const int_64 cin, const uint_32 p, const uint_32 b, const uint_32 b_inv, const int b_s)
+{
+	int4_32 r;
+	int_64 f = cin + get_int(u.s0, p);
+	r.s0 = reduce64(&f, b, b_inv, b_s);
+	f += get_int(u.s1, p);
+	r.s1 = reduce64(&f, b, b_inv, b_s);
+	f += get_int(u.s2, p);
+	r.s2 = reduce64(&f, b, b_inv, b_s);
+	f += get_int(u.s3, p);
+	r.s3 = (int_32)(f);
+	return (uint4_32)(set_int(r.s0, p), set_int(r.s1, p), set_int(r.s2, p), set_int(r.s3, p));
+}
+
+// forward64_0 and normalize2 of the previous squaring
+__kernel
+ATTR_64()
+void forward64_0c(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg,
+	__global const int_64 * restrict const c, const uint_32 b, const uint_32 b_inv, const int b_s)
+{
+	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;
+	__local VTYPE Z[4 * B_64 * CHUNK64];
+	DECLARE_VAR(B_64, CHUNK64);
+	DECLARE_VAR_FORWARD();
+	{
+		const sz_t mg = B_64 << lm;
+		VTYPE zl[4]; _loadg(4, zl, zi, mg);
+		for (sz_t l = 0; l < 4; ++l)
+		{
+			const sz_t k = ki + l * mg;
+			if (k % NORM_WG_SZ == 0) zl[l] = carry_in(zl[l], c[k / NORM_WG_SZ], pq.s0, b, b_inv, b_s);
+		}
+		_forward4_0(pq, g_f0[lid], zl);
+		_storel(4, &Z[i], B_64 * CHUNK64, zl);
+	}
+	FORWARD_64();
+}
+
+#endif

@@ -941,6 +941,38 @@ private:
 	ZP * const _z;
 	engines<RNS_SIZE, is32> * _pEngine = nullptr;
 
+	static uint32 mulMod(const uint32 a, const uint32 b, const uint32 p) { return uint32(a * uint64(b) % p); }
+
+	static uint32 powMod(const uint32 a, const uint64 e, const uint32 p)
+	{
+		uint32 r = 1, x = a;
+		for (uint64 k = e; k != 0; k /= 2)
+		{
+			if (k % 2 != 0) r = mulMod(r, x, p);
+			x = mulMod(x, x, p);
+		}
+		return r;
+	}
+
+	// t^2 = NORM / 2^32 = 2^-(ln + 31) (mod p). If ln is even, t has a factor sqrt(2) = zeta8 + 1 / zeta8, since p = 1 (mod 8).
+	static uint32 foldNormScale(const uint32 p, const int ln, const uint32 norm)
+	{
+		const int e = ln + 31;
+		uint32 t = powMod((p + 1) / 2, uint64((e + 1) / 2), p);
+		if (e % 2 != 0)
+		{
+			uint32 z = 0;
+			for (uint32 a = 2; z == 0; ++a)
+			{
+				const uint32 y = powMod(a, (p - 1) / 8, p);
+				if (powMod(y, 4, p) == p - 1) z = y;
+			}
+			t = mulMod(t, uint32((uint64(z) + powMod(z, 7, p)) % p), p);
+		}
+		if (mulMod(mulMod(t, t, p), uint32((uint64(1) << 32) % p), p) != norm) throw std::runtime_error("FOLD_NORM scale");
+		return t;
+	}
+
 public:
 	transformGPUs(const uint32_t b, const uint32_t n, const bool isBoinc, const size_t device, const size_t num_regs,
 				 const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose)
@@ -963,6 +995,21 @@ public:
 
 		_pEngine = new engines<RNS_SIZE, is32>(eng_platform, is_boinc_platform ? 0 : device, static_cast<int>(n), isBoinc, num_regs, verbose);
 
+		uint32 rsq[3] = { is32 ? RSQ1U : RSQ1S, is32 ? RSQ2U : RSQ2S, is32 ? RSQ3U : RSQ3S };
+		uint32 mfim[3] = { is32 ? MFIM1U : MFIM1S, is32 ? MFIM2U : MFIM2S, is32 ? MFIM3U : MFIM3S };
+		const bool foldNorm = _pEngine->isApple();
+		if (foldNorm)
+		{
+			const uint32 p[3] = { is32 ? P1U : P1S, is32 ? P2U : P2S, is32 ? P3U : P3S };
+			const uint32 norm[3] = { ZP1::norm(uint32(size / 2)).get(), ZP2::norm(uint32(size / 2)).get(), ZP3::norm(uint32(size / 2)).get() };
+			for (size_t k = 0; k < 3; ++k)
+			{
+				const uint32 t = foldNormScale(p[k], int(n), norm[k]);
+				rsq[k] = uint32(rsq[k] * uint64(t) % p[k]);
+				mfim[k] = uint32(mfim[k] * uint64(t) % p[k]);
+			}
+		}
+
 		std::ostringstream src;
 
 		src << "#define N_SZ\t" << (1u << n) << "u" << std::endl;
@@ -975,25 +1022,25 @@ public:
 
 		src << "#define P1\t" << (is32 ? P1U : P1S) << "u" << std::endl;
 		src << "#define Q1\t" << (is32 ? Q1U : Q1S) << "u" << std::endl;
-		src << "#define RSQ1\t" << (is32 ? RSQ1U : RSQ1S) << "u" << std::endl;
+		src << "#define RSQ1\t" << rsq[0] << "u" << std::endl;
 		src << "#define IM1\t" << (is32 ? IM1U : IM1S) << "u" << std::endl;
-		src << "#define MFIM1\t" << (is32 ? MFIM1U : MFIM1S) << "u" << std::endl;
+		src << "#define MFIM1\t" << mfim[0] << "u" << std::endl;
 		src << "#define SQRTI1\t" << (is32 ? SQRTI1U : SQRTI1S) << "u" << std::endl;
 		src << "#define ISQRTI1\t" << (is32 ? ISQRTI1U : ISQRTI1S) << "u" << std::endl;
 
 		src << "#define P2\t" << (is32 ? P2U : P2S) << "u" << std::endl;
 		src << "#define Q2\t" << (is32 ? Q2U : Q2S) << "u" << std::endl;
-		src << "#define RSQ2\t" << (is32 ? RSQ2U : RSQ2S) << "u" << std::endl;
+		src << "#define RSQ2\t" << rsq[1] << "u" << std::endl;
 		src << "#define IM2\t" << (is32 ? IM2U : IM2S) << "u" << std::endl;
-		src << "#define MFIM2\t" << (is32 ? MFIM2U : MFIM2S) << "u" << std::endl;
+		src << "#define MFIM2\t" << mfim[1] << "u" << std::endl;
 		src << "#define SQRTI2\t" << (is32 ? SQRTI2U : SQRTI2S) << "u" << std::endl;
 		src << "#define ISQRTI2\t" << (is32 ? ISQRTI2U : ISQRTI2S) << "u" << std::endl;
 
 		src << "#define P3\t" << (is32 ? P3U : P3S) << "u" << std::endl;
 		src << "#define Q3\t" << (is32 ? Q3U : Q3S) << "u" << std::endl;
-		src << "#define RSQ3\t" << (is32 ? RSQ3U : RSQ3S) << "u" << std::endl;
+		src << "#define RSQ3\t" << rsq[2] << "u" << std::endl;
 		src << "#define IM3\t" << (is32 ? IM3U : IM3S) << "u" << std::endl;
-		src << "#define MFIM3\t" << (is32 ? MFIM3U : MFIM3S) << "u" << std::endl;
+		src << "#define MFIM3\t" << mfim[2] << "u" << std::endl;
 		src << "#define SQRTI3\t" << (is32 ? SQRTI3U : SQRTI3S) << "u" << std::endl;
 		src << "#define ISQRTI3\t" << (is32 ? ISQRTI3U : ISQRTI3S) << "u" << std::endl;
 
@@ -1034,6 +1081,7 @@ public:
 #endif
 
 		src << "#define NORM_WG_SZ\t" << _pEngine->getNormWGsize() << std::endl;
+		if (foldNorm) src << "#define FOLD_NORM\t" << 1 << std::endl;
 
 		src << "#define MAX_WG_SZ\t" << _pEngine->getMaxWorkGroupSize() << std::endl << std::endl;
 

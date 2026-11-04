@@ -2379,7 +2379,12 @@ static const char * const src_ocl_kernel = \
 "	__local int_64 * const cl, const sz_t gid, const sz_t lid,\n" \
 "	const uint_32 b, const uint_32 b_inv, const int b_s, const bool dup)\n" \
 "{\n" \
+"#if defined(FOLD_NORM)\n" \
+"	// NORM is folded into RSQ and MFIM\n" \
+"	const uint4_32 u1 = zi[0 * N_SZ / 4], u2 = zi[1 * N_SZ / 4];\n" \
+"#else\n" \
 "	const uint4_32 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);\n" \
+"#endif\n" \
 "	int4_32 r;\n" \
 "\n" \
 "#if RNS_SZ == 2\n" \
@@ -2394,7 +2399,11 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "#else\n" \
 "\n" \
+"#if defined(FOLD_NORM)\n" \
+"	const uint4_32 u3 = zi[2 * N_SZ / 4];\n" \
+"#else\n" \
 "	const uint4_32 u3 = mulmod4(zi[2 * N_SZ / 4], NORM3, PQ3);\n" \
+"#endif\n" \
 "\n" \
 "	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);\n" \
 "	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);\n" \

@@ -2367,7 +2367,12 @@ INLINE int4_32 normalize_1(__global uint4_32 * restrict const zi, __global int_6
 	__local int_64 * const cl, const sz_t gid, const sz_t lid,
 	const uint_32 b, const uint_32 b_inv, const int b_s, const bool dup)
 {
+#if defined(FOLD_NORM)
+	// NORM is folded into RSQ and MFIM
+	const uint4_32 u1 = zi[0 * N_SZ / 4], u2 = zi[1 * N_SZ / 4];
+#else
 	const uint4_32 u1 = mulmod4(zi[0 * N_SZ / 4], NORM1, PQ1), u2 = mulmod4(zi[1 * N_SZ / 4], NORM2, PQ2);
+#endif
 	int4_32 r;
 
 #if RNS_SZ == 2
@@ -2382,7 +2387,11 @@ INLINE int4_32 normalize_1(__global uint4_32 * restrict const zi, __global int_6
 
 #else
 
+#if defined(FOLD_NORM)
+	const uint4_32 u3 = zi[2 * N_SZ / 4];
+#else
 	const uint4_32 u3 = mulmod4(zi[2 * N_SZ / 4], NORM3, PQ3);
+#endif
 
 	int96 l0 = garner3(u1.s0, u2.s0, u3.s0), l1 = garner3(u1.s1, u2.s1, u3.s1);
 	int96 l2 = garner3(u1.s2, u2.s2, u3.s2), l3 = garner3(u1.s3, u2.s3, u3.s3);

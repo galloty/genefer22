@@ -607,6 +607,8 @@ INLINE void backwardio_0(const uint2_32 pq, const uint4_32 b0, __global VTYPE * 
 	_storeg(4, z, m, zl);
 }
 
+
+
 // --- v1
 
 INLINE void square2x2io(const uint2_32 pq, __global uint_32 * restrict const z, const uint_32 w)
@@ -916,6 +918,253 @@ INLINE void backward_4o_0(const uint2_32 pq, const uint4_32 b0, const sz_t mg, _
 	_backward4_0(pq, b0, zl);
 	_storeg(4, z, mg, zl);
 }
+
+#if VSIZE == 2 && !defined(IS32)
+
+INLINE uint2_32 reduce_lazy2(const uint2_32 x, const uint_32 p)
+{
+	return (uint2_32)(
+		x.s0 - ((x.s0 >= p) ? p : 0),
+		x.s1 - ((x.s1 >= p) ? p : 0));
+}
+
+#define FWD2v2_LAZY_FIRST(z0, z1, w) \
+{ \
+	const uint2_32 t = mulmod2(z1, w, pq); \
+	z1 = z0 + (uint2_32)(pq.s0) - t; \
+	z0 = z0 + t; \
+}
+
+#define FWD2v2_LAZY(z0, z1, w) \
+{ \
+	const uint2_32 a = reduce_lazy2(z0, pq.s0); \
+	const uint2_32 t = mulmod2(z1, w, pq); \
+	z1 = a + (uint2_32)(pq.s0) - t; \
+	z0 = a + t; \
+}
+
+INLINE void _forward4x2_lazy_first(
+	const uint2_32 pq,
+	uint2_32 z[4],
+	const uint_32 w1,
+	const uint_32 w2[2])
+{
+	FWD2v2_LAZY_FIRST(z[0], z[2], w1);
+	FWD2v2_LAZY_FIRST(z[1], z[3], w1);
+
+	FWD2v2_LAZY(z[0], z[1], w2[0]);
+	FWD2v2_LAZY(z[2], z[3], w2[1]);
+}
+
+INLINE void _forward4x2_lazy(
+	const uint2_32 pq,
+	uint2_32 z[4],
+	const uint_32 w1,
+	const uint_32 w2[2])
+{
+	FWD2v2_LAZY(z[0], z[2], w1);
+	FWD2v2_LAZY(z[1], z[3], w1);
+
+	FWD2v2_LAZY(z[0], z[1], w2[0]);
+	FWD2v2_LAZY(z[2], z[3], w2[1]);
+}
+
+INLINE void forward_4i_lazy_first(
+	const uint2_32 pq,
+	const sz_t ml,
+	__local uint2_32 * restrict const Z,
+	const sz_t mg,
+	__global const uint2_32 * restrict const z,
+	__global const uint_32 * restrict const w,
+	const sz_t sj)
+{
+	DECLARE_W12(sj);
+
+	uint2_32 zl[4];
+	_loadg2(4, zl, z, mg);
+
+	_forward4x2_lazy_first(
+		pq, zl, w1, w2);
+
+	_storel2(4, Z, ml, zl);
+}
+
+INLINE void forward_4_lazy(
+	const uint2_32 pq,
+	const sz_t m,
+	__local uint2_32 * restrict const Z,
+	__global const uint_32 * restrict const w,
+	const sz_t sj)
+{
+	DECLARE_W12(sj);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	uint2_32 zl[4];
+	_loadl2(4, zl, Z, m);
+
+	_forward4x2_lazy(
+		pq, zl, w1, w2);
+
+	_storel2(4, Z, m, zl);
+}
+
+INLINE void square_8_from_lazy(
+	const uint2_32 pq,
+	__local uint2_32 * restrict const Z,
+	__global const uint_32 * restrict const w,
+	__global const uint_32 * restrict const wi,
+	const sz_t sj,
+	const sz_t sji)
+{
+	DECLARE_W12(sj);
+	DECLARE_WIN12(sji);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	uint2_32 zl[4];
+	_loadl2(4, zl, Z, 1);
+
+	zl[0] = reduce_lazy2(zl[0], pq.s0);
+	zl[1] = reduce_lazy2(zl[1], pq.s0);
+	zl[2] = reduce_lazy2(zl[2], pq.s0);
+	zl[3] = reduce_lazy2(zl[3], pq.s0);
+
+	_square8(
+		pq,
+		zl,
+		w1,
+		win1,
+		w2,
+		win2);
+
+	_storel2(4, Z, 1, zl);
+}
+
+
+INLINE void _forward4x2_0_lazy_first(
+	const uint2_32 pq,
+	const uint4_32 f0,
+	uint2_32 z[4])
+{
+	const uint_32 rsq = f0.s0;
+	const uint_32 mfim = f0.s1;
+	const uint_32 sqrti = f0.s2;
+	const uint_32 isqrti = f0.s3;
+
+	z[0] = mulmod2(z[0], rsq, pq);
+	z[1] = mulmod2(z[1], rsq, pq);
+
+	FWD2v2_LAZY_FIRST(
+		z[0], z[2], mfim);
+
+	FWD2v2_LAZY_FIRST(
+		z[1], z[3], mfim);
+
+	FWD2v2_LAZY(
+		z[0], z[1], sqrti);
+
+	FWD2v2_LAZY(
+		z[2], z[3], isqrti);
+}
+
+INLINE void forward_4i_0_lazy_first(
+	const uint2_32 pq,
+	const uint4_32 f0,
+	const sz_t ml,
+	__local uint2_32 * restrict const Z,
+	const sz_t mg,
+	__global const uint2_32 * restrict const z)
+{
+	uint2_32 zl[4];
+
+	_loadg2(
+		4,
+		zl,
+		z,
+		mg);
+
+	_forward4x2_0_lazy_first(
+		pq,
+		f0,
+		zl);
+
+	_storel2(
+		4,
+		Z,
+		ml,
+		zl);
+}
+
+INLINE void forward_4i_lazy(
+	const uint2_32 pq,
+	const sz_t ml,
+	__local uint2_32 * restrict const Z,
+	const sz_t mg,
+	__global const uint2_32 * restrict const z,
+	__global const uint_32 * restrict const w,
+	const sz_t sj)
+{
+	DECLARE_W12(sj);
+
+	uint2_32 zl[4];
+
+	_loadg2(
+		4,
+		zl,
+		z,
+		mg);
+
+	_forward4x2_lazy(
+		pq,
+		zl,
+		w1,
+		w2);
+
+	_storel2(
+		4,
+		Z,
+		ml,
+		zl);
+}
+
+INLINE void forward_4o_lazy(
+	const uint2_32 pq,
+	const sz_t mg,
+	__global uint2_32 * restrict const z,
+	const sz_t ml,
+	__local const uint2_32 * restrict const Z,
+	__global const uint_32 * restrict const w,
+	const sz_t sj)
+{
+	DECLARE_W12(sj);
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	uint2_32 zl[4];
+
+	_loadl2(
+		4,
+		zl,
+		Z,
+		ml);
+
+	_forward4x2_lazy(
+		pq,
+		zl,
+		w1,
+		w2);
+
+	_storeg2(
+		4,
+		z,
+		mg,
+		zl);
+}
+
+
+#endif
+
 
 // --- v1
 
@@ -1413,6 +1662,56 @@ void forward64_0(__global VTYPE * restrict const zg, __global const uint_32 * re
 	FORWARD_64();
 }
 
+
+#if VSIZE == 2 && !defined(IS32)
+__kernel
+ATTR_64()
+void forward64_0_lazy(
+	__global VTYPE * restrict const zg,
+	__global const uint_32 * restrict const wg)
+{
+	const int lm = LN_SZ - LVSIZE - 6;
+	const unsigned int s = 64 / 4;
+
+	__local VTYPE Z[
+		4 * B_64 * CHUNK64];
+
+	DECLARE_VAR(
+		B_64,
+		CHUNK64);
+
+	DECLARE_VAR_FORWARD();
+
+	forward_4i_0_lazy_first(
+		pq,
+		g_f0[lid],
+		B_64 * CHUNK64,
+		&Z[i],
+		B_64 << lm,
+		zi);
+
+	const sz_t k4 =
+		((4 * threadIdx) & ~(4 * 4 - 1))
+		+ (threadIdx % 4);
+
+	forward_4_lazy(
+		pq,
+		4 * CHUNK64,
+		&Zi[CHUNK64 * k4],
+		w,
+		sj / 4);
+
+	forward_4o_lazy(
+		pq,
+		(sz_t)1 << lm,
+		zo,
+		1 * CHUNK64,
+		&Zi[CHUNK64 * 4 * threadIdx],
+		w,
+		sj / 1);
+}
+#endif
+
 __kernel
 ATTR_64()
 void forward64_9(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg)
@@ -1887,6 +2186,13 @@ void square2048(__global VTYPE * restrict const zg, __global const uint_32 * res
 {
 	DECLARE_VAR_2048();
 
+#if VSIZE == 2 && !defined(IS32)
+	forward_4i_lazy(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));
+	forward_4_lazy(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));
+	forward_4_lazy(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));
+	forward_4_lazy(pq, L2048S / 256, Zi8, w, sj / (L2048S / 256));
+	square_8_from_lazy(pq, Z4, w, wi, sj, sji);
+#else
 	forward_4i(pq, L2048S / 4, Zi512, L2048S / 4, zk, w, sj / (L2048S / 4));
 	forward_4(pq, L2048S / 16, Zi128, w, sj / (L2048S / 16));
 	forward_4(pq, L2048S / 64, Zi32, w, sj / (L2048S / 64));
@@ -1897,6 +2203,7 @@ void square2048(__global VTYPE * restrict const zg, __global const uint_32 * res
 	backward_4(pq, 2, Zi2, wi, sji / 2);
 #else
 	square_8(pq, Z4, w, wi, sj, sji);
+#endif
 #endif
 	backward_4(pq, L2048S / 256, Zi8, wi, sji / (L2048S / 256));
 	backward_4(pq, L2048S / 64, Zi32, wi, sji / (L2048S / 64));

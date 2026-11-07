@@ -18,7 +18,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "gint.h"
 #include "file.h"
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) && !defined(__APPLE__)	// Apple M processors do not support SVE, ID_AA64PFR0_EL1 cannot be read (SIGILL)
 
 inline bool cpu_supports_sve()
 {
@@ -26,9 +26,6 @@ inline bool cpu_supports_sve()
 	// See https://www.kernel.org/doc/Documentation/arm64/sve.txt
 	const unsigned long hwcaps = getauxval(AT_HWCAP);
 	return ((hwcaps & HWCAP_SVE) != 0);
-#elif defined(__APPLE__)
-	// Apple M processors do not support SVE, ID_AA64PFR0_EL1 cannot be read (SIGILL)
-	return false;
 #elif defined(__clang__) && (__clang_major__ >= 19)
 	return __builtin_cpu_supports("sve");
 #else
@@ -81,10 +78,12 @@ private:
 								  const cl_platform_id boinc_platform_id, const cl_device_id boinc_device_id, const bool verbose);
 #elif defined(__aarch64__)
 	static transform * create_neon(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+#if !defined(__APPLE__)
 	static size_t get_sve_size();
 	static transform * create_sve128(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_sve256(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
 	static transform * create_sve512(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
+#endif
 #else
 	static transform * create_i32(const uint32_t b, const uint32_t n, const size_t num_regs);
 	static transform * create_sse2(const uint32_t b, const uint32_t n, const size_t num_threads, const size_t num_regs, const bool checkError);
@@ -128,6 +127,7 @@ public:
 		transform * pTransform = nullptr;
 
 #if defined(__aarch64__)
+#if !defined(__APPLE__)
 		const uint64_t size = cpu_supports_sve() ? transform::get_sve_size() : 0;
 		if ((size == 128) && (impl.empty() || (impl == "sve128")))
 		{
@@ -145,6 +145,7 @@ public:
 			ttype = "sve512";
 		}
 		else
+#endif
 		{
 			pTransform = transform::create_neon(b, n, num_threads, num_regs, checkError);
 			ttype = "neon";
@@ -200,6 +201,7 @@ public:
 		std::string impls;
 #if !defined(GPU)
 #if defined(__aarch64__)
+#if !defined(__APPLE__)
 		if (cpu_supports_sve())
 		{
 			const uint64_t size = transform::get_sve_size();
@@ -212,6 +214,7 @@ public:
 				pio::print(ss.str());
 			}
 		}
+#endif
 		impls += " neon";
 #else
 		__builtin_cpu_init();

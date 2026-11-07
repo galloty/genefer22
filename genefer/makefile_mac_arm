@@ -37,7 +37,7 @@ OFLAGS = -ffinite-math-only -ffp-contract=fast -fno-trapping-math -fno-signed-ze
 FLAGS_CPU = -O3
 FLAGS_GPU = -O3 -DGPU
 
-OBJS_CPU = main.o transform_neon.o sve_size.o transform_sve128.o transform_sve256.o transform_sve512.o
+OBJS_CPU = main.o transform_neon.o
 OBJS_GPU = maing.o transform_ocl.o
 DEPS_COMMON = $(SRC_DIR)/transform.h $(SRC_DIR)/file.h $(SRC_DIR)/gint.h $(SRC_DIR)/pio.h $(SRC_DIR)/boinc.h
 DEPS_MAIN = $(SRC_DIR)/genefer.h $(SRC_DIR)/timer.h $(DEPS_COMMON)
@@ -67,18 +67,6 @@ maing.o: $(SRC_DIR)/main.cpp $(DEPS_MAIN)
 
 transform_neon.o: $(SRC_DIR)/transform_neon.cpp $(DEPS_TRANSFORM_CPUf64)
 	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) $(GMP_INC) -c $< -o $@
-
-sve_size.o: $(SRC_DIR)/sve_size.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(FLAGS_CPU) -march=armv8-a+sve $(GMP_INC) -c $< -o $@
-
-transform_sve128.o: $(SRC_DIR)/transform_sve128.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=128 -mtune=neoverse-512tvb $(GMP_INC) -c $< -o $@
-
-transform_sve256.o: $(SRC_DIR)/transform_sve256.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=256 -mtune=neoverse-v1 $(GMP_INC) -c $< -o $@
-
-transform_sve512.o: $(SRC_DIR)/transform_sve512.cpp $(DEPS_TRANSFORM_CPUf64)
-	$(CC) $(CFLAGS) $(OFLAGS) $(FLAGS_CPU) -march=armv8-a+sve -msve-vector-bits=512 -mtune=a64fx $(GMP_INC) -c $< -o $@
 
 transform_ocl.o: $(SRC_DIR)/transform_ocl.cpp $(DEPS_TRANSFORM_GPU)
 	$(CC) $(CFLAGS) $(FLAGS_GPU) $(GMP_INC) $(OCL_INC) -c $< -o $@

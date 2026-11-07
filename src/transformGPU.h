@@ -38,6 +38,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define GENEFER_GPU_SHORT_PLAN21 0
 #endif
 static_assert(GENEFER_GPU_SHORT_PLAN21 == 0 || GENEFER_GPU_SHORT_PLAN21 == 1, "GENEFER_GPU_SHORT_PLAN21 must be 0 or 1");
+#if GENEFER_GPU_SHORT_PLAN21 && GENEFER_GPU_LAZY_N17
+#error GENEFER_GPU_SHORT_PLAN21 and GENEFER_GPU_LAZY_N17 cannot be enabled together
+#endif
 
 // TUNE must be set if CHECK is set
 // #define CHECK_ALL_FUNCTIONS		1

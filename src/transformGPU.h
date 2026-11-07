@@ -21,6 +21,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #define VSIZE	4
 
+#ifndef GENEFER_GPU_SHORT_PLAN21
+#define GENEFER_GPU_SHORT_PLAN21 0
+#endif
+static_assert(GENEFER_GPU_SHORT_PLAN21 == 0 || GENEFER_GPU_SHORT_PLAN21 == 1, "GENEFER_GPU_SHORT_PLAN21 must be 0 or 1");
+
 // TUNE must be set if CHECK is set
 // #define CHECK_ALL_FUNCTIONS		1
 // #define CHECK_RADIX4_FUNCTIONS	1
@@ -242,6 +247,9 @@ private:
 	cl_kernel _mul512 = nullptr, _mul1024 = nullptr, _mul2048 = nullptr, _mul4096 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr, _mulscalar = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr, _copyp = nullptr;
+#if GENEFER_GPU_SHORT_PLAN21 && VSIZE == 4 && !defined(TUNE)
+	bool _useShortPlan21 = false;
+#endif
 #if defined(TUNE)
 	splitter * _pSplit = nullptr;
 	size_t _splitIndex = 0;
@@ -418,6 +426,14 @@ public:
 		CREATE_SETCOPY_KERNEL(set);
 		CREATE_SETCOPY_KERNEL(copy);
 		CREATE_COPYP_KERNEL(copyp);
+
+#if GENEFER_GPU_SHORT_PLAN21 && VSIZE == 4 && !defined(TUNE)
+		// Select one layout for square, multiplication and multiplicand preparation.
+		const size_t outerGroup = 1024 / 4 * CHUNK1024, tailGroup = 2048 / (4 * VSIZE) * BLK2048;
+		_useShortPlan21 = _ln == 21 && isNVIDIA() && supportsWorkGroup1D(_forward1024_0, outerGroup) &&
+			supportsWorkGroup1D(_backward1024_0, outerGroup) && supportsWorkGroup1D(_square2048, tailGroup) &&
+			supportsWorkGroup1D(_fwd2048p, tailGroup) && supportsWorkGroup1D(_mul2048, tailGroup);
+#endif
 
 #if defined(TUNE)
 		_pSplit = new splitter(size_t(_ln), CHUNK256, CHUNK1024, sizeof(ZP), VSIZE, 12, getLocalMemSize(), getMaxWorkGroupSize());
@@ -675,6 +691,9 @@ public:
 #endif
 		_mul(splitIndex, true);
 #else
+#if GENEFER_GPU_SHORT_PLAN21 && VSIZE == 4
+		if (_useShortPlan21) { forward1024_0(); square2048(); backward1024_0(); return; }
+#endif
 		const int ln = _ln;
 		if (ln == 11) { forward64_0(); square32(); backward64_0(); }
 		else if (ln == 12) { forward64_0(); square64(); backward64_0(); }
@@ -697,6 +716,9 @@ public:
 #if defined(TUNE)
 		_mul(_splitIndex, false);
 #else
+#if GENEFER_GPU_SHORT_PLAN21 && VSIZE == 4
+		if (_useShortPlan21) { forward1024_0(); mul2048(); backward1024_0(); return; }
+#endif
 		const int ln = _ln;
 		if (ln == 11) { forward64_0(); mul32(); backward64_0(); }
 		else if (ln == 12) { forward64_0(); mul64(); backward64_0(); }
@@ -719,6 +741,10 @@ public:
 		const uint32 isrc = static_cast<uint32>(src * RNS_SIZE * _n / 4);
 		_setKernelArg(_copyp, 2, sizeof(uint32), &isrc);
 		_executeKernel(_copyp, RNS_SIZE * _n / 4);
+
+#if GENEFER_GPU_SHORT_PLAN21 && VSIZE == 4 && !defined(TUNE)
+		if (_useShortPlan21) { forward1024p_0(); fwd2048p(); return; }
+#endif
 
 #if defined(CHECK_FUNC_1)
 		if (_ln == 12) { forward4p_0(); forward256p(12 - 10); fwd4p(); return; }

@@ -16,10 +16,23 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl/kernel.h"
 
-// #define USE_WI	1
+#if !defined(GENEFER_GPU_LAZY_N17)
+#define GENEFER_GPU_LAZY_N17 0
+#endif
+#if GENEFER_GPU_LAZY_N17 != 0 && GENEFER_GPU_LAZY_N17 != 1
+#error GENEFER_GPU_LAZY_N17 must be 0 or 1
+#endif
+
+#if GENEFER_GPU_LAZY_N17
+#define USE_WI	1
+#endif
 // #define	TUNE	1
 
+#if GENEFER_GPU_LAZY_N17
+#define VSIZE	2
+#else
 #define VSIZE	4
+#endif
 
 #ifndef GENEFER_GPU_SHORT_PLAN21
 #define GENEFER_GPU_SHORT_PLAN21 0
@@ -232,7 +245,7 @@ private:
 	cl_kernel _fwd4p = nullptr, _fwd8p = nullptr;
 	cl_kernel _mul2x2 = nullptr, _mul4 = nullptr, _mul8 = nullptr;
 #endif
-	cl_kernel _forward64_0 = nullptr, _forward64_9 = nullptr, _forward64_11 = nullptr;
+	cl_kernel _forward64_0 = nullptr, _forward64_0_lazy = nullptr, _forward64_9 = nullptr, _forward64_11 = nullptr;
 	cl_kernel _backward64_0 = nullptr, _backward64_9 = nullptr, _backward64_11 = nullptr;
 	cl_kernel _forward256_0 = nullptr, _backward256_0 = nullptr, _forward1024_0 = nullptr, _backward1024_0 = nullptr;
 #if defined(TUNE)
@@ -372,6 +385,9 @@ public:
 
 #if !defined(CHECK_RADIX4_FUNCTIONS)
 		CREATE_TRANSFORM_KERNEL(forward64_0);
+#if VSIZE == 2
+		if constexpr (!is32) CREATE_TRANSFORM_KERNEL(forward64_0_lazy);
+#endif
 		CREATE_TRANSFORM_KERNEL(forward64_9);
 		CREATE_TRANSFORM_KERNEL(forward64_11);
 		CREATE_TRANSFORM_KERNEL(backward64_0);
@@ -454,7 +470,11 @@ public:
 		_releaseKernel(_fwd4p); _releaseKernel(_fwd8p);
 		_releaseKernel(_mul2x2); _releaseKernel(_mul4); _releaseKernel(_mul8);
 #endif
-		_releaseKernel(_forward64_0); _releaseKernel(_forward64_9); _releaseKernel(_forward64_11);
+		_releaseKernel(_forward64_0);
+#if VSIZE == 2
+		if constexpr (!is32) _releaseKernel(_forward64_0_lazy);
+#endif
+		_releaseKernel(_forward64_9); _releaseKernel(_forward64_11);
 		_releaseKernel(_backward64_0); _releaseKernel(_backward64_9); _releaseKernel(_backward64_11);
 		_releaseKernel(_forward256_0); _releaseKernel(_backward256_0); _releaseKernel(_forward1024_0); _releaseKernel(_backward1024_0);
 #if defined(TUNE)
@@ -520,6 +540,12 @@ private:
 #endif
 
 	DEFINE_FORWARDn(64, 0);
+#if VSIZE == 2
+	void forward64_0_lazy()
+	{
+		ek(_forward64_0_lazy, 64 / 4 * CHUNK64, 4 * VSIZE);
+	}
+#endif
 	DEFINE_BACKWARDn(64, 0);
 	DEFINE_FORWARDn(64, 9);
 	DEFINE_BACKWARDn(64, 9);
@@ -571,7 +597,6 @@ private:
 
 #if defined(TUNE)
 	DEFINE_FORWARDP(4);
-	DEFINE_FORWARDP0(4);
 #endif
 	DEFINE_FORWARDPn(64, 0);
 	DEFINE_FORWARDPn(64, 9);
@@ -621,10 +646,18 @@ private:
 		const splitter * const pSplit = _pSplit;
 		const size_t s = pSplit->getPartSize(sIndex);
 
+		const bool useLazyForwardChain =
+			isSquare
+			&& (_ln == 17)
+			&& (s == 2)
+			&& (pSplit->getPart(sIndex, 0) == 6)
+			&& (pSplit->getPart(sIndex, 1) == 11);
+
 		const uint32_t k0 = pSplit->getPart(sIndex, 0);
 		lm -= int(k0);
 		if (k0 == 10) forward1024_0();
 		else if (k0 == 8) forward256_0();
+		else if (useLazyForwardChain) forward64_0_lazy();
 		else forward64_0();	// k0 = 6
 
 		for (size_t i = 2; i < s; ++i)
@@ -701,7 +734,23 @@ public:
 		else if (ln == 14) { forward64_0(); square256(); backward64_0(); }
 		else if (ln == 15) { forward64_0(); square512(); backward64_0(); }
 		else if (ln == 16) { forward64_0(); square1024(); backward64_0(); }
-		else if (ln == 17) { forward64_0(); square2048(); backward64_0(); }
+		else if (ln == 17)
+		{
+#if VSIZE == 2
+			if constexpr (!is32)
+			{
+				forward64_0_lazy();
+				square2048();
+				backward64_0();
+			}
+			else
+#endif
+			{
+				forward64_0();
+				square2048();
+				backward64_0();
+			}
+		}
 		else if (ln == 18) { forward256_0(); square1024(); backward256_0(); }
 		else if (ln == 19) { forward256_0(); square2048(); backward256_0(); }
 		else if (ln == 20) { forward256_0(); square4096(); backward256_0(); }

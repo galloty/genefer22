@@ -1015,6 +1015,7 @@ public:
 #if defined(USE_WI)
 		src << "#define USE_WI\t" << 1 << std::endl;
 #endif
+		if (!is32 && _pEngine->isApple()) src << "#define SB4\t" << 1 << std::endl;
 		src << "#define BLK32\t" << BLK32 << std::endl;
 		src << "#define BLK64\t" << BLK64 << std::endl;
 		src << "#define BLK128\t" << BLK128 << std::endl;

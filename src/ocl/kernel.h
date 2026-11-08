@@ -2523,4 +2523,47 @@ static const char * const src_ocl_kernel = \
 "	const sz_t gid = (sz_t)get_global_id(0);\n" \
 "	zp[gid] = z[src + gid];\n" \
 "}\n" \
+"\n" \
+"#if defined(FUSE_CARRY)\n" \
+"\n" \
+"// As normalize2, but the digits are read from the residue of p, not P1: |d| < p / 2 is required.\n" \
+"INLINE uint4_32 carry_in(const uint4_32 u, const int_64 cin, const uint_32 p, const uint_32 b, const uint_32 b_inv, const int b_s)\n" \
+"{\n" \
+"	int4_32 r;\n" \
+"	int_64 f = cin + get_int(u.s0, p);\n" \
+"	r.s0 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += get_int(u.s1, p);\n" \
+"	r.s1 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += get_int(u.s2, p);\n" \
+"	r.s2 = reduce64(&f, b, b_inv, b_s);\n" \
+"	f += get_int(u.s3, p);\n" \
+"	r.s3 = (int_32)(f);\n" \
+"	return (uint4_32)(set_int(r.s0, p), set_int(r.s1, p), set_int(r.s2, p), set_int(r.s3, p));\n" \
+"}\n" \
+"\n" \
+"// forward64_0 and normalize2 of the previous squaring\n" \
+"__kernel\n" \
+"ATTR_64()\n" \
+"void forward64_0c(__global VTYPE * restrict const zg, __global const uint_32 * restrict const wg,\n" \
+"	__global const int_64 * restrict const c, const uint_32 b, const uint_32 b_inv, const int b_s)\n" \
+"{\n" \
+"	const int lm = LN_SZ - LVSIZE - 6; const unsigned int s = 64 / 4;\n" \
+"	__local VTYPE Z[4 * B_64 * CHUNK64];\n" \
+"	DECLARE_VAR(B_64, CHUNK64);\n" \
+"	DECLARE_VAR_FORWARD();\n" \
+"	{\n" \
+"		const sz_t mg = B_64 << lm;\n" \
+"		VTYPE zl[4]; _loadg(4, zl, zi, mg);\n" \
+"		for (sz_t l = 0; l < 4; ++l)\n" \
+"		{\n" \
+"			const sz_t k = ki + l * mg;\n" \
+"			if (k % NORM_WG_SZ == 0) zl[l] = carry_in(zl[l], c[k / NORM_WG_SZ], pq.s0, b, b_inv, b_s);\n" \
+"		}\n" \
+"		_forward4_0(pq, g_f0[lid], zl);\n" \
+"		_storel(4, &Z[i], B_64 * CHUNK64, zl);\n" \
+"	}\n" \
+"	FORWARD_64();\n" \
+"}\n" \
+"\n" \
+"#endif\n" \
 "";

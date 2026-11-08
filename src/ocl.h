@@ -275,7 +275,7 @@ public:
 class device : oclObject
 {
 private:
-	enum class EVendor { Unknown, NVIDIA, AMD, INTEL };
+	enum class EVendor { Unknown, NVIDIA, AMD, INTEL, APPLE };
 
 	const cl_platform_id _platform;
 	const cl_device_id _device;
@@ -380,6 +380,7 @@ public:
 	size_t getLocalMemSize() const { return _localMemSize; }
 	size_t getTimerResolution() const { return _timerResolution; }
 	bool isIntel() const { return (_vendor == EVendor::INTEL); }
+	bool isApple() const { return (_vendor == EVendor::APPLE); }
 
 private:
 	static EVendor getVendor(const std::string & vendorString)
@@ -391,6 +392,7 @@ private:
 		if (strstr(lVendorString.c_str(), "amd") != nullptr) return EVendor::AMD;
 		if (strstr(lVendorString.c_str(), "advanced micro devices") != nullptr) return EVendor::AMD;
 		if (strstr(lVendorString.c_str(), "intel") != nullptr) return EVendor::INTEL;
+		if (strstr(lVendorString.c_str(), "apple") != nullptr) return EVendor::APPLE;
 		// must be tested after 'Intel' because 'ati' is in 'Intel(R) Corporation' string
 		if (strstr(lVendorString.c_str(), "ati") != nullptr) return EVendor::AMD;
 		return EVendor::Unknown;

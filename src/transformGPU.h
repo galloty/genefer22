@@ -19,6 +19,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 // #define USE_WI	1
 // #define	TUNE	1
 
+#ifndef GENEFER_GPU_GFN16_17_NORM_WG_PLUS1
+#define GENEFER_GPU_GFN16_17_NORM_WG_PLUS1	0
+#endif
+
 #define VSIZE	4
 
 // TUNE must be set if CHECK is set
@@ -253,7 +257,7 @@ private:
 public:
 	engines(const platform & platform, const size_t d, const int ln, const bool isBoinc, const size_t num_regs, const bool verbose)
 		: device(platform, d, verbose), _n(size_t(1) << ln), _ln(ln), _isBoinc(isBoinc), _num_regs(num_regs),
-		_lnormWGsize(std::min(std::max(5, ln / 2 - 3), ilog2_32(uint32_t(getMaxWorkGroupSize())))) {}
+		_lnormWGsize(std::min(std::max(5, ln / 2 - ((GENEFER_GPU_GFN16_17_NORM_WG_PLUS1 && (ln <= 17)) ? 2 : 3)), ilog2_32(uint32_t(getMaxWorkGroupSize())))) {}
 	virtual ~engines() {}
 
 ///////////////////////////////

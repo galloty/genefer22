@@ -379,6 +379,7 @@ public:
 	size_t getMaxWorkGroupSize() const { return _maxWorkGroupSize; }
 	size_t getLocalMemSize() const { return _localMemSize; }
 	size_t getTimerResolution() const { return _timerResolution; }
+	bool isAMD() const { return (_vendor == EVendor::AMD); }
 	bool isIntel() const { return (_vendor == EVendor::INTEL); }
 
 private:

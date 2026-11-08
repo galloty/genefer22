@@ -19,6 +19,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 // #define USE_WI	1
 // #define	TUNE	1
 
+#ifndef GENEFER_GPU_AMD_GFN21_PLAN_8_8_5
+#define GENEFER_GPU_AMD_GFN21_PLAN_8_8_5	0
+#endif
+static_assert(GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 == 0 || GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 == 1,
+	"GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 must be 0 or 1");
+
 #define VSIZE	4
 
 // TUNE must be set if CHECK is set
@@ -233,6 +239,8 @@ private:
 #if defined(TUNE)
 	cl_kernel _forward64 = nullptr, _forward256 = nullptr, _forward1024 = nullptr;
 	cl_kernel _backward64 = nullptr, _backward256 = nullptr, _backward1024 = nullptr;
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+	cl_kernel _forward256 = nullptr, _backward256 = nullptr;
 #endif
 	cl_kernel _square32 = nullptr, _square64 = nullptr, _square128 = nullptr, _square256 = nullptr;
 	cl_kernel _square512 = nullptr, _square1024 = nullptr, _square2048 = nullptr, _square4096 = nullptr;
@@ -380,6 +388,12 @@ public:
 		CREATE_TRANSFORM_KERNEL(backward256);
 		CREATE_TRANSFORM_KERNEL(forward1024);
 		CREATE_TRANSFORM_KERNEL(backward1024);
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+		if (isAMD())
+		{
+			CREATE_TRANSFORM_KERNEL(forward256);
+			CREATE_TRANSFORM_KERNEL(backward256);
+		}
 #endif
 		CREATE_TRANSFORM_KERNEL(square32);
 		CREATE_TRANSFORM_KERNEL(square64);
@@ -444,6 +458,8 @@ public:
 #if defined(TUNE)
 		_releaseKernel(_forward64); _releaseKernel(_forward256); _releaseKernel(_forward1024);
 		_releaseKernel(_backward64); _releaseKernel(_backward256); _releaseKernel(_backward1024);
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+		_releaseKernel(_forward256); _releaseKernel(_backward256);
 #endif
 		_releaseKernel(_square32); _releaseKernel(_square64); _releaseKernel(_square128); _releaseKernel(_square256);
 		_releaseKernel(_square512); _releaseKernel(_square1024); _releaseKernel(_square2048); _releaseKernel(_square4096);
@@ -520,6 +536,9 @@ private:
 	DEFINE_BACKWARD(256);
 	DEFINE_FORWARD(1024);
 	DEFINE_BACKWARD(1024);
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+	DEFINE_FORWARD(256);
+	DEFINE_BACKWARD(256);
 #endif
 	DEFINE_SQUARE(32);
 	DEFINE_SQUARE(64);
@@ -566,6 +585,8 @@ private:
 	DEFINE_FORWARDP(64);
 	DEFINE_FORWARDP(256);
 	DEFINE_FORWARDP(1024);
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+	DEFINE_FORWARDP(256);
 #endif
 
 #if defined(TUNE)
@@ -686,7 +707,14 @@ public:
 		else if (ln == 18) { forward256_0(); square1024(); backward256_0(); }
 		else if (ln == 19) { forward256_0(); square2048(); backward256_0(); }
 		else if (ln == 20) { forward256_0(); square4096(); backward256_0(); }
-		else if (ln == 21) { forward64_0(); forward64_9(); square512(); backward64_9(); backward64_0(); }
+		else if (ln == 21)
+		{
+#if GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+			if (isAMD()) { forward256_0(); forward256(5); square32(); backward256(5); backward256_0(); }
+			else
+#endif
+			{ forward64_0(); forward64_9(); square512(); backward64_9(); backward64_0(); }
+		}
 		else if (ln == 22) { forward1024_0(); square4096(); backward1024_0(); }
 		else { forward64_0(); forward64_11(); square2048(); backward64_11(); backward64_0(); }
 #endif
@@ -708,7 +736,14 @@ public:
 		else if (ln == 18) { forward256_0(); mul1024(); backward256_0(); }
 		else if (ln == 19) { forward256_0(); mul2048(); backward256_0(); }
 		else if (ln == 20) { forward256_0(); mul4096(); backward256_0(); }
-		else if (ln == 21) { forward64_0(); forward64_9(); mul512(); backward64_9(); backward64_0(); }
+		else if (ln == 21)
+		{
+#if GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+			if (isAMD()) { forward256_0(); forward256(5); mul32(); backward256(5); backward256_0(); }
+			else
+#endif
+			{ forward64_0(); forward64_9(); mul512(); backward64_9(); backward64_0(); }
+		}
 		else if (ln == 22) { forward1024_0(); mul4096(); backward1024_0(); }
 		else { forward64_0(); forward64_11(); mul2048(); backward64_11(); backward64_0(); }
 #endif
@@ -792,7 +827,14 @@ public:
 		else if (lm == 18) { forward256p_0(); fwd1024p(); }
 		else if (lm == 19) { forward256p_0(); fwd2048p(); }
 		else if (lm == 20) { forward256p_0(); fwd4096p(); }
-		else if (lm == 21) { forward64p_0(); forward64p_9(); fwd512p(); }
+		else if (lm == 21)
+		{
+#if GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
+			if (isAMD()) { forward256p_0(); forward256p(5); fwd32p(); }
+			else
+#endif
+			{ forward64p_0(); forward64p_9(); fwd512p(); }
+		}
 		else if (lm == 22) { forward1024p_0(); fwd4096p(); }
 		else { forward64p_0(); forward64p_11(); fwd2048p(); }
 #endif
@@ -1030,6 +1072,8 @@ public:
 		src << "#define SHORT_FUNC\t" << 1 << std::endl;
 #endif
 #if defined(TUNE)
+		src << "#define ALL_FUNC\t" << 1 << std::endl;
+#elif GENEFER_GPU_AMD_GFN21_PLAN_8_8_5 && VSIZE == 4
 		src << "#define ALL_FUNC\t" << 1 << std::endl;
 #endif
 
